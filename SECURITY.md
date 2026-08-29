@@ -8,7 +8,9 @@ sessions. It does not implement, and will not implement, CAPTCHA/anti-bot
 bypass, authentication bypass, credential/cookie/token theft, or stealth
 malware behavior. It makes no claim of guaranteed anonymity or
 undetectability — see README.md and ARCHITECTURE.md for what the fingerprint
-engine actually does (coherent configuration, not evasion).
+engine actually does (coherent configuration, not evasion), and
+`docs/FINGERPRINT_AUDIT.md` for exactly which fingerprint properties are
+genuinely enforced in the running browser versus stored-and-validated-only.
 
 ## Electron hardening
 
@@ -20,6 +22,18 @@ engine actually does (coherent configuration, not evasion).
   `child_process`, `shell`, `process`, or database handle is ever exposed.
 - A restrictive CSP is set in `src/renderer/index.html`
   (`default-src 'self'; script-src 'self'`).
+- The per-profile webview's `preload` is force-set by the *main* process on
+  `will-attach-webview` (`src/main/browser/profileWindowEntry.ts`), not left
+  to the guest page to request — that preload
+  (`src/main/browser/diagnosticsPreload.ts`) exposes exactly one function,
+  gated to fire only when `location.protocol === 'profileforge:'`, so an
+  arbitrary website loaded in the same webview cannot call it to spoof a fake
+  fingerprint snapshot or spam the IPC channel.
+- `webContents.debugger` (Chrome DevTools Protocol) is attached only to a
+  profile's own webview `WebContents`, only to call the specific `Emulation.*`
+  methods needed for fingerprint enforcement
+  (`src/main/browser/fingerprintEnforcement.ts`) — it is never exposed to the
+  renderer and grants no capability beyond those explicit CDP calls.
 
 ## IPC validation
 

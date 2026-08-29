@@ -38,6 +38,11 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
       deviceMemory: params.fingerprint.deviceMemory,
       webglVendor: params.fingerprint.webglVendor,
       webglRenderer: params.fingerprint.webglRenderer,
+      webrtcMode: params.fingerprint.webrtcMode,
+      canvasMode: params.fingerprint.canvasMode,
+      audioMode: params.fingerprint.audioMode,
+      fontsMode: params.fingerprint.fontsMode,
+      mediaDevicesMode: params.fingerprint.mediaDevicesMode,
     }),
   ).toString('base64');
 

@@ -42,7 +42,11 @@
     const view = document.getElementById('view');
     view.setAttribute('partition', partition);
     if (userAgent) view.setAttribute('useragent', userAgent);
-    view.setAttribute('src', startUrl);
+    // Deliberately left at about:blank here — the main process applies CDP
+    // Emulation overrides (platform, languages, hardware concurrency, screen)
+    // on 'did-attach-webview' and only then navigates to startUrl, so the
+    // very first real page load already reflects the full fingerprint
+    // instead of racing it with a visible reload. See profileWindowEntry.ts.
     document.getElementById('address').value = startUrl;
     document.getElementById('label').textContent = label;
 

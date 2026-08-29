@@ -6,6 +6,7 @@ export type Os = z.infer<typeof OsSchema>;
 export const CanvasModeSchema = z.enum(['off', 'noise']);
 export const AudioModeSchema = z.enum(['off', 'noise']);
 export const WebrtcModeSchema = z.enum(['default', 'disabled', 'proxy-only']);
+export type WebrtcMode = z.infer<typeof WebrtcModeSchema>;
 export const FontsModeSchema = z.enum(['system', 'restricted']);
 export const MediaDevicesModeSchema = z.enum(['real', 'hidden']);
 

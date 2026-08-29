@@ -1,6 +1,6 @@
 # Testing
 
-## Unit + integration suite (55 tests, all passing as of this writing)
+## Unit + integration suite (63 tests, all passing as of this writing)
 
 Run with `npm run rebuild:node && npm test`.
 
@@ -31,10 +31,17 @@ Run with `npm run rebuild:node && npm test`.
   each created profile gets its own directory, one profile's files are
   invisible to another, full-clone copies storage while config-clone doesn't,
   deleting one profile leaves others' storage intact.
+- `tests/unit/consistencyEngine.test.ts` — the fingerprint validator's
+  cross-field coherence checks against the specific "impossible combination"
+  examples named in the fingerprint audit brief (Windows + macOS-only
+  platform, macOS + Windows-only UA), plus new CPU/RAM plausibility warnings.
+- `tests/unit/browserCompatibility.test.ts` — the Chromium-version-drift
+  check used by `ProfileManager.start()` to flag a profile whose fingerprint
+  claims a different major Chromium version than the one actually running.
 
 ## E2E suite (Playwright driving the real Electron app)
 
-Two files, 7 tests total, run with:
+Three files, 9 tests total, run with:
 
 ```bash
 npm run build && npm run rebuild:electron && npm run test:e2e
@@ -56,8 +63,19 @@ suite calls directly.
   `browser-data` directory actually gets created on disk (proof the nested
   Electron/Chromium process really launched with its own `userData` dir, not
   a simulation), then clicks **Stop** and waits for `STOPPED`.
+- `tests/e2e/fingerprintEnforcement.spec.ts` (2 tests, also isolated —
+  spawns the same kind of nested process) — the core verification the
+  fingerprint audit demanded: starts a profile with the test-only
+  `PF_E2E_AUTO_DIAGNOSTICS=1` flag set (see
+  `docs/FINGERPRINT_AUDIT.md`), which makes it navigate straight to the
+  diagnostics page; that page's own JS reads the *actual* browser state and
+  writes a snapshot the test asserts on. Confirms both that enforced fields
+  (UA, platform, languages, timezone, screen, hardwareConcurrency) really do
+  `PASS` in the real browser, **and** that unenforced fields (deviceMemory,
+  WebGL vendor/renderer, canvasMode, fontsMode, mediaDevicesMode) are
+  honestly reported `NOT_IMPLEMENTED` rather than a false pass.
 
-Writing this second test surfaced a real bug during development: the
+Writing the browser-lifecycle test surfaced a real bug during development: the
 Profiles page had no polling, so after clicking Stop the row could visibly
 freeze on `STOPPING` forever even though the DB/process had already finished
 transitioning to `STOPPED` — nothing told the renderer to re-fetch. Fixed

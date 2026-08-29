@@ -65,6 +65,16 @@ export function validateFingerprint(fp: FingerprintInput): FingerprintValidation
   if (fp.deviceMemory < 1) {
     errors.push('deviceMemory must be at least 1');
   }
+  if (fp.hardwareConcurrency >= 16 && fp.deviceMemory <= 2) {
+    warnings.push(
+      `${fp.hardwareConcurrency} CPU cores with only ${fp.deviceMemory}GB RAM is an implausible hardware pairing`,
+    );
+  }
+  if (fp.deviceMemory >= 16 && fp.hardwareConcurrency <= 2) {
+    warnings.push(
+      `${fp.deviceMemory}GB RAM with only ${fp.hardwareConcurrency} CPU core(s) is an implausible hardware pairing`,
+    );
+  }
 
   const gpuVendorLower = fp.webglVendor.toLowerCase();
   const platformProfile = PLATFORM_PROFILES.find((p) => p.os === fp.os);

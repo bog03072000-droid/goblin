@@ -7,6 +7,7 @@ import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
 import { LockManager } from './lockManager';
 import { launchProfileProcess } from '../browser/browserLauncher';
+import { checkBrowserCompatibility } from '../fingerprint/browserCompatibility';
 import {
   createProfileStorage,
   deleteProfileStorage,
@@ -67,6 +68,14 @@ export class ProfileManager {
     if (!fingerprint) throw new Error('Profile fingerprint is missing');
     const proxy = profile.proxyId ? this.proxies.getById(profile.proxyId) : null;
     const proxyPassword = profile.proxyId ? this.proxies.getPassword(profile.proxyId) : null;
+
+    // Guards against exactly the drift the fingerprint audit found: an
+    // Electron/Chromium upgrade silently making an old profile's claimed
+    // browser version wrong. Never blocks the launch — just surfaces it.
+    const compat = checkBrowserCompatibility(fingerprint.browserVersion, process.versions.chrome);
+    if (!compat.compatible && compat.message) {
+      this.logs.record('FINGERPRINT_CHANGED', id, compat.message);
+    }
 
     this.profiles.updateStatus(id, 'STARTING');
     let child: ChildProcess;

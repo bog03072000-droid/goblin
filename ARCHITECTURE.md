@@ -17,10 +17,20 @@ ProfileForge runs as several separate OS processes, not one:
    - gets its own `persist:<profileId>` session partition.
    - has its proxy applied via `session.setProxy()` / the `--proxy-server`
      switch, and proxy auth handled via the `login` event.
-   - gets its timezone via the `TZ` environment variable and its locale via
-     the `--lang` switch — using real Chromium/Node mechanisms rather than
-     JavaScript-level spoofing, per the project's "prefer real config over
-     fragile spoofing" principle.
+   - gets its timezone via the `TZ` environment variable (verified to
+     actually change `Intl.DateTimeFormat().resolvedOptions().timeZone` in
+     the real browser — see `docs/FINGERPRINT_AUDIT.md`).
+   - gets User-Agent, `navigator.platform`, `navigator.languages`, screen
+     dimensions/`devicePixelRatio`, and `navigator.hardwareConcurrency`
+     enforced via Chrome DevTools Protocol `Emulation.*` overrides
+     (`src/main/browser/fingerprintEnforcement.ts`), applied once the webview
+     attaches and before its first real navigation. This replaced an earlier
+     `--lang` command-line-switch approach that was found, during the
+     fingerprint audit, to leak the host OS's real installed languages into
+     `navigator.languages` — see the audit doc for the exact repro.
+   - gets its WebRTC IP-handling policy set via the real Chromium
+     `webContents.setWebRTCIPHandlingPolicy()` API (not a homegrown leak
+     "protection").
 
 This is why one profile's renderer/browser crashing doesn't affect any other
 running profile or the manager window, and why profile data survives an app
@@ -43,7 +53,15 @@ all.
   clears stale locks (dead PID) without ever touching profile data.
 - `fingerprint/` — `platformProfiles.ts` (coherent OS/GPU/UA bundles),
   `generator.ts` (seeded, deterministic), `validator.ts` (cross-field
-  coherence checks, not an anonymity/undetectability guarantee).
+  coherence checks, not an anonymity/undetectability guarantee),
+  `browserCompatibility.ts` (flags when a profile's fingerprint claims a
+  different Chromium major version than the one actually running — see
+  `docs/FINGERPRINT_AUDIT.md`).
+- `browser/fingerprintEnforcement.ts` — the only place that calls Chromium's
+  CDP `Emulation` domain to actually apply fingerprint fields to a running
+  `WebContents`. Every field it touches was empirically verified to work
+  against this project's real Electron/Chromium build before being coded —
+  see `docs/FINGERPRINT_AUDIT.md` for the verification method and results.
 - `proxy/proxyTester.ts` — TCP-reachability check only; documented as such.
 - `security/credentialVault.ts` — wraps Electron `safeStorage` (Windows DPAPI)
   for proxy passwords.
@@ -65,11 +83,21 @@ inside that profile's browser window, serving exactly one page —
 `diagnostics.html` — at `profileforge://fingerprint-test`. The configured
 fingerprint values are passed in as a base64-encoded query parameter computed
 by `browserLauncher.ts`; the page's own script reads the real
-`navigator`/`screen`/`Intl`/WebGL values and renders them side by side,
-flagging mismatches rather than hiding them. This is intentionally the
-"document it, don't fake it" mechanism the project brief calls for wherever a
-fingerprint field (e.g. `hardwareConcurrency`, `deviceMemory`, `platform`)
-isn't yet enforced at the Chromium/OS level.
+`navigator`/`screen`/`Intl`/WebGL/`RTCPeerConnection` values and renders a
+`PASS`/`MISMATCH`/`NOT_IMPLEMENTED`/`APPLIED` status per property against a
+fixed classification (never derived from whether values happen to coincide —
+see `docs/FINGERPRINT_AUDIT.md` for why that distinction matters and how it
+was verified). This is intentionally the "document it, don't fake it"
+mechanism the project brief calls for wherever a fingerprint field isn't
+enforced at the Chromium/OS level (Canvas, Audio, WebGL vendor/renderer,
+device memory, fonts, media device identity — full list in the audit doc).
+
+The page's report is also sent back to the main process via a narrow preload
+bridge (`src/main/browser/diagnosticsPreload.ts`, gated to the
+`profileforge://` origin so an arbitrary browsed page can't call it) and
+written to `<profile directory>/fingerprint-snapshot.json` — a technical-only
+snapshot (no page content/cookies/history) that lets a profile's actual
+observed fingerprint be compared before and after an app/Electron upgrade.
 
 ## Renderer (`src/renderer`)
 

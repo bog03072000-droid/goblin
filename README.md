@@ -20,7 +20,19 @@ browser identity per profile — nothing more, nothing less. See
 - Generate a coherent fingerprint configuration (OS + GPU + UA + screen +
   hardware bundled together, not randomized independently) from a seed, and
   validate it for internal contradictions.
-- Full activity log of profile lifecycle events.
+- Genuinely enforce User-Agent, `navigator.platform`, `navigator.languages`,
+  timezone, screen dimensions/`devicePixelRatio`, `hardwareConcurrency`, and
+  WebRTC IP-handling policy in the real running browser — verified by an
+  automated test that reads the actual browser state, not just the database.
+  See [docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md) for exactly
+  which properties are enforced, which are honestly not (Canvas, Audio,
+  WebGL vendor/renderer, device memory, fonts, media device identity), and
+  why — this is the single most important document if you're evaluating what
+  this app actually does versus what similar tools claim to do.
+- Full activity log of profile lifecycle events, plus a per-profile
+  fingerprint snapshot written whenever its diagnostics page runs, so a
+  profile's actual observed fingerprint can be compared before/after an
+  Electron/Chromium upgrade.
 
 See [PLAN.md](PLAN.md) for exactly which parts of the original spec are done,
 partially done, or not started yet — it's kept current, not aspirational.
@@ -94,23 +106,32 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#fingerprint-engine). The generator picks
 one coherent platform+locale bundle per profile rather than mixing randomized
 fields, and the validator flags cross-field contradictions (e.g. a Windows OS
 paired with a macOS platform string). It does not and cannot guarantee that a
-given fingerprint is unique or undetectable.
+given fingerprint is unique or undetectable. See
+[docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md) for the full
+property-by-property reality matrix (what's genuinely applied to the running
+browser vs. stored-and-validated only).
 
 ## Known limitations (current build)
 
-- No Settings UI yet (Stage 15 in PLAN.md).
+- Canvas, AudioContext, WebGL vendor/renderer identity, device memory, font
+  enumeration, and media-device identity are stored and validated in the
+  fingerprint data model but **not enforced** in the actual browser process —
+  because no reliable Chromium-native mechanism exists for them (verified
+  empirically, not assumed — see
+  [docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md)). The fingerprint
+  diagnostic page (`profileforge://fingerprint-test`, open it via the
+  "Diagnostics" button in any running profile's browser toolbar) shows this
+  honestly with an explicit PASS/MISMATCH/NOT_IMPLEMENTED status per
+  property, never a silent false pass.
+- WebRTC leak protection uses Chromium's real `setWebRTCIPHandlingPolicy`,
+  but there is no Chromium policy that fully disables the `RTCPeerConnection`
+  API — `webrtcMode: 'disabled'` gets the strongest *available* protection,
+  not a true API removal. Documented in the audit doc.
 - Full profile export is a manifest + copied folder, not a single portable
   archive file (no zip/tar dependency was added speculatively — see
   DEVELOPMENT.md).
-- Canvas/audio noise modes and WebRTC leak protection are stored and validated
-  in the data model but **not yet enforced** in the actual browser process —
-  the fingerprint diagnostic page (`profileforge://fingerprint-test`, open it
-  via the "Diagnostics" button in any running profile's browser toolbar)
-  shows this honestly by comparing configured vs. observed values rather than
-  hiding the gap.
-- No Playwright E2E suite yet; the current test suite covers unit +
-  integration level (storage isolation, fingerprint coherence, DB
-  repositories, lock recovery) with a real Electron app runtime smoke-tested
-  manually, not yet automated.
-- Windows installer config exists and the app builds, but the installer
-  itself has not yet been produced and verified end-to-end.
+- No manual fingerprint hand-editing in the UI yet (the profile editor's
+  Fingerprint tab is read-only plus a Validate button; only "Automatic"
+  generation is exposed).
+- Backup/Restore have storage-layer functions but no IPC channel or UI wiring
+  yet (only clear-cache, export, and import are exposed end to end).

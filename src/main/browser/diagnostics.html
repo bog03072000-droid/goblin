@@ -6,12 +6,15 @@
 <style>
   body { margin: 0; background: #1e1f22; color: #e6e6e6; font-family: Segoe UI, sans-serif; padding: 20px; }
   h1 { font-size: 16px; font-weight: 600; }
-  p.hint { color: #9a9da3; font-size: 12px; max-width: 640px; }
+  p.hint { color: #9a9da3; font-size: 12px; max-width: 680px; }
   table { border-collapse: collapse; width: 100%; margin-top: 14px; }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #3a3b40; font-size: 12px; vertical-align: top; word-break: break-all; }
   th { color: #9a9da3; font-weight: 500; }
-  tr.match td.observed { color: #3fb950; }
-  tr.mismatch td.observed { color: #d29922; }
+  .status { font-weight: 600; white-space: nowrap; }
+  .status-PASS { color: #3fb950; }
+  .status-MISMATCH { color: #d29922; }
+  .status-NOT_IMPLEMENTED { color: #6b7280; }
+  .status-APPLIED { color: #4f8cff; }
   .toolbar { display: flex; gap: 8px; margin-top: 14px; }
   button { background: #3a3b40; color: #eee; border: 1px solid #4a4b50; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
   button:hover { background: #46474d; }
@@ -21,13 +24,13 @@
 <body>
   <h1>Fingerprint Diagnostics</h1>
   <p class="hint">
-    Compares the configured fingerprint against what this browser process actually reports.
-    A mismatch is expected and clearly marked wherever the field is not yet enforced at the
-    Chromium/OS level (documented in ARCHITECTURE.md / PLAN.md) — this page exists specifically
-    to surface that honestly, not to claim full spoofing coverage.
+    Compares the configured fingerprint against what this browser process actually reports, and
+    labels every row PASS / MISMATCH / NOT IMPLEMENTED / APPLIED — never silently claims something
+    works. See <code>docs/FINGERPRINT_AUDIT.md</code> for the full reality matrix and how each
+    status was verified.
   </p>
   <table>
-    <thead><tr><th>Field</th><th>Configured</th><th class="observed">Observed</th></tr></thead>
+    <thead><tr><th>Property</th><th>Configured</th><th>Observed</th><th>Status</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <div class="toolbar">
@@ -37,21 +40,24 @@
   </div>
   <textarea id="report" readonly></textarea>
   <script>
-    function getObserved() {
-      let webgl = { vendor: 'unavailable', renderer: 'unavailable' };
+    function getWebgl() {
+      let vendor = 'unavailable';
+      let renderer = 'unavailable';
       try {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
         if (gl) {
           const ext = gl.getExtension('WEBGL_debug_renderer_info');
           if (ext) {
-            webgl.vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
-            webgl.renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+            vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+            renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
           }
         }
       } catch (e) { /* leave defaults */ }
+      return { vendor, renderer };
+    }
 
-      let canvasHash = 'unavailable';
+    function getCanvasTail() {
       try {
         const c = document.createElement('canvas');
         c.width = 50; c.height = 50;
@@ -59,9 +65,56 @@
         ctx.textBaseline = 'top';
         ctx.font = '14px Arial';
         ctx.fillText('pf-diag', 2, 2);
-        canvasHash = c.toDataURL().slice(-24);
-      } catch (e) { /* leave default */ }
+        return c.toDataURL().slice(-24);
+      } catch (e) { return 'unavailable'; }
+    }
 
+    async function getMediaDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const kinds = devices.reduce((acc, d) => ({ ...acc, [d.kind]: (acc[d.kind] || 0) + 1 }), {});
+        return JSON.stringify(kinds);
+      } catch (e) {
+        return 'enumerateDevices() failed: ' + e.message;
+      }
+    }
+
+    // Real leak probe (not a simulation): opens an RTCPeerConnection against a
+    // public STUN server and inspects the actual ICE candidates Chromium
+    // generates. If the WebRTC IP-handling policy is working, no "host" (LAN)
+    // candidate exposing a real local IP should appear — only srflx/relay.
+    function probeWebrtc() {
+      return new Promise((resolve) => {
+        const candidates = [];
+        let pc;
+        try {
+          pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        } catch (e) {
+          resolve({ status: 'NOT_IMPLEMENTED', detail: 'RTCPeerConnection unavailable: ' + e.message });
+          return;
+        }
+        pc.createDataChannel('probe');
+        pc.onicecandidate = (e) => {
+          if (e.candidate) candidates.push(e.candidate.candidate);
+        };
+        pc.createOffer().then((offer) => pc.setLocalDescription(offer)).catch(() => {});
+
+        setTimeout(() => {
+          pc.close();
+          const hostLeak = candidates.some((c) => / typ host /.test(c) && !/0\.0\.0\.0/.test(c));
+          if (candidates.length === 0) {
+            resolve({ status: 'NOT_IMPLEMENTED', detail: 'No ICE candidates gathered (no network reachable from this sandbox/profile) — policy could not be exercised' });
+          } else if (hostLeak) {
+            resolve({ status: 'MISMATCH', detail: 'A host (LAN-IP) candidate was observed: ' + candidates.find((c) => / typ host /.test(c)) });
+          } else {
+            resolve({ status: 'APPLIED', detail: candidates.length + ' candidate(s), no direct host/LAN IP among them' });
+          }
+        }, 2500);
+      });
+    }
+
+    async function getObserved() {
+      const webgl = getWebgl();
       return {
         userAgent: navigator.userAgent,
         platform: navigator.platform,
@@ -72,57 +125,83 @@
         devicePixelRatio: window.devicePixelRatio,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         hardwareConcurrency: navigator.hardwareConcurrency,
-        deviceMemory: navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'not exposed',
+        deviceMemory: navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'not exposed by this origin',
         webglVendor: webgl.vendor,
         webglRenderer: webgl.renderer,
-        canvasFingerprintTail: canvasHash,
-        webrtcLocalIp: 'not probed (see PLAN.md)',
-        mediaDevicesCount: 'pending permission',
+        canvasFingerprintTail: getCanvasTail(),
+        mediaDevices: await getMediaDevices(),
+        webrtc: await probeWebrtc(),
       };
     }
 
-    function render() {
+    // Ground-truth classification from docs/FINGERPRINT_AUDIT.md — NOT derived
+    // from whether the values happen to match, since a coincidental match on an
+    // unenforced field must never be reported as PASS.
+    const ENFORCED_FIELDS = new Set([
+      'userAgent', 'platform', 'locale', 'languages', 'screenWidth', 'screenHeight',
+      'deviceScaleFactor', 'timezone', 'hardwareConcurrency',
+    ]);
+
+    function classify(field, cVal, oVal) {
+      if (!ENFORCED_FIELDS.has(field)) return 'NOT_IMPLEMENTED';
+      return String(cVal) === String(oVal) ? 'PASS' : 'MISMATCH';
+    }
+
+    async function render() {
       const params = new URLSearchParams(location.search);
       let configured = {};
       try { configured = JSON.parse(atob(params.get('config') || '')); } catch (e) { configured = {}; }
-      const observed = getObserved();
+      const observed = await getObserved();
 
       const fieldMap = [
-        ['User-Agent', 'userAgent', 'userAgent'],
-        ['Platform', 'platform', 'platform'],
-        ['Locale', 'locale', 'language'],
-        ['Languages', 'languages', 'languages'],
-        ['Screen Width', 'screenWidth', 'screenWidth'],
-        ['Screen Height', 'screenHeight', 'screenHeight'],
-        ['Device Scale Factor', 'deviceScaleFactor', 'devicePixelRatio'],
-        ['Timezone', 'timezone', 'timezone'],
-        ['Hardware Concurrency', 'hardwareConcurrency', 'hardwareConcurrency'],
-        ['Device Memory (GB)', 'deviceMemory', 'deviceMemory'],
-        ['WebGL Vendor', 'webglVendor', 'webglVendor'],
-        ['WebGL Renderer', 'webglRenderer', 'webglRenderer'],
-        ['Canvas fingerprint (tail)', null, 'canvasFingerprintTail'],
-        ['WebRTC local IP leak check', null, 'webrtcLocalIp'],
-        ['Media devices', null, 'mediaDevicesCount'],
+        ['User-Agent', 'userAgent', 'userAgent', 'userAgent'],
+        ['Platform', 'platform', 'platform', 'platform'],
+        ['Locale', 'locale', 'locale', 'language'],
+        ['Languages', 'languages', 'languages', 'languages'],
+        ['Screen Width', 'screenWidth', 'screenWidth', 'screenWidth'],
+        ['Screen Height', 'screenHeight', 'screenHeight', 'screenHeight'],
+        ['Device Scale Factor', 'deviceScaleFactor', 'deviceScaleFactor', 'devicePixelRatio'],
+        ['Timezone', 'timezone', 'timezone', 'timezone'],
+        ['Hardware Concurrency', 'hardwareConcurrency', 'hardwareConcurrency', 'hardwareConcurrency'],
+        ['Device Memory (GB)', 'deviceMemory', 'deviceMemory', 'deviceMemory'],
+        ['WebGL Vendor', 'webglVendor', 'webglVendor', 'webglVendor'],
+        ['WebGL Renderer', 'webglRenderer', 'webglRenderer', 'webglRenderer'],
+        ['Canvas fingerprint (tail)', 'canvasMode', null, 'canvasFingerprintTail'],
+        ['Fonts', 'fontsMode', null, '(not probed — no reliable enumeration API; see audit)'],
+        ['Media Devices', 'mediaDevicesMode', null, 'mediaDevices'],
       ];
 
       const rows = document.getElementById('rows');
       rows.innerHTML = '';
-      const reportObj = { configured, observed, generatedAt: new Date().toISOString() };
+      const statusByField = {};
 
-      for (const [label, cKey, oKey] of fieldMap) {
-        const cVal = cKey ? (configured[cKey] !== undefined ? String(Array.isArray(configured[cKey]) ? configured[cKey].join(', ') : configured[cKey]) : '—') : 'n/a';
-        const oVal = String(observed[oKey]);
+      for (const [label, fieldKey, cKey, oKey] of fieldMap) {
+        const cVal = cKey && configured[cKey] !== undefined
+          ? (Array.isArray(configured[cKey]) ? configured[cKey].join(', ') : String(configured[cKey]))
+          : (configured[fieldKey] !== undefined ? String(configured[fieldKey]) : '—');
+        const oVal = oKey ? String(observed[oKey]) : '—';
+        const status = classify(fieldKey, cVal, oVal);
+        statusByField[fieldKey] = status;
         const tr = document.createElement('tr');
-        const matches = cKey ? cVal === oVal || cVal.includes(oVal) || oVal.includes(cVal) : true;
-        tr.className = matches ? 'match' : 'mismatch';
-        tr.innerHTML = `<td>${label}</td><td>${cVal}</td><td class="observed">${oVal}</td>`;
+        tr.innerHTML = `<td>${label}</td><td>${cVal}</td><td>${oVal}</td><td class="status status-${status}">${status.replace('_', ' ')}</td>`;
         rows.appendChild(tr);
       }
 
+      // WebRTC gets its own row since it's a live network probe, not a static compare.
+      const webrtcTr = document.createElement('tr');
+      webrtcTr.innerHTML = `<td>WebRTC IP leak probe</td><td>mode: ${configured.webrtcMode ?? '—'}</td><td>${observed.webrtc.detail}</td><td class="status status-${observed.webrtc.status}">${observed.webrtc.status.replace('_', ' ')}</td>`;
+      rows.appendChild(webrtcTr);
+      statusByField.webrtc = observed.webrtc.status;
+
+      const reportObj = { configured, observed, statusByField, generatedAt: new Date().toISOString() };
       document.getElementById('report').value = JSON.stringify(reportObj, null, 2);
+
+      if (window.pfDiagnostics) {
+        window.pfDiagnostics.report(reportObj);
+      }
     }
 
-    document.getElementById('refresh').addEventListener('click', render);
+    document.getElementById('refresh').addEventListener('click', () => void render());
     document.getElementById('copy').addEventListener('click', () => {
       const ta = document.getElementById('report');
       ta.select();
@@ -138,7 +217,7 @@
       URL.revokeObjectURL(url);
     });
 
-    render();
+    void render();
   </script>
 </body>
 </html>

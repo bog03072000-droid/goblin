@@ -1,6 +1,10 @@
-import { app, BrowserWindow, protocol, session } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
+import type { WebrtcMode } from '../../shared/schemas/fingerprint';
+
+const BROWSER_START_URL = 'https://www.google.com';
 
 // Must run before 'ready' — registers profileforge:// as a standard, fetch-capable
 // scheme so the diagnostics page (served from it) behaves like a normal web page
@@ -39,7 +43,20 @@ export function runProfileWindowProcess(): void {
     if (args.proxyRules) {
       void ses.setProxy({ proxyRules: args.proxyRules });
     }
-    ses.setUserAgent(args.userAgent);
+
+    // Session-level UA/Accept-Language: covers HTTP headers and any request
+    // made before the webview's CDP override (below) attaches. NOTE: the
+    // `--lang` switch alone was measured to leak the host OS's real installed
+    // languages into navigator.languages (verified during the fingerprint
+    // audit — see docs/FINGERPRINT_AUDIT.md) so it is NOT relied on for that;
+    // the CDP override in the did-attach-webview handler is the authoritative
+    // source for navigator.language/languages/platform.
+    const languages = Array.isArray(args.fingerprintConfig['languages'])
+      ? (args.fingerprintConfig['languages'] as string[])
+      : [args.locale];
+    ses.setUserAgent(args.userAgent, languages.join(','));
+
+    const webrtcMode = (args.fingerprintConfig['webrtcMode'] as WebrtcMode | undefined) ?? 'default';
 
     // Registered on the profile's own session (not the default one) since that's
     // what the <webview partition="..."> actually uses. Serves the local
@@ -67,14 +84,71 @@ export function runProfileWindowProcess(): void {
       },
     });
 
+    // Forced here (main process) rather than left to the <webview> tag's own
+    // `preload` attribute, so a compromised/malicious page loaded inside the
+    // webview cannot get the guest to request a different preload for itself.
+    win.webContents.on('will-attach-webview', (_event, webPreferences) => {
+      webPreferences.preload = path.join(__dirname, 'diagnosticsPreload.js');
+    });
+
     const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
+    const diagnosticsUrl = `profileforge://fingerprint-test?config=${configB64}`;
+
+    // Testing-only mechanism (see docs/FINGERPRINT_AUDIT.md and TESTING.md):
+    // when set by the E2E harness, skip straight to the diagnostics page
+    // instead of the real start page, so the automated test can read the
+    // resulting snapshot file without needing to drive the UI's Diagnostics
+    // button. Never set in a normal launch.
+    const autoNavigateTarget = process.env['PF_E2E_AUTO_DIAGNOSTICS'] === '1' ? diagnosticsUrl : BROWSER_START_URL;
+
+    // The webview starts at about:blank (see browser-shell.html); once Electron
+    // attaches its guest WebContents here, the CDP fingerprint overrides are
+    // applied and ONLY THEN does the real navigation start — so the very first
+    // page load already reflects platform/languages/hardwareConcurrency/screen
+    // instead of racing a reload against them.
+    win.webContents.on('did-attach-webview', (_event, webviewContents) => {
+      applyWebrtcPolicy(webviewContents, webrtcMode);
+
+      const fp = args.fingerprintConfig;
+      enforceFingerprint(webviewContents, {
+        userAgent: args.userAgent,
+        platform: String(fp['platform'] ?? 'Win32'),
+        languages,
+        hardwareConcurrency: Number(fp['hardwareConcurrency'] ?? 8),
+        screenWidth: Number(fp['screenWidth'] ?? 1920),
+        screenHeight: Number(fp['screenHeight'] ?? 1080),
+        deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
+      })
+        .catch((err: unknown) => {
+          console.error('[ProfileForge] fingerprint enforcement failed:', err);
+        })
+        .finally(() => {
+          void webviewContents.loadURL(autoNavigateTarget);
+        });
+    });
+
+    // Fulfills the "fingerprint snapshot on start" requirement: whenever the
+    // diagnostics page runs (opened manually via the toolbar, or automatically
+    // in test mode above) it hands its configured-vs-observed report to the
+    // preload bridge, which forwards it here to be written into the profile's
+    // own directory — technical diagnostic values only, never page content,
+    // cookies, or browsing history.
+    ipcMain.on('pf:diagnostics-report', (_event, report: unknown) => {
+      try {
+        const snapshotPath = path.join(path.dirname(args.userDataDir), 'fingerprint-snapshot.json');
+        fs.writeFileSync(snapshotPath, JSON.stringify(report, null, 2), 'utf-8');
+      } catch (err) {
+        console.error('[ProfileForge] failed to write fingerprint snapshot:', err);
+      }
+    });
+
     const shellPath = path.join(__dirname, 'browser-shell.html');
     const query = new URLSearchParams({
       partition,
       ua: args.userAgent,
-      start: 'https://www.google.com',
+      start: BROWSER_START_URL,
       label: args.profileName,
-      diagnostics: `profileforge://fingerprint-test?config=${configB64}`,
+      diagnostics: diagnosticsUrl,
     });
     void win.loadFile(shellPath, { search: query.toString() });
 

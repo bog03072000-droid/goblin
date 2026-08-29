@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased — fingerprint reality audit & deep browser integration
+
+Full audit of every fingerprint property against the actual running browser
+— see **`docs/FINGERPRINT_AUDIT.md`** for the complete reality matrix and the
+empirical findings behind every classification. Summary:
+
+- **Newly genuinely enforced** (previously configured-only): User-Agent,
+  `navigator.platform`, `navigator.languages`/`navigator.language`,
+  `hardwareConcurrency`, screen width/height, `devicePixelRatio` — all via
+  Chrome DevTools Protocol `Emulation.*` overrides applied to the profile's
+  webview on attach (`src/main/browser/fingerprintEnforcement.ts`), verified
+  by `tests/e2e/fingerprintEnforcement.spec.ts` reading the real browser
+  state (not the database).
+- **WebRTC**: now uses the real `webContents.setWebRTCIPHandlingPolicy()`
+  Chromium API (discovered during the audit that it's a `WebContents` method
+  in this Electron version, not `Session` as older docs suggest). Honest
+  limitation documented: `webrtcMode: 'disabled'` gets the strongest
+  *available* policy, not true `RTCPeerConnection` removal. The diagnostics
+  page now runs a real ICE-candidate leak probe rather than trusting the
+  policy call succeeded.
+- **Bug found and fixed**: the previous `--lang` command-line-switch-only
+  locale mechanism was measured to leak the host OS's real installed
+  languages into `navigator.languages`. Replaced with the CDP
+  `acceptLanguage` override, verified clean.
+- **Confirmed genuinely not implementable** (not merely "not done yet"):
+  Canvas, AudioContext, WebGL vendor/renderer, `navigator.deviceMemory`,
+  font enumeration, and media-device identity — each empirically tested
+  against a live CDP session before being marked D, with the required future
+  architecture documented for Canvas/Audio specifically.
+- Fingerprint diagnostics page rewritten with an explicit
+  PASS/MISMATCH/NOT_IMPLEMENTED/APPLIED status per property — never a
+  silent pass on a coincidental value match (verified: `deviceMemory`
+  happened to match during testing and was still correctly reported
+  NOT_IMPLEMENTED).
+- New: per-profile fingerprint snapshot (`fingerprint-snapshot.json` in the
+  profile's own directory) written whenever the diagnostics page runs, for
+  comparing observed fingerprints across app/Electron upgrades.
+- New: `browserCompatibility.ts` flags (via an activity log entry, non-
+  blocking) when a profile's fingerprint claims a different Chromium major
+  version than the one actually running.
+- New: consistency-engine tests for the audit brief's own named "impossible
+  combination" examples, plus a CPU/RAM plausibility warning.
+- 10 new tests (2 E2E + 5 consistency + 3 compatibility) — 63 unit/
+  integration + 9 E2E, all passing.
+
 ## Unreleased — real browser start/stop E2E coverage + polling bug fix
 
 - Added `tests/e2e/profileBrowserLifecycle.spec.ts`: an E2E test that clicks a
