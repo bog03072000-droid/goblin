@@ -59,9 +59,26 @@ Honesty over appearance: these are real gaps, not implied coverage.
   storage → stop → restart → verify persistence) — see the E2E scope note
   above. This remains the single biggest gap versus the acceptance criteria
   in the project brief.
-- **200-profile performance benchmarking** (Stage 18) — not run yet. When it
-  is, real measured numbers go here and in PLAN.md; this project's own rules
-  forbid inventing benchmark figures.
+## Performance suite (200 profiles)
+
+```bash
+npm run test:perf
+```
+
+`tests/performance/profileScale.test.ts` creates 200 real profiles (each with
+its own generated fingerprint) through the actual `ProfileManager` and
+`ProfileRepository` code — not a synthetic stand-in — and times create,
+list-all, name search, tag filter, config-clone, and delete. Results are
+printed and written to `tests/performance/PERFORMANCE_REPORT.md` on every run
+(regenerated, not hand-edited) so the numbers there are always from the most
+recent actual run on this machine, never invented. Assertions use generous
+sanity bounds (roughly 10x what was observed) so the test catches a real
+regression without being flaky across different hardware.
+
+This measures the DB/filesystem layer specifically — it does not launch 200
+real Chromium processes, since the brief is explicit that stored profiles
+don't need to run simultaneously; that would be a different (and much
+heavier) benchmark than what Stage 18 is asking for.
 - **Adversarial IPC/security suite** beyond what Zod's schema rejection and
   the path-traversal tests already cover — see SECURITY.md's "known gaps".
 - **Windows installer smoke test** (install → run → uninstall, verify profile

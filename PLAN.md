@@ -30,7 +30,7 @@ Updated as stages complete. See CHANGELOG.md for dated entries.
 | 15 | Settings | ✅ | `SettingsRepository` (key-value over the `settings` table, defaults-merged, corrupted-key-resilient) + Settings page (hardware acceleration, auto cache cleanup, cache limit, startup behavior, log retention). `hardwareAcceleration` actually calls `app.disableHardwareAcceleration()` before `ready` — a real applied setting, not just stored. |
 | 16 | Security hardening | ✅ | contextIsolation/sandbox/no nodeIntegration, Zod validation on every IPC channel, path-traversal guard (incl. null-byte/UNC/URL-encoded variants), encrypted proxy passwords, and now a dedicated adversarial test suite (`tests/unit/security.test.ts`, 19 tests): malformed IPC payloads across 8 channels, 5 path-traversal variants, malformed/prototype-polluted import manifests, FK-constraint-backed corruption resistance. |
 | 17 | Crash recovery | 🟡 | Stale lock detection/recovery implemented and tested; CRASHED status wired to child process non-zero exit; no auto-restart UI flow yet |
-| 18 | Performance testing (200 profiles) | ⬜ | Not run yet — see immediate next steps |
+| 18 | Performance testing (200 profiles) | 🟡 | `tests/performance/profileScale.test.ts` (`npm run test:perf`) creates 200 real profiles+fingerprints through `ProfileManager`/repositories and measures create/list/search/filter/clone/delete — see `tests/performance/PERFORMANCE_REPORT.md` for actual measured numbers (sub-2ms for list/search/filter, ~170ms total to create 200). This is the DB+filesystem layer only; it does not measure real browser-process launch time (200 running Chromium instances isn't the brief's scenario either — profiles don't need to run simultaneously). |
 | 19 | E2E testing | 🟡 | Playwright + `_electron` harness set up and passing (`tests/e2e/profileLifecycle.spec.ts`, 5 tests) against the real built app: profile list, create, search, delete, page navigation. Does not yet drive a profile's actual Start/Stop/Restart (spawns a nested Electron process — see TESTING.md for why that's a deliberate scope cut, not an oversight). |
 | 20 | Windows packaging | 🟡 | electron-builder config present and builds compile; installer not yet produced/verified |
 | 21 | Update architecture | ⬜ | Not started |
@@ -43,13 +43,9 @@ and has passing automated tests exercising the behavior described. Nothing here 
 that merely looks like it works.
 
 ## Immediate next steps
-1. 200-profile performance benchmark (Stage 18) using the repository layer directly (create 200
-   profiles + fingerprints, list/search/filter/start/stop-one/delete, record real measured
-   timings) — the E2E harness now exists but nested-Electron-launch automation isn't there yet,
-   so this measures the DB/storage layer honestly rather than waiting on that.
-2. Windows installer production + verified install/uninstall (Stage 20).
-3. UI polish pass (Stage 22) — profile editor tabs (fingerprint/proxy/browser/storage/advanced
+1. Windows installer production + verified install/uninstall (Stage 20).
+2. UI polish pass (Stage 22) — profile editor tabs (fingerprint/proxy/browser/storage/advanced
    sections) are still just a name+template dropdown at creation time; there's no way to inspect
    or hand-edit a fingerprint from the UI yet, only via IPC directly.
-4. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
+3. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
    process, once there's time to make that reliable rather than flaky.

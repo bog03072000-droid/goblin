@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — E2E harness, performance benchmark
+
+- Playwright + `_electron` E2E harness (`tests/e2e/profileLifecycle.spec.ts`,
+  5 tests) driving the real built Electron app — main process, preload,
+  contextBridge IPC, SQLite, and React renderer all exercised together, not
+  just called in-process. `npm run test:e2e`.
+- 200-profile performance benchmark (`tests/performance/profileScale.test.ts`,
+  `npm run test:perf`), creating 200 real profiles+fingerprints through
+  `ProfileManager`/repositories and measuring create/list/search/filter/
+  clone/delete. Real measured numbers written to
+  `tests/performance/PERFORMANCE_REPORT.md` on every run — sub-2ms for
+  list/search/filter at 200 profiles, ~170ms to create all 200.
+
 ## Unreleased — settings, filtering, security suite
 
 - Settings repository (defaults-merged, corrupted-key-resilient key/value
