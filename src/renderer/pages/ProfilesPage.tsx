@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
-import type { Profile } from '@shared/schemas/profile';
+import { useEffect, useMemo, useState } from 'react';
+import type { Profile, ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import { callApi } from '../services/api';
+
+type StatusFilter = 'ALL' | ProfileStatus;
 
 export function ProfilesPage(): JSX.Element {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [search, setSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [newName, setNewName] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +19,10 @@ export function ProfilesPage(): JSX.Element {
 
   async function refresh(): Promise<void> {
     try {
-      const list = await callApi<'profiles:list', Profile[]>('profiles:list', { search: search || undefined });
+      const list = await callApi<'profiles:list', Profile[]>('profiles:list', {
+        search: search || undefined,
+        tag: tagFilter || undefined,
+      });
       setProfiles(list);
       setError(null);
     } catch (err) {
@@ -27,7 +34,14 @@ export function ProfilesPage(): JSX.Element {
     void refresh();
     void callApi<'templates:list', Template[]>('templates:list', {}).then(setTemplates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, tagFilter]);
+
+  const allTags = useMemo(() => Array.from(new Set(profiles.flatMap((p) => p.tags))).sort(), [profiles]);
+
+  const visibleProfiles = useMemo(
+    () => (statusFilter === 'ALL' ? profiles : profiles.filter((p) => p.status === statusFilter)),
+    [profiles, statusFilter],
+  );
 
   async function createProfile(): Promise<void> {
     if (!newName.trim()) return;
@@ -89,6 +103,22 @@ export function ProfilesPage(): JSX.Element {
     <>
       <div className="toolbar">
         <input placeholder="Search profiles..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
+          <option value="ALL">All statuses</option>
+          <option value="RUNNING">Running</option>
+          <option value="STOPPED">Stopped</option>
+          <option value="CRASHED">Crashed</option>
+          <option value="ERROR">Error</option>
+          <option value="LOCKED">Locked</option>
+        </select>
+        <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+          <option value="">All tags</option>
+          {allTags.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
         <div style={{ flex: 1 }} />
         <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
           <option value="">Automatic (mixed)</option>
@@ -122,7 +152,7 @@ export function ProfilesPage(): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {profiles.map((p) => (
+            {visibleProfiles.map((p) => (
               <tr key={p.id}>
                 <td>{p.name}</td>
                 <td>
@@ -162,10 +192,10 @@ export function ProfilesPage(): JSX.Element {
                 </td>
               </tr>
             ))}
-            {profiles.length === 0 && (
+            {visibleProfiles.length === 0 && (
               <tr>
                 <td colSpan={5} style={{ color: 'var(--text-dim)' }}>
-                  No profiles yet. Create one above.
+                  {profiles.length === 0 ? 'No profiles yet. Create one above.' : 'No profiles match the current filters.'}
                 </td>
               </tr>
             )}

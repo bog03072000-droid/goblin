@@ -6,6 +6,7 @@ import type { FingerprintRepository } from '../database/fingerprintRepository';
 import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
 import type { TemplateRepository } from '../database/templateRepository';
+import type { SettingsRepository } from '../database/settingsRepository';
 import type { ImportExportService } from '../profiles/importExport';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
@@ -19,6 +20,7 @@ export interface IpcDependencies {
   logs: ActivityLogRepository;
   templates: TemplateRepository;
   importExport: ImportExportService;
+  settings: SettingsRepository;
 }
 
 /** Registers every IPC handler with Zod validation on the incoming payload —
@@ -78,4 +80,7 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:exportConfig', (p) => deps.importExport.exportConfig(p.id));
   handle('profiles:exportFull', (p) => deps.importExport.exportFull(p.id));
   handle('profiles:import', () => deps.importExport.importProfile());
+
+  handle('settings:get', () => deps.settings.getAll());
+  handle('settings:update', (p) => deps.settings.update(p));
 }

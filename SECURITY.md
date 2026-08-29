@@ -77,12 +77,29 @@ lock file records the owning PID; on any check, if that PID is no longer
 alive the lock is cleared automatically (stale-lock recovery) — but **profile
 data itself is never touched by this recovery path**, only the lock file.
 
+## Adversarial test suite
+
+`tests/unit/security.test.ts` (19 tests) covers, specifically:
+- Malformed IPC payloads across 8 different channels (wrong types, invalid
+  enum values, out-of-range numbers, non-UUID ids), asserted directly against
+  the same Zod schemas `registerIpc.ts` uses — not a separate reimplementation.
+- 5 path-traversal variants beyond the basic `../` case in
+  `profileStorage.test.ts`: trailing traversal segments, null bytes, Windows
+  UNC paths, empty strings, URL-encoded traversal attempts.
+- Malformed and prototype-pollution-shaped import manifests, confirming Zod's
+  `.parse()` output is a clean object unaffected by an injected `__proto__`.
+- Database-level corruption resistance: a lookup by a nonexistent id returns
+  `null` rather than throwing; the `fingerprint_id` foreign key blocks
+  creating an orphaned profile; `RESTRICT` blocks deleting a fingerprint still
+  referenced by a profile.
+
 ## Not yet implemented / known gaps
 
-- A dedicated adversarial security test suite (malformed IPC payloads beyond
-  Zod's own rejection, corrupted profile metadata, database failure
-  injection) does not exist yet as a standalone suite — path-traversal and
-  schema-rejection are covered today via the unit tests referenced above.
+- Renderer-side "attempts an unauthorized IPC channel" is enforced by
+  Electron itself (`ipcMain.handle` simply has no listener for an unknown
+  channel) — this is a property of the platform, not something this
+  suite re-tests, since exercising it meaningfully requires a real
+  Electron IPC round-trip (see the E2E gap below).
 - Proxy authentication credentials are currently passed to the per-profile
   child process via environment variables rather than a more tightly scoped
   IPC handshake. Environment variables are visible to other processes running

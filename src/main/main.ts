@@ -6,6 +6,7 @@ import { FingerprintRepository } from './database/fingerprintRepository';
 import { ProxyRepository } from './database/proxyRepository';
 import { ActivityLogRepository } from './database/activityLogRepository';
 import { TemplateRepository } from './database/templateRepository';
+import { SettingsRepository } from './database/settingsRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { registerIpc } from './ipc/registerIpc';
@@ -28,10 +29,18 @@ function runManagerProcess(): void {
     ? path.join(process.resourcesPath, 'database', 'migrations')
     : path.join(__dirname, '..', '..', 'database', 'migrations');
 
+  // Opened before `ready` (app.getPath works pre-ready) specifically so the
+  // hardwareAcceleration setting can take effect — disableHardwareAcceleration()
+  // only has an effect if called before the app is ready.
+  const db = getDb(dbPath, migrationsDir);
+  const settings = new SettingsRepository(db);
+  if (!settings.getAll().hardwareAcceleration) {
+    app.disableHardwareAcceleration();
+  }
+
   let mainWindow: BrowserWindow | null = null;
 
   app.whenReady().then(() => {
-    const db = getDb(dbPath, migrationsDir);
     const profiles = new ProfileRepository(db);
     const fingerprints = new FingerprintRepository(db);
     const proxies = new ProxyRepository(db);
@@ -41,7 +50,7 @@ function runManagerProcess(): void {
     const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs);
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
 
-    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport });
+    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport, settings });
 
     mainWindow = new BrowserWindow({
       width: 1400,

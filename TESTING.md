@@ -1,6 +1,6 @@
 # Testing
 
-## Current suite (25 tests, all passing as of this writing)
+## Current suite (55 tests, all passing as of this writing)
 
 Run with `npm run rebuild:node && npm test`.
 
@@ -19,6 +19,13 @@ Run with `npm run rebuild:node && npm test`.
   each created profile gets its own directory, one profile's files are
   invisible to another, full-clone copies storage while config-clone doesn't,
   deleting one profile leaves others' storage intact.
+- `tests/unit/settingsRepository.test.ts` — defaults when nothing is stored,
+  partial updates persist and merge correctly, a corrupted individual setting
+  key doesn't break reading the rest.
+- `tests/unit/security.test.ts` — dedicated adversarial suite; see
+  SECURITY.md's "Adversarial test suite" section for exactly what it covers
+  (malformed IPC payloads, path-traversal variants, malformed/polluted import
+  manifests, DB-level corruption resistance).
 
 ## What this suite does *not* yet cover
 

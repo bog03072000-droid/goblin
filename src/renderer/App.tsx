@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ProxiesPage } from './pages/ProxiesPage';
 import { LogsPage } from './pages/LogsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 type Page = 'profiles' | 'proxies' | 'logs' | 'settings';
 
@@ -28,11 +29,7 @@ export function App(): JSX.Element {
         {page === 'profiles' && <ProfilesPage />}
         {page === 'proxies' && <ProxiesPage />}
         {page === 'logs' && <LogsPage />}
-        {page === 'settings' && (
-          <div className="content">
-            <p>Settings are not implemented yet in this build.</p>
-          </div>
-        )}
+        {page === 'settings' && <SettingsPage />}
       </div>
     </>
   );

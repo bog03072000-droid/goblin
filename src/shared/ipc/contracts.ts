@@ -6,6 +6,7 @@ import {
 } from '../schemas/profile';
 import { FingerprintInputSchema } from '../schemas/fingerprint';
 import { ProxyInputSchema } from '../schemas/proxy';
+import { SettingsUpdateSchema } from '../schemas/settings';
 
 /**
  * Central IPC contract registry. Every channel's request/response shape is
@@ -48,6 +49,9 @@ export const IpcRequestSchemas = {
   'profiles:exportConfig': z.object({ id: ProfileIdSchema }),
   'profiles:exportFull': z.object({ id: ProfileIdSchema }),
   'profiles:import': z.object({}),
+
+  'settings:get': z.object({}),
+  'settings:update': SettingsUpdateSchema,
 } as const;
 
 export type IpcChannel = keyof typeof IpcRequestSchemas;

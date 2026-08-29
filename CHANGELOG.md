@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — settings, filtering, security suite
+
+- Settings repository (defaults-merged, corrupted-key-resilient key/value
+  store over the `settings` table) + Settings page: hardware acceleration
+  (actually applied via `app.disableHardwareAcceleration()` before `ready`,
+  not just stored), auto cache cleanup, cache limit, startup behavior, log
+  retention.
+- Profiles page: status filter, tag filter (backend `profiles:list` already
+  supported `tag`; now wired to a dropdown), template selector at creation.
+- Dedicated adversarial security test suite (`tests/unit/security.test.ts`,
+  19 tests): malformed IPC payloads across 8 channels, 5 path-traversal
+  variants, malformed/prototype-polluted import manifests, DB foreign-key
+  corruption resistance.
+- 22 new tests overall — 55/55 passing.
+
 ## Unreleased — diagnostics, templates, import/export
 
 - Fingerprint diagnostic page (`profileforge://fingerprint-test`), served by a
