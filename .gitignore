@@ -12,3 +12,4 @@ test-results/
 *.db-journal
 *.db-wal
 *.db-shm
+*.lnk
