@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — profile editor UI
+
+- `ProfileEditorModal` with General/Fingerprint/Proxy/Storage/Advanced tabs:
+  view and rename a profile, view every fingerprint field and run
+  `fingerprint:validate` against it, assign/change/clear a proxy, clear cache,
+  and see storage path + timestamps. Opened via a new "Edit" button per row.
+- New `fingerprint:get` IPC channel to support the editor.
+- Extended the E2E suite with a 5th/6th test covering the editor end-to-end
+  (open, view fingerprint, validate, rename, save) — 6/6 e2e tests passing,
+  55/55 unit/integration tests still passing.
+
 ## Unreleased — Windows installer
 
 - Fixed `electron-builder` packaging on Windows without Developer Mode/admin

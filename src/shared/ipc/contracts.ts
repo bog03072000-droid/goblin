@@ -29,6 +29,7 @@ export const IpcRequestSchemas = {
   }),
   'profiles:clearCache': z.object({ id: ProfileIdSchema }),
 
+  'fingerprint:get': z.object({ id: z.string().uuid() }),
   'fingerprint:generate': z.object({
     seed: z.string().min(1),
     templateId: z.string().optional(),

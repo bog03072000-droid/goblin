@@ -68,6 +68,24 @@ test('deleting a profile removes it from the list', async () => {
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible();
 });
 
+test('editing a profile shows its fingerprint and allows renaming', async () => {
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile One' }) });
+  await row.getByRole('button', { name: 'Edit' }).click();
+
+  await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+  await window.getByText('fingerprint', { exact: true }).click();
+  await expect(window.locator('th', { hasText: 'User-Agent' })).toBeVisible();
+  await window.getByRole('button', { name: 'Validate' }).click();
+  await expect(window.locator('p', { hasText: /Valid|Invalid/ })).toBeVisible({ timeout: 10_000 });
+
+  await window.getByText('general', { exact: true }).click();
+  await window.getByLabel('Name').fill('E2E Profile One Renamed');
+  await window.getByRole('button', { name: 'Save' }).click();
+  await window.getByRole('button', { name: 'Close' }).click();
+
+  await expect(window.locator('td', { hasText: 'E2E Profile One Renamed' })).toBeVisible({ timeout: 15_000 });
+});
+
 test('navigating to Proxies and Settings pages works', async () => {
   await window.getByText('Proxies', { exact: true }).click();
   await expect(window.locator('text=Add Proxy')).toBeVisible();

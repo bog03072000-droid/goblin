@@ -58,6 +58,7 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:clone', (p) => deps.profileManager.clone(p.id, p.mode, p.name));
   handle('profiles:clearCache', (p) => deps.profileManager.clearCache(p.id));
 
+  handle('fingerprint:get', (p) => deps.fingerprints.getById(p.id));
   handle('fingerprint:generate', (p) => generateFingerprint({ seed: p.seed }));
   handle('fingerprint:validate', (p) => validateFingerprint(p));
   handle('fingerprint:update', (p) => deps.fingerprints.update(p.id, p));

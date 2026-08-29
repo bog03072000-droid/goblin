@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Profile, ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import { callApi } from '../services/api';
+import { ProfileEditorModal } from '../components/ProfileEditorModal';
 
 type StatusFilter = 'ALL' | ProfileStatus;
 
@@ -16,6 +17,7 @@ export function ProfilesPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function refresh(): Promise<void> {
     try {
@@ -180,6 +182,9 @@ export function ProfilesPage(): JSX.Element {
                   <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:restart')}>
                     Restart
                   </button>
+                  <button disabled={busyId === p.id} onClick={() => setEditingId(p.id)}>
+                    Edit
+                  </button>
                   <button disabled={busyId === p.id} onClick={() => void exportConfig(p.id)}>
                     Export Config
                   </button>
@@ -202,6 +207,13 @@ export function ProfilesPage(): JSX.Element {
           </tbody>
         </table>
       </div>
+      {editingId && (
+        <ProfileEditorModal
+          profileId={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => void refresh()}
+        />
+      )}
     </>
   );
 }

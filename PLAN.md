@@ -15,7 +15,7 @@ Updated as stages complete. See CHANGELOG.md for dated entries.
 | 0 | Repo/environment init | ✅ | package.json, tsconfig×2, vite, vitest, eslint, git init |
 | 1 | SQLite database + migrations | ✅ | `database/migrations/001_init.sql`, migration runner in `src/main/database/db.ts` |
 | 2 | Persistent profile storage | ✅ | `src/main/storage/profileStorage.ts`, path-traversal guarded, tested |
-| 3 | Profile Manager UI | 🟡 | Functional list/create/start/stop/restart/delete in `ProfilesPage.tsx`; no tags/search UI polish, no editor sections (fingerprint/proxy tabs) yet |
+| 3 | Profile Manager UI | ✅ | List/create/start/stop/restart/delete/export/import in `ProfilesPage.tsx`, tag+status filtering, and a tabbed `ProfileEditorModal` (General/Fingerprint/Proxy/Storage/Advanced) for viewing fingerprint fields, running validation, assigning a proxy, renaming, and clearing cache. |
 | 4 | Chromium/browser engine | ✅ | Per-profile child Electron process, own `userData` dir + session partition (`src/main/browser`) |
 | 5 | Proxy Manager | 🟡 | CRUD + TCP reachability test + encrypted password storage done; SOCKS5/HTTP auth wired into child process env; no per-protocol deep validation |
 | 6 | Fingerprint data model | ✅ | `src/shared/schemas/fingerprint.ts`, DB table, repository |
@@ -34,7 +34,7 @@ Updated as stages complete. See CHANGELOG.md for dated entries.
 | 19 | E2E testing | 🟡 | Playwright + `_electron` harness set up and passing (`tests/e2e/profileLifecycle.spec.ts`, 5 tests) against the real built app: profile list, create, search, delete, page navigation. Does not yet drive a profile's actual Start/Stop/Restart (spawns a nested Electron process — see TESTING.md for why that's a deliberate scope cut, not an oversight). |
 | 20 | Windows packaging | ✅ | `npm run package` (or `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis`) produces `release/ProfileForge Setup 0.1.0.exe`. Verified: packaged unpacked exe launches cleanly, `database/migrations` is bundled as an extra resource and loads correctly (`app.isPackaged` path), and `profileforge.db` is created under `%APPDATA%/ProfileForge` — outside the install directory, confirming the "uninstall doesn't destroy profile data" requirement by construction. A scripted install→run→uninstall via the actual NSIS UI has not been automated (would need UI automation of the installer itself); the unpacked-exe + resource-layout verification above is the practical substitute. |
 | 21 | Update architecture | ⬜ | Not started |
-| 22 | UI polish | ⬜ | Functional, not polished |
+| 22 | UI polish | 🟡 | Profile editor tabs now exist (see Stage 3); still no drag/drop, folders, or bulk actions across 200 profiles. Visually plain but consistent dark theme throughout. |
 | 23 | Final QA | ⬜ | Pending prior stages |
 
 ## What "done" means here
@@ -43,9 +43,9 @@ and has passing automated tests exercising the behavior described. Nothing here 
 that merely looks like it works.
 
 ## Immediate next steps
-1. UI polish pass (Stage 22) — profile editor tabs (fingerprint/proxy/browser/storage/advanced
-   sections) are still just a name+template dropdown at creation time; there's no way to inspect
-   or hand-edit a fingerprint from the UI yet, only via IPC directly.
-2. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
-   process, once there's time to make that reliable rather than flaky.
+1. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
+   process, once there's time to make that reliable rather than flaky — the single biggest
+   remaining gap against the brief's acceptance criteria.
+2. Manual fingerprint editing (currently the editor shows fingerprint fields read-only plus a
+   Validate button; there's no form to hand-edit values and re-save, only "Automatic" mode).
 3. Final QA pass (Stage 23) against the acceptance checklist in the original brief.
