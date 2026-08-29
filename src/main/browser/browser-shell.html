@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>ProfileForge Browser</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1e1f22; font-family: Segoe UI, sans-serif; }
+  #toolbar { display: flex; gap: 6px; padding: 6px 8px; background: #26272b; -webkit-app-region: drag; }
+  #toolbar button, #toolbar input { -webkit-app-region: no-drag; }
+  #toolbar button {
+    background: #3a3b40; color: #eee; border: 1px solid #4a4b50; border-radius: 4px;
+    padding: 4px 10px; cursor: pointer; font-size: 13px;
+  }
+  #toolbar button:hover { background: #46474d; }
+  #address {
+    flex: 1; border-radius: 4px; border: 1px solid #4a4b50; background: #1a1b1e;
+    color: #eee; padding: 4px 10px; font-size: 13px; outline: none;
+  }
+  #label { color: #8a8d93; font-size: 11px; align-self: center; padding-left: 6px; }
+  webview { width: 100%; height: calc(100% - 40px); border: none; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="back">&#8592;</button>
+    <button id="fwd">&#8594;</button>
+    <button id="reload">&#8635;</button>
+    <input id="address" type="text" value="about:blank" />
+    <button id="go">Go</button>
+    <span id="label"></span>
+  </div>
+  <webview id="view" src="about:blank"></webview>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const partition = params.get('partition') || '';
+    const userAgent = params.get('ua') || '';
+    const startUrl = params.get('start') || 'https://www.google.com';
+    const label = params.get('label') || '';
+
+    const view = document.getElementById('view');
+    view.setAttribute('partition', partition);
+    if (userAgent) view.setAttribute('useragent', userAgent);
+    view.setAttribute('src', startUrl);
+    document.getElementById('address').value = startUrl;
+    document.getElementById('label').textContent = label;
+
+    function navigate(url) {
+      let target = url.trim();
+      if (!/^[a-zA-Z]+:\/\//.test(target)) target = 'https://' + target;
+      view.setAttribute('src', target);
+    }
+
+    document.getElementById('go').addEventListener('click', () => navigate(document.getElementById('address').value));
+    document.getElementById('address').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') navigate(document.getElementById('address').value);
+    });
+    document.getElementById('back').addEventListener('click', () => view.goBack());
+    document.getElementById('fwd').addEventListener('click', () => view.goForward());
+    document.getElementById('reload').addEventListener('click', () => view.reload());
+    view.addEventListener('did-navigate', (e) => {
+      document.getElementById('address').value = e.url;
+    });
+  </script>
+</body>
+</html>

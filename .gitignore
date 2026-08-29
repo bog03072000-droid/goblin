@@ -1,0 +1,12 @@
+node_modules/
+dist-electron/
+dist-renderer/
+release/
+*.log
+.env
+.env.*
+coverage/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

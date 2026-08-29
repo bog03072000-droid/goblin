@@ -1,0 +1,72 @@
+:root {
+  color-scheme: dark;
+  --bg: #1e1f22;
+  --bg-panel: #26272b;
+  --bg-hover: #33343a;
+  --border: #3a3b40;
+  --text: #e6e6e6;
+  --text-dim: #9a9da3;
+  --accent: #4f8cff;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+#root { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 200px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+.sidebar-item.active { background: var(--bg-hover); color: var(--text); border-left: 2px solid var(--accent); }
+
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.toolbar { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; }
+.content { flex: 1; overflow: auto; padding: 16px; }
+
+input, button, select, textarea {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+button { cursor: pointer; }
+button:hover { background: var(--bg-hover); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.status-RUNNING { background: var(--green); }
+.status-STOPPED { background: var(--text-dim); }
+.status-STARTING, .status-STOPPING { background: var(--yellow); }
+.status-CRASHED, .status-ERROR { background: var(--red); }
+.status-LOCKED { background: var(--yellow); }
+
+.tag { display: inline-block; background: var(--bg-hover); border-radius: 3px; padding: 1px 6px; margin-right: 4px; font-size: 11px; color: var(--text-dim); }
+.error-banner { background: #3a1f1f; border: 1px solid var(--red); color: #ffb3ae; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; }
