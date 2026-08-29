@@ -1,6 +1,6 @@
 # Testing
 
-## Current suite (55 tests, all passing as of this writing)
+## Unit + integration suite (55 tests, all passing as of this writing)
 
 Run with `npm run rebuild:node && npm test`.
 
@@ -14,22 +14,27 @@ Run with `npm run rebuild:node && npm test`.
 - `tests/unit/repositories.test.ts` — fingerprint/proxy/profile repository
   round-trips; proxy password never appears in `list()`/`getById()` output;
   tag filtering; deleting a profile doesn't cascade into unrelated data.
+- `tests/unit/settingsRepository.test.ts` — defaults when nothing is stored,
+  partial updates persist and merge correctly, a corrupted individual setting
+  key doesn't break reading the rest.
+- `tests/unit/templates.test.ts` — the 6 built-in templates seed idempotently
+  with coherent os/locale definitions.
+- `tests/unit/exportFormat.test.ts` — export manifest schema accepts valid
+  data, rejects unknown format/version/malformed fingerprints, never leaks a
+  password field even if one is injected.
+- `tests/unit/security.test.ts` — dedicated adversarial suite; see
+  SECURITY.md's "Adversarial test suite" section for exactly what it covers
+  (malformed IPC payloads, path-traversal variants, malformed/polluted import
+  manifests, DB-level corruption resistance).
 - `tests/integration/profileIsolation.test.ts` — `ProfileManager` end-to-end
   against a real (in-memory) SQLite DB and a real temp-directory filesystem:
   each created profile gets its own directory, one profile's files are
   invisible to another, full-clone copies storage while config-clone doesn't,
   deleting one profile leaves others' storage intact.
-- `tests/unit/settingsRepository.test.ts` — defaults when nothing is stored,
-  partial updates persist and merge correctly, a corrupted individual setting
-  key doesn't break reading the rest.
-- `tests/unit/security.test.ts` — dedicated adversarial suite; see
-  SECURITY.md's "Adversarial test suite" section for exactly what it covers
-  (malformed IPC payloads, path-traversal variants, malformed/polluted import
-  manifests, DB-level corruption resistance).
 
 ## E2E suite (Playwright driving the real Electron app)
 
-`tests/e2e/profileLifecycle.spec.ts` — 5 tests, run with:
+Two files, 7 tests total, run with:
 
 ```bash
 npm run build && npm run rebuild:electron && npm run test:e2e
@@ -39,26 +44,29 @@ This launches the actual compiled manager process (`@playwright/test`'s
 `_electron` launcher) against a temp `--user-data-dir`, so it exercises the
 real Electron main + preload + `contextBridge` + IPC + SQLite + React
 renderer stack — not just the in-process repository code the unit/integration
-suite calls directly. Covers: the Profiles page loading with an empty list,
-creating a profile end-to-end through the UI, search filtering, deletion, and
-navigation to the Proxies/Settings pages.
+suite calls directly.
 
-**Deliberately out of scope for this harness:** clicking a profile's "Start"
-button, which spawns a *second*, independent Electron/Chromium OS process
-per `ARCHITECTURE.md`. Reliably driving a nested Electron launch (and then
-attaching to *its* window to verify storage persistence) from inside this
-harness needs more sandbox/process-management work than was worth doing
-speculatively — it's tracked as a follow-up in PLAN.md rather than faked with
-a test that doesn't actually exercise the real launch path.
+- `tests/e2e/profileLifecycle.spec.ts` (6 tests) — Profiles page loading
+  empty, creating a profile through the UI, search filtering, deletion,
+  opening the profile editor (view fingerprint fields, run validation, rename
+  and save), and navigation to Proxies/Settings.
+- `tests/e2e/profileBrowserLifecycle.spec.ts` (1 test, isolated because it's
+  slower/more environment-sensitive) — clicks a profile's real **Start**
+  button, waits for status to reach `RUNNING`, confirms the per-profile
+  `browser-data` directory actually gets created on disk (proof the nested
+  Electron/Chromium process really launched with its own `userData` dir, not
+  a simulation), then clicks **Stop** and waits for `STOPPED`.
 
-## What this suite does *not* yet cover
+Writing this second test surfaced a real bug during development: the
+Profiles page had no polling, so after clicking Stop the row could visibly
+freeze on `STOPPING` forever even though the DB/process had already finished
+transitioning to `STOPPED` — nothing told the renderer to re-fetch. Fixed
+with a 1s interval poll in `ProfilesPage.tsx` that runs only while at least
+one visible profile is `STARTING`/`STOPPING`, and stops itself otherwise.
+This is exactly the kind of bug an E2E test catches that a unit test testing
+`ProfileManager` in isolation cannot, since the bug was entirely in the
+renderer's refresh logic.
 
-Honesty over appearance: these are real gaps, not implied coverage.
-
-- **Full browser-process lifecycle** (start → real Chromium window → write
-  storage → stop → restart → verify persistence) — see the E2E scope note
-  above. This remains the single biggest gap versus the acceptance criteria
-  in the project brief.
 ## Performance suite (200 profiles)
 
 ```bash
@@ -79,10 +87,23 @@ This measures the DB/filesystem layer specifically — it does not launch 200
 real Chromium processes, since the brief is explicit that stored profiles
 don't need to run simultaneously; that would be a different (and much
 heavier) benchmark than what Stage 18 is asking for.
-- **Adversarial IPC/security suite** beyond what Zod's schema rejection and
-  the path-traversal tests already cover — see SECURITY.md's "known gaps".
-- **Windows installer smoke test** (install → run → uninstall, verify profile
-  data survives/doesn't per user choice) — not run yet.
+
+## What this suite does *not* yet cover
+
+Honesty over appearance: these are real gaps, not implied coverage.
+
+- `ProfileManager.restart()` is unit-tested but not yet driven through the
+  E2E UI the way start/stop now are.
+- An automated "close the app, reopen it, profile data is still there"
+  round-trip — persistence-across-restart is true by construction (each
+  profile has its own `userData` dir independent of the manager process) but
+  isn't yet asserted by a test that actually closes and reopens the app.
+- Backup/Restore have storage-layer functions (`backupProfile`/
+  `restoreProfile` in `profileStorage.ts`) but no IPC channel or UI wiring
+  yet, so there's nothing to E2E-test there.
+- **Windows installer smoke test** via the actual NSIS installer UI
+  (install → run → uninstall) — not automated; see PLAN.md Stage 20 for what
+  *was* verified (packaged exe launch, resource bundling, DB location).
 
 ## Manual smoke test performed
 

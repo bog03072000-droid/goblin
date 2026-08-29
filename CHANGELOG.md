@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — real browser start/stop E2E coverage + polling bug fix
+
+- Added `tests/e2e/profileBrowserLifecycle.spec.ts`: an E2E test that clicks a
+  profile's real Start button, confirms the nested per-profile Electron/
+  Chromium OS process actually launches (its `browser-data` directory
+  appears on disk), then Stops it and confirms teardown. This was previously
+  documented as an intentional scope cut; it's now covered.
+- Writing that test surfaced a real bug: `ProfilesPage` never re-polled after
+  Start/Stop, so the UI could visibly freeze on STARTING/STOPPING even after
+  the profile had actually finished transitioning in the database. Fixed with
+  a 1s poll that runs only while a profile is in a transitional state.
+- Completed a Stage 23 final-QA pass against the original brief's acceptance
+  checklist — see PLAN.md for the full item-by-item result. 7/7 E2E, 55/55
+  unit/integration, 6/6 performance tests passing; both tsconfigs and ESLint
+  clean.
+
 ## Unreleased — profile editor UI
 
 - `ProfileEditorModal` with General/Fingerprint/Proxy/Storage/Advanced tabs:

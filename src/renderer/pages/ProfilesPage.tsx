@@ -38,6 +38,18 @@ export function ProfilesPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, tagFilter]);
 
+  // Start/Stop resolve to a terminal RUNNING/STOPPED/CRASHED status asynchronously
+  // (the browser process's own 'exit' event), not synchronously when the IPC call
+  // returns — so without this poll, the UI would freeze on STARTING/STOPPING until
+  // some unrelated action happened to trigger another refresh().
+  const hasTransitionalProfile = profiles.some((p) => p.status === 'STARTING' || p.status === 'STOPPING');
+  useEffect(() => {
+    if (!hasTransitionalProfile) return;
+    const interval = setInterval(() => void refresh(), 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTransitionalProfile]);
+
   const allTags = useMemo(() => Array.from(new Set(profiles.flatMap((p) => p.tags))).sort(), [profiles]);
 
   const visibleProfiles = useMemo(
