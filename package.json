@@ -2,6 +2,7 @@
   "name": "profileforge",
   "version": "0.1.0",
   "description": "Multi-profile Chromium browser with persistent isolated profiles, proxy management, and coherent fingerprint configuration.",
+  "author": "ProfileForge",
   "private": true,
   "main": "dist-electron/main/main.js",
   "type": "commonjs",
@@ -64,7 +65,8 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

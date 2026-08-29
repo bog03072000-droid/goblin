@@ -61,6 +61,30 @@ one.
 Never add a new way for the renderer to reach the main process — this is the
 only bridge, by design (see SECURITY.md).
 
+## Packaging: "Cannot create symbolic link" during `electron-builder`
+
+electron-builder unconditionally downloads and extracts a shared
+`winCodeSign` tool package (used for cross-platform code-signing support)
+even for an unsigned Windows-only build. That archive contains macOS-style
+symlinks, and extracting them requires either Administrator privileges or
+Windows Developer Mode enabled — without either, 7-Zip fails with
+`ERROR: Cannot create symbolic link : A required privilege is not held by the client.`
+on `darwin/.../lib/*.dylib` entries, and the build fails.
+
+This project's `build.win.signAndEditExecutable` is set to `false` in
+`package.json`, which avoids the specific `rcedit` step that needed the
+extraction in practice. If you still hit the error, either:
+
+- run `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis`
+  (skips code-signing identity auto-discovery), or
+- enable Windows Developer Mode (Settings → Privacy & security → For
+  developers) so unprivileged symlink creation is allowed, then retry.
+
+This is an electron-builder/Windows environment quirk, not a ProfileForge
+bug — verified working (installer built successfully, packaged app launches,
+`profileforge.db` is created under `%APPDATA%/ProfileForge`, not the install
+directory) with the `signAndEditExecutable: false` config alone.
+
 ## Known dev-environment quirks
 
 - `dist-electron/main/browser/browser-shell.html` is a plain static asset

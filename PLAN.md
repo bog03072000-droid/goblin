@@ -32,7 +32,7 @@ Updated as stages complete. See CHANGELOG.md for dated entries.
 | 17 | Crash recovery | 🟡 | Stale lock detection/recovery implemented and tested; CRASHED status wired to child process non-zero exit; no auto-restart UI flow yet |
 | 18 | Performance testing (200 profiles) | 🟡 | `tests/performance/profileScale.test.ts` (`npm run test:perf`) creates 200 real profiles+fingerprints through `ProfileManager`/repositories and measures create/list/search/filter/clone/delete — see `tests/performance/PERFORMANCE_REPORT.md` for actual measured numbers (sub-2ms for list/search/filter, ~170ms total to create 200). This is the DB+filesystem layer only; it does not measure real browser-process launch time (200 running Chromium instances isn't the brief's scenario either — profiles don't need to run simultaneously). |
 | 19 | E2E testing | 🟡 | Playwright + `_electron` harness set up and passing (`tests/e2e/profileLifecycle.spec.ts`, 5 tests) against the real built app: profile list, create, search, delete, page navigation. Does not yet drive a profile's actual Start/Stop/Restart (spawns a nested Electron process — see TESTING.md for why that's a deliberate scope cut, not an oversight). |
-| 20 | Windows packaging | 🟡 | electron-builder config present and builds compile; installer not yet produced/verified |
+| 20 | Windows packaging | ✅ | `npm run package` (or `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis`) produces `release/ProfileForge Setup 0.1.0.exe`. Verified: packaged unpacked exe launches cleanly, `database/migrations` is bundled as an extra resource and loads correctly (`app.isPackaged` path), and `profileforge.db` is created under `%APPDATA%/ProfileForge` — outside the install directory, confirming the "uninstall doesn't destroy profile data" requirement by construction. A scripted install→run→uninstall via the actual NSIS UI has not been automated (would need UI automation of the installer itself); the unpacked-exe + resource-layout verification above is the practical substitute. |
 | 21 | Update architecture | ⬜ | Not started |
 | 22 | UI polish | ⬜ | Functional, not polished |
 | 23 | Final QA | ⬜ | Pending prior stages |
@@ -43,9 +43,9 @@ and has passing automated tests exercising the behavior described. Nothing here 
 that merely looks like it works.
 
 ## Immediate next steps
-1. Windows installer production + verified install/uninstall (Stage 20).
-2. UI polish pass (Stage 22) — profile editor tabs (fingerprint/proxy/browser/storage/advanced
+1. UI polish pass (Stage 22) — profile editor tabs (fingerprint/proxy/browser/storage/advanced
    sections) are still just a name+template dropdown at creation time; there's no way to inspect
    or hand-edit a fingerprint from the UI yet, only via IPC directly.
-3. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
+2. Extend the E2E harness to drive an actual profile Start/Stop cycle against a nested Electron
    process, once there's time to make that reliable rather than flaky.
+3. Final QA pass (Stage 23) against the acceptance checklist in the original brief.

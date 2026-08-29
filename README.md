@@ -59,11 +59,17 @@ npm run rebuild:electron && npm run dev:electron
 ## Build a Windows installer
 
 ```bash
-npm run rebuild:electron
-npm run package
+npm run build
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis
 ```
 
-Output goes to `release/`. Application data (profiles, the SQLite database)
+(`npm run package` runs the same thing without the env var — set it if
+electron-builder's cache doesn't already have `winCodeSign` extracted; see
+DEVELOPMENT.md if you hit a "Cannot create symbolic link" error.)
+
+Produces `release/ProfileForge Setup <version>.exe` (NSIS, per-user install by
+default, user can change the install directory). Output goes to `release/`.
+Application data (profiles, the SQLite database)
 lives in the OS user-data directory (`%APPDATA%/ProfileForge`), never inside
 the install directory, so uninstalling the app does not delete profile data
 unless the user explicitly removes that folder.

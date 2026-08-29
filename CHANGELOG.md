@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — Windows installer
+
+- Fixed `electron-builder` packaging on Windows without Developer Mode/admin
+  (`signAndEditExecutable: false`, documented in DEVELOPMENT.md) and produced
+  a real NSIS installer: `release/ProfileForge Setup 0.1.0.exe`.
+- Verified: the packaged app launches cleanly, `database/migrations` is
+  correctly bundled as an extra resource and used via the `app.isPackaged`
+  code path, and `profileforge.db` is created under `%APPDATA%/ProfileForge`
+  — outside the install directory.
+- Added the `author` field electron-builder required.
+
 ## Unreleased — E2E harness, performance benchmark
 
 - Playwright + `_electron` E2E harness (`tests/e2e/profileLifecycle.spec.ts`,
