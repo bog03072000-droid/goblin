@@ -16,7 +16,7 @@ target runtime:
 
 ```bash
 npm run rebuild:node       # before: npm test / npm run test:watch
-npm run rebuild:electron   # before: npm run dev:electron / npm run package
+npm run rebuild:electron   # before: npm run dev:electron / npm run package / npm run test:e2e
 ```
 
 Running the wrong one gives a `NODE_MODULE_VERSION` mismatch error at
@@ -33,6 +33,7 @@ above.
 | `npm run typecheck` | `tsc --noEmit` for both the renderer and main tsconfigs |
 | `npm run lint` | ESLint over `.ts`/`.tsx` |
 | `npm test` | Vitest (unit + integration) |
+| `npm run test:e2e` | Playwright, driving the real built Electron app (requires `npm run build` + `npm run rebuild:electron` first) |
 | `npm run package` | electron-builder → Windows installer in `release/` |
 
 ## Project layout

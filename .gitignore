@@ -6,6 +6,8 @@ release/
 .env
 .env.*
 coverage/
+playwright-report/
+test-results/
 *.db
 *.db-journal
 *.db-wal

@@ -15,6 +15,7 @@
     "lint": "eslint . --ext .ts,.tsx",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "package": "npm run build && electron-builder",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3"
@@ -26,6 +27,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.5.0",
     "@types/react": "^18.3.5",
@@ -55,7 +57,10 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "database/migrations", "to": "database/migrations" }
+      {
+        "from": "database/migrations",
+        "to": "database/migrations"
+      }
     ],
     "win": {
       "target": "nsis"
