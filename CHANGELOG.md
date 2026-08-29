@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — diagnostics, templates, import/export
+
+- Fingerprint diagnostic page (`profileforge://fingerprint-test`), served by a
+  custom protocol handler registered on each profile's own session, comparing
+  configured vs. observed navigator/WebGL/canvas values. Reachable via a
+  toolbar button in the per-profile browser shell. Deliberately shows
+  mismatches on fields not yet enforced rather than hiding them.
+- 6 built-in profile templates (Windows Desktop/Germany/France/Ukraine, macOS
+  Desktop, Linux Desktop), seeded idempotently at startup; profile creation
+  can now target a template to constrain OS/locale.
+- Versioned, Zod-validated profile export/import
+  (`src/shared/schemas/exportFormat.ts`, `src/main/profiles/importExport.ts`):
+  config-only export (single JSON, no secrets) and full export (manifest +
+  copied browser-data folder via a native folder-picker dialog). Import
+  always creates a new profile with a freshly generated ID/directory; it never
+  overwrites an existing one.
+- 8 new tests (templates, export schema validation) — 33/33 passing.
+
 ## Unreleased — initial foundation
 
 - Initialized project: Electron + React + TypeScript + Vite + better-sqlite3 +

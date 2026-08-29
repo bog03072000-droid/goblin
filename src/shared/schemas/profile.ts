@@ -39,6 +39,7 @@ export const ProfileCreateInputSchema = z.object({
   description: z.string().max(2000).optional(),
   proxyId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().min(1).max(60)).optional(),
+  templateId: z.string().optional(),
 });
 export type ProfileCreateInput = z.infer<typeof ProfileCreateInputSchema>;
 

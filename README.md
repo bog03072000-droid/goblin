@@ -92,11 +92,16 @@ given fingerprint is unique or undetectable.
 
 ## Known limitations (current build)
 
-- No fingerprint diagnostic page yet (Stage 9 in PLAN.md).
-- No templates, import/export, or Settings UI yet.
+- No Settings UI yet (Stage 15 in PLAN.md).
+- Full profile export is a manifest + copied folder, not a single portable
+  archive file (no zip/tar dependency was added speculatively — see
+  DEVELOPMENT.md).
 - Canvas/audio noise modes and WebRTC leak protection are stored and validated
   in the data model but **not yet enforced** in the actual browser process —
-  this is called out explicitly rather than faked.
+  the fingerprint diagnostic page (`profileforge://fingerprint-test`, open it
+  via the "Diagnostics" button in any running profile's browser toolbar)
+  shows this honestly by comparing configured vs. observed values rather than
+  hiding the gap.
 - No Playwright E2E suite yet; the current test suite covers unit +
   integration level (storage isolation, fingerprint coherence, DB
   repositories, lock recovery) with a real Electron app runtime smoke-tested

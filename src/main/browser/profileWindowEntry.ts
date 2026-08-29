@@ -1,5 +1,13 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, protocol, session } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
+
+// Must run before 'ready' — registers profileforge:// as a standard, fetch-capable
+// scheme so the diagnostics page (served from it) behaves like a normal web page
+// (relative URLs, fetch, no restricted-scheme quirks) while staying local-only.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'profileforge', privileges: { standard: true, secure: true, corsEnabled: true } },
+]);
 
 /**
  * Entry point run inside the per-profile child Electron process (spawned by
@@ -33,6 +41,19 @@ export function runProfileWindowProcess(): void {
     }
     ses.setUserAgent(args.userAgent);
 
+    // Registered on the profile's own session (not the default one) since that's
+    // what the <webview partition="..."> actually uses. Serves the local
+    // diagnostics page only — profileforge:// resolves no other path, so this
+    // cannot become a general local-file-read primitive.
+    ses.protocol.handle('profileforge', (request) => {
+      const url = new URL(request.url);
+      if (url.hostname !== 'fingerprint-test') {
+        return new Response('Not found', { status: 404 });
+      }
+      const html = fs.readFileSync(path.join(__dirname, 'diagnostics.html'));
+      return new Response(html, { headers: { 'content-type': 'text/html' } });
+    });
+
     const win = new BrowserWindow({
       width: 1280,
       height: 800,
@@ -46,12 +67,14 @@ export function runProfileWindowProcess(): void {
       },
     });
 
+    const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
     const shellPath = path.join(__dirname, 'browser-shell.html');
     const query = new URLSearchParams({
       partition,
       ua: args.userAgent,
       start: 'https://www.google.com',
       label: args.profileName,
+      diagnostics: `profileforge://fingerprint-test?config=${configB64}`,
     });
     void win.loadFile(shellPath, { search: query.toString() });
 
@@ -70,6 +93,7 @@ interface ProfileWindowArgs {
   proxyRules: string | null;
   proxyUsername: string | null;
   proxyPassword: string | null;
+  fingerprintConfig: Record<string, unknown>;
 }
 
 function parseArgs(argv: string[]): ProfileWindowArgs {
@@ -85,6 +109,18 @@ function parseArgs(argv: string[]): ProfileWindowArgs {
   if (!profileId || !profileName || !userDataDir || !userAgent) {
     throw new Error('Missing required profile window arguments');
   }
+  const fingerprintConfigB64 = get('fingerprint-config');
+  let fingerprintConfig: Record<string, unknown> = {};
+  if (fingerprintConfigB64) {
+    try {
+      fingerprintConfig = JSON.parse(Buffer.from(fingerprintConfigB64, 'base64').toString('utf-8')) as Record<
+        string,
+        unknown
+      >;
+    } catch {
+      fingerprintConfig = {};
+    }
+  }
   return {
     profileId,
     profileName,
@@ -94,5 +130,6 @@ function parseArgs(argv: string[]): ProfileWindowArgs {
     proxyRules: get('proxy-rules'),
     proxyUsername: process.env['PF_PROXY_USERNAME'] ?? null,
     proxyPassword: process.env['PF_PROXY_PASSWORD'] ?? null,
+    fingerprintConfig,
   };
 }

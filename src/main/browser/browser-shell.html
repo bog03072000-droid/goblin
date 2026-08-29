@@ -27,6 +27,7 @@
     <button id="reload">&#8635;</button>
     <input id="address" type="text" value="about:blank" />
     <button id="go">Go</button>
+    <button id="diagnostics">Diagnostics</button>
     <span id="label"></span>
   </div>
   <webview id="view" src="about:blank"></webview>
@@ -36,6 +37,7 @@
     const userAgent = params.get('ua') || '';
     const startUrl = params.get('start') || 'https://www.google.com';
     const label = params.get('label') || '';
+    const diagnosticsUrl = params.get('diagnostics') || '';
 
     const view = document.getElementById('view');
     view.setAttribute('partition', partition);
@@ -54,6 +56,7 @@
     document.getElementById('address').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') navigate(document.getElementById('address').value);
     });
+    document.getElementById('diagnostics').addEventListener('click', () => navigate(diagnosticsUrl));
     document.getElementById('back').addEventListener('click', () => view.goBack());
     document.getElementById('fwd').addEventListener('click', () => view.goForward());
     document.getElementById('reload').addEventListener('click', () => view.reload());

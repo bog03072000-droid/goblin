@@ -5,6 +5,8 @@ import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
 import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
+import type { TemplateRepository } from '../database/templateRepository';
+import type { ImportExportService } from '../profiles/importExport';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
 import { testProxyConnection } from '../proxy/proxyTester';
@@ -15,6 +17,8 @@ export interface IpcDependencies {
   fingerprints: FingerprintRepository;
   proxies: ProxyRepository;
   logs: ActivityLogRepository;
+  templates: TemplateRepository;
+  importExport: ImportExportService;
 }
 
 /** Registers every IPC handler with Zod validation on the incoming payload —
@@ -34,7 +38,14 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:list', (p) => deps.profiles.list(p));
   handle('profiles:get', (p) => deps.profiles.getById(p.id));
   handle('profiles:create', (p) => {
-    const fingerprint = deps.fingerprints.create(generateFingerprint({ seed: p.name + Date.now() }));
+    const template = p.templateId ? deps.templates.getById(p.templateId) : null;
+    const fingerprint = deps.fingerprints.create(
+      generateFingerprint({
+        seed: p.name + Date.now(),
+        os: template?.definition.os,
+        locale: template?.definition.locale,
+      }),
+    );
     return deps.profileManager.create(p, fingerprint.id);
   });
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
@@ -61,4 +72,10 @@ export function registerIpc(deps: IpcDependencies): void {
   });
 
   handle('logs:list', (p) => deps.logs.list(p.limit));
+
+  handle('templates:list', () => deps.templates.list());
+
+  handle('profiles:exportConfig', (p) => deps.importExport.exportConfig(p.id));
+  handle('profiles:exportFull', (p) => deps.importExport.exportFull(p.id));
+  handle('profiles:import', () => deps.importExport.importProfile());
 }

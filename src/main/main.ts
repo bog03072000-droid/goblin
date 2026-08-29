@@ -5,7 +5,9 @@ import { ProfileRepository } from './database/profileRepository';
 import { FingerprintRepository } from './database/fingerprintRepository';
 import { ProxyRepository } from './database/proxyRepository';
 import { ActivityLogRepository } from './database/activityLogRepository';
+import { TemplateRepository } from './database/templateRepository';
 import { ProfileManager } from './profiles/profileManager';
+import { ImportExportService } from './profiles/importExport';
 import { registerIpc } from './ipc/registerIpc';
 import { runProfileWindowProcess } from './browser/profileWindowEntry';
 
@@ -34,9 +36,12 @@ function runManagerProcess(): void {
     const fingerprints = new FingerprintRepository(db);
     const proxies = new ProxyRepository(db);
     const logs = new ActivityLogRepository(db);
+    const templates = new TemplateRepository(db);
+    templates.seedBuiltins();
     const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs);
+    const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
 
-    registerIpc({ profileManager, profiles, fingerprints, proxies, logs });
+    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport });
 
     mainWindow = new BrowserWindow({
       width: 1400,

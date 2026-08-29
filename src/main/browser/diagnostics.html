@@ -1,0 +1,144 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>ProfileForge Fingerprint Diagnostics</title>
+<style>
+  body { margin: 0; background: #1e1f22; color: #e6e6e6; font-family: Segoe UI, sans-serif; padding: 20px; }
+  h1 { font-size: 16px; font-weight: 600; }
+  p.hint { color: #9a9da3; font-size: 12px; max-width: 640px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #3a3b40; font-size: 12px; vertical-align: top; word-break: break-all; }
+  th { color: #9a9da3; font-weight: 500; }
+  tr.match td.observed { color: #3fb950; }
+  tr.mismatch td.observed { color: #d29922; }
+  .toolbar { display: flex; gap: 8px; margin-top: 14px; }
+  button { background: #3a3b40; color: #eee; border: 1px solid #4a4b50; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #46474d; }
+  textarea { width: 100%; height: 160px; margin-top: 10px; background: #1a1b1e; color: #ccc; border: 1px solid #3a3b40; font-family: monospace; font-size: 11px; }
+</style>
+</head>
+<body>
+  <h1>Fingerprint Diagnostics</h1>
+  <p class="hint">
+    Compares the configured fingerprint against what this browser process actually reports.
+    A mismatch is expected and clearly marked wherever the field is not yet enforced at the
+    Chromium/OS level (documented in ARCHITECTURE.md / PLAN.md) — this page exists specifically
+    to surface that honestly, not to claim full spoofing coverage.
+  </p>
+  <table>
+    <thead><tr><th>Field</th><th>Configured</th><th class="observed">Observed</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="toolbar">
+    <button id="refresh">REFRESH</button>
+    <button id="copy">COPY REPORT</button>
+    <button id="exportJson">EXPORT JSON</button>
+  </div>
+  <textarea id="report" readonly></textarea>
+  <script>
+    function getObserved() {
+      let webgl = { vendor: 'unavailable', renderer: 'unavailable' };
+      try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          if (ext) {
+            webgl.vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+            webgl.renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+          }
+        }
+      } catch (e) { /* leave defaults */ }
+
+      let canvasHash = 'unavailable';
+      try {
+        const c = document.createElement('canvas');
+        c.width = 50; c.height = 50;
+        const ctx = c.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('pf-diag', 2, 2);
+        canvasHash = c.toDataURL().slice(-24);
+      } catch (e) { /* leave default */ }
+
+      return {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        languages: (navigator.languages || []).join(', '),
+        screenWidth: screen.width,
+        screenHeight: screen.height,
+        devicePixelRatio: window.devicePixelRatio,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        hardwareConcurrency: navigator.hardwareConcurrency,
+        deviceMemory: navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'not exposed',
+        webglVendor: webgl.vendor,
+        webglRenderer: webgl.renderer,
+        canvasFingerprintTail: canvasHash,
+        webrtcLocalIp: 'not probed (see PLAN.md)',
+        mediaDevicesCount: 'pending permission',
+      };
+    }
+
+    function render() {
+      const params = new URLSearchParams(location.search);
+      let configured = {};
+      try { configured = JSON.parse(atob(params.get('config') || '')); } catch (e) { configured = {}; }
+      const observed = getObserved();
+
+      const fieldMap = [
+        ['User-Agent', 'userAgent', 'userAgent'],
+        ['Platform', 'platform', 'platform'],
+        ['Locale', 'locale', 'language'],
+        ['Languages', 'languages', 'languages'],
+        ['Screen Width', 'screenWidth', 'screenWidth'],
+        ['Screen Height', 'screenHeight', 'screenHeight'],
+        ['Device Scale Factor', 'deviceScaleFactor', 'devicePixelRatio'],
+        ['Timezone', 'timezone', 'timezone'],
+        ['Hardware Concurrency', 'hardwareConcurrency', 'hardwareConcurrency'],
+        ['Device Memory (GB)', 'deviceMemory', 'deviceMemory'],
+        ['WebGL Vendor', 'webglVendor', 'webglVendor'],
+        ['WebGL Renderer', 'webglRenderer', 'webglRenderer'],
+        ['Canvas fingerprint (tail)', null, 'canvasFingerprintTail'],
+        ['WebRTC local IP leak check', null, 'webrtcLocalIp'],
+        ['Media devices', null, 'mediaDevicesCount'],
+      ];
+
+      const rows = document.getElementById('rows');
+      rows.innerHTML = '';
+      const reportObj = { configured, observed, generatedAt: new Date().toISOString() };
+
+      for (const [label, cKey, oKey] of fieldMap) {
+        const cVal = cKey ? (configured[cKey] !== undefined ? String(Array.isArray(configured[cKey]) ? configured[cKey].join(', ') : configured[cKey]) : '—') : 'n/a';
+        const oVal = String(observed[oKey]);
+        const tr = document.createElement('tr');
+        const matches = cKey ? cVal === oVal || cVal.includes(oVal) || oVal.includes(cVal) : true;
+        tr.className = matches ? 'match' : 'mismatch';
+        tr.innerHTML = `<td>${label}</td><td>${cVal}</td><td class="observed">${oVal}</td>`;
+        rows.appendChild(tr);
+      }
+
+      document.getElementById('report').value = JSON.stringify(reportObj, null, 2);
+    }
+
+    document.getElementById('refresh').addEventListener('click', render);
+    document.getElementById('copy').addEventListener('click', () => {
+      const ta = document.getElementById('report');
+      ta.select();
+      document.execCommand('copy');
+    });
+    document.getElementById('exportJson').addEventListener('click', () => {
+      const blob = new Blob([document.getElementById('report').value], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'fingerprint-diagnostics.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    render();
+  </script>
+</body>
+</html>

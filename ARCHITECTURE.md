@@ -50,6 +50,26 @@ all.
 - `ipc/registerIpc.ts` — every IPC channel is registered here with a Zod
   schema from `src/shared/ipc/contracts.ts` validating the payload before any
   handler logic runs, regardless of what the renderer/preload types imply.
+- `profiles/importExport.ts` — export/import. All filesystem paths come from
+  a native `dialog.showSaveDialog`/`showOpenDialog` call the user drives, never
+  from a string handed over by the renderer. Export manifests are validated
+  against `src/shared/schemas/exportFormat.ts` on the way back in.
+
+## Fingerprint diagnostics
+
+`src/main/browser/profileWindowEntry.ts` registers `profileforge://` as a
+privileged, standard scheme (via `protocol.registerSchemesAsPrivileged`,
+before `app.whenReady()`) and handles it on the *profile's own session*
+(`ses.protocol.handle`, not the default session) so it's only reachable from
+inside that profile's browser window, serving exactly one page —
+`diagnostics.html` — at `profileforge://fingerprint-test`. The configured
+fingerprint values are passed in as a base64-encoded query parameter computed
+by `browserLauncher.ts`; the page's own script reads the real
+`navigator`/`screen`/`Intl`/WebGL values and renders them side by side,
+flagging mismatches rather than hiding them. This is intentionally the
+"document it, don't fake it" mechanism the project brief calls for wherever a
+fingerprint field (e.g. `hardwareConcurrency`, `deviceMemory`, `platform`)
+isn't yet enforced at the Chromium/OS level.
 
 ## Renderer (`src/renderer`)
 

@@ -21,10 +21,10 @@ Updated as stages complete. See CHANGELOG.md for dated entries.
 | 6 | Fingerprint data model | ✅ | `src/shared/schemas/fingerprint.ts`, DB table, repository |
 | 7 | Fingerprint generator/validator | ✅ | Seeded deterministic generator using coherent platform bundles; validator with errors/warnings; unit tested |
 | 8 | Browser configuration integration | 🟡 | UA, locale, timezone (via TZ env) wired into per-profile process; canvas/audio/webrtc modes are stored/validated but not yet enforced in the child process — documented as not implemented, not faked |
-| 9 | Fingerprint diagnostic page | ⬜ | Not built yet |
-| 10 | Templates | ⬜ | Not built yet |
+| 9 | Fingerprint diagnostic page | ✅ | `profileforge://fingerprint-test` served via a per-profile-session custom protocol handler (`src/main/browser/profileWindowEntry.ts`); `diagnostics.html` shows configured vs. observed navigator/WebGL/canvas values with REFRESH/COPY REPORT/EXPORT JSON. Reachable via a "Diagnostics" button in the browser shell toolbar. Mismatches on fields not yet enforced (hardwareConcurrency, deviceMemory, platform) are shown, not hidden. |
+| 10 | Templates | ✅ | 6 built-in templates seeded idempotently at startup (`TemplateRepository`); `profiles:create` accepts an optional `templateId` that constrains fingerprint generation to that template's OS/locale. UI: template dropdown on profile creation. |
 | 11 | Profile cloning | ✅ | Config-clone and full-clone implemented and tested (`ProfileManager.clone`) |
-| 12 | Import/export | ⬜ | Not built yet |
+| 12 | Import/export | ✅ | Versioned (`format`/`version`) Zod-validated manifest (`src/shared/schemas/exportFormat.ts`); config export is a single JSON file, full export is a manifest + copied `browser-data` folder (no zip dependency added — documented in DEVELOPMENT.md, not faked as a single-file archive). Never includes proxy passwords. All paths come from native OS dialogs, never from renderer-supplied strings. |
 | 13 | Tags/search/filtering | 🟡 | Backend supports tag filter + name search; UI only exposes search box |
 | 14 | Activity logs | ✅ | Repository + Logs page; all lifecycle events recorded |
 | 15 | Settings | ⬜ | Placeholder page only |
@@ -43,9 +43,10 @@ and has passing automated tests exercising the behavior described. Nothing here 
 that merely looks like it works.
 
 ## Immediate next steps
-1. Fingerprint diagnostic page (Stage 9) — needed before deeper browser-config work is trustworthy.
-2. Templates (Stage 10) + Import/Export (Stage 12), since they're pure data-layer work with no new infra.
+1. Tags/search/filtering UI polish (Stage 13) — backend already supports it.
+2. Settings page (Stage 15) — general/browser/storage/privacy/performance/logging/updates sections.
 3. Playwright/Electron E2E harness (Stage 19) — required before Performance testing (18) can be
    done meaningfully against a real running app rather than just the in-process repositories.
 4. Security test suite (Stage 30 in the original numbering) — path traversal and malformed-IPC
    cases are covered inline today; a dedicated suite should assert the full list in the brief.
+5. Windows installer production + verified install/uninstall (Stage 20).

@@ -42,6 +42,12 @@ export const IpcRequestSchemas = {
   'proxy:test': z.object({ id: z.string().uuid() }),
 
   'logs:list': z.object({ limit: z.number().int().min(1).max(1000).default(200) }),
+
+  'templates:list': z.object({}),
+
+  'profiles:exportConfig': z.object({ id: ProfileIdSchema }),
+  'profiles:exportFull': z.object({ id: ProfileIdSchema }),
+  'profiles:import': z.object({}),
 } as const;
 
 export type IpcChannel = keyof typeof IpcRequestSchemas;

@@ -24,6 +24,23 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   const electronBinary = process.execPath;
   const entryScript = app.getAppPath();
 
+  const fingerprintConfigB64 = Buffer.from(
+    JSON.stringify({
+      userAgent: params.fingerprint.userAgent,
+      platform: params.fingerprint.platform,
+      locale: params.fingerprint.locale,
+      languages: params.fingerprint.languages,
+      timezone: params.fingerprint.timezone,
+      screenWidth: params.fingerprint.screenWidth,
+      screenHeight: params.fingerprint.screenHeight,
+      deviceScaleFactor: params.fingerprint.deviceScaleFactor,
+      hardwareConcurrency: params.fingerprint.hardwareConcurrency,
+      deviceMemory: params.fingerprint.deviceMemory,
+      webglVendor: params.fingerprint.webglVendor,
+      webglRenderer: params.fingerprint.webglRenderer,
+    }),
+  ).toString('base64');
+
   const args = [
     entryScript,
     '--profile-window',
@@ -32,6 +49,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
     `--user-data-dir=${params.userDataDir}`,
     `--user-agent=${params.fingerprint.userAgent}`,
     `--locale=${params.fingerprint.locale}`,
+    `--fingerprint-config=${fingerprintConfigB64}`,
   ];
 
   if (params.proxy) {
