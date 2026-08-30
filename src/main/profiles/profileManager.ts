@@ -254,17 +254,29 @@ export class ProfileManager {
   }
 
   /** Bulk actions never let one profile's failure abort the rest of the
-   * batch; each id's outcome is reported independently. */
-  private bulkRun(ids: string[], action: (id: string) => void): BulkResult {
+   * batch; each id's outcome is reported independently. `action` may be
+   * sync or async — `await`ing a plain (non-promise) return value is a
+   * no-op, so this one implementation correctly handles both, which is
+   * what fixed a real bug: bulkStop() used to call this with a sync-typed
+   * callback around `this.stop(id)` (which returns a Promise) WITHOUT
+   * awaiting it, so every stop was reported "succeeded" the instant it was
+   * *requested*, not when it actually finished — any real failure became
+   * an unhandled promise rejection instead of a reported bulk failure. */
+  private async bulkRun(ids: string[], action: (id: string) => void | Promise<void>): Promise<BulkResult> {
     const succeeded: string[] = [];
     const failed: Array<{ id: string; message: string }> = [];
-    for (const id of ids) {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]!;
       try {
-        action(id);
+        await action(id);
         succeeded.push(id);
       } catch (err) {
         failed.push({ id, message: err instanceof Error ? err.message : String(err) });
       }
+      // Yields to the event loop every 20 items so a large batch (e.g. 200
+      // profiles) never blocks the single-threaded main process — and
+      // therefore all other IPC handling — for one long synchronous stretch.
+      if (i % 20 === 19) await new Promise((resolve) => setImmediate(resolve));
     }
     return { succeeded, failed };
   }
@@ -278,7 +290,9 @@ export class ProfileManager {
     const failed: Array<{ id: string; message: string }> = [];
     for (let i = 0; i < ids.length; i += concurrency) {
       const chunk = ids.slice(i, i + concurrency);
-      const result = this.bulkRun(chunk, (id) => this.start(id));
+      const result = await this.bulkRun(chunk, (id) => {
+        this.start(id);
+      });
       succeeded.push(...result.succeeded);
       failed.push(...result.failed);
       if (i + concurrency < ids.length) {
@@ -288,29 +302,46 @@ export class ProfileManager {
     return { succeeded, failed };
   }
 
-  bulkStop(ids: string[]): BulkResult {
-    return this.bulkRun(ids, (id) => this.stop(id));
+  bulkStop(ids: string[]): Promise<BulkResult> {
+    return this.bulkRun(ids, (id) => this.stop(id).then(() => undefined));
   }
 
-  bulkDelete(ids: string[]): BulkResult {
+  /** Same chunked-with-a-pause shape as bulkStart, for the same reason: a
+   * restart re-launches a real Chromium process per profile. */
+  async bulkRestart(ids: string[], concurrency = 4): Promise<BulkResult> {
+    const succeeded: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (let i = 0; i < ids.length; i += concurrency) {
+      const chunk = ids.slice(i, i + concurrency);
+      const result = await this.bulkRun(chunk, (id) => this.restart(id).then(() => undefined));
+      succeeded.push(...result.succeeded);
+      failed.push(...result.failed);
+      if (i + concurrency < ids.length) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    return { succeeded, failed };
+  }
+
+  bulkDelete(ids: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => this.delete(id));
   }
 
-  bulkClone(ids: string[]): BulkResult {
+  bulkClone(ids: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {
       const source = this.mustGet(id);
       this.clone(id, 'config', `${source.name} (clone)`);
     });
   }
 
-  bulkAssignProxy(ids: string[], proxyId: string | null): BulkResult {
+  bulkAssignProxy(ids: string[], proxyId: string | null): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {
       this.mustGet(id);
       this.profiles.update(id, { proxyId });
     });
   }
 
-  bulkAssignGroup(ids: string[], groupId: string | null): BulkResult {
+  bulkAssignGroup(ids: string[], groupId: string | null): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {
       this.mustGet(id);
       this.profiles.update(id, { groupId });
@@ -318,11 +349,21 @@ export class ProfileManager {
   }
 
   /** Adds tags without clobbering each profile's existing ones. */
-  bulkAddTags(ids: string[], tags: string[]): BulkResult {
+  bulkAddTags(ids: string[], tags: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {
       const profile = this.mustGet(id);
       const merged = Array.from(new Set([...profile.tags, ...tags]));
       this.profiles.update(id, { tags: merged });
+    });
+  }
+
+  /** Removes tags without touching a profile's other, unrelated tags. */
+  bulkRemoveTags(ids: string[], tags: string[]): Promise<BulkResult> {
+    const toRemove = new Set(tags);
+    return this.bulkRun(ids, (id) => {
+      const profile = this.mustGet(id);
+      const remaining = profile.tags.filter((tg) => !toRemove.has(tg));
+      this.profiles.update(id, { tags: remaining });
     });
   }
 

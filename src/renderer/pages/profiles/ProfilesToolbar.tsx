@@ -1,11 +1,14 @@
 import type { ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import type { Group } from '@shared/schemas/group';
+import type { ProxyRecord } from '@shared/schemas/proxy';
 import { useTranslation, type TranslationKey } from '../../i18n';
 
 export type StatusFilter = 'ALL' | ProfileStatus;
 export type SortKey = 'name' | 'status' | 'lastUsed';
+export type SortDirection = 'asc' | 'desc';
 export const UNGROUPED_FILTER = '__ungrouped__';
+export const NO_PROXY_FILTER = '__no_proxy__';
 
 export const STATUS_LABEL_KEYS: Record<ProfileStatus, TranslationKey> = {
   RUNNING: 'profiles.status.running',
@@ -29,13 +32,25 @@ export function ProfilesToolbar({
   onGroupFilterChange,
   groups,
   onManageGroups,
+  proxyFilter,
+  onProxyFilterChange,
+  proxies,
   sortKey,
   onSortKeyChange,
+  sortDirection,
+  onToggleSortDirection,
+  onInvertSelection,
   templateId,
   onTemplateIdChange,
   templates,
   newName,
   onNewNameChange,
+  newGroupId,
+  onNewGroupIdChange,
+  newProxyId,
+  onNewProxyIdChange,
+  newTags,
+  onNewTagsChange,
   onCreate,
   onImport,
   onRestore,
@@ -52,13 +67,25 @@ export function ProfilesToolbar({
   onGroupFilterChange: (value: string) => void;
   groups: Group[];
   onManageGroups: () => void;
+  proxyFilter: string;
+  onProxyFilterChange: (value: string) => void;
+  proxies: ProxyRecord[];
   sortKey: SortKey;
   onSortKeyChange: (value: SortKey) => void;
+  sortDirection: SortDirection;
+  onToggleSortDirection: () => void;
+  onInvertSelection: () => void;
   templateId: string;
   onTemplateIdChange: (value: string) => void;
   templates: Template[];
   newName: string;
   onNewNameChange: (value: string) => void;
+  newGroupId: string;
+  onNewGroupIdChange: (value: string) => void;
+  newProxyId: string;
+  onNewProxyIdChange: (value: string) => void;
+  newTags: string;
+  onNewTagsChange: (value: string) => void;
   onCreate: () => void;
   onImport: () => void;
   onRestore: () => void;
@@ -66,8 +93,13 @@ export function ProfilesToolbar({
 }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="toolbar">
-      <input placeholder={t('profiles.searchPlaceholder')} value={search} onChange={(e) => onSearchChange(e.target.value)} />
+    <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+      <input
+        id="profiles-search-input"
+        placeholder={t('profiles.searchPlaceholder')}
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+      />
       <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}>
         <option value="ALL">{t('profiles.status.all')}</option>
         {(Object.keys(STATUS_LABEL_KEYS) as ProfileStatus[]).map((s) => (
@@ -93,12 +125,33 @@ export function ProfilesToolbar({
           </option>
         ))}
       </select>
-      <button className="btn btn-ghost" onClick={onManageGroups}>+ {t('profiles.group.manage')}</button>
-      <select value={sortKey} onChange={(e) => onSortKeyChange(e.target.value as SortKey)}>
-        <option value="name">{t('profiles.sort.name')}</option>
-        <option value="status">{t('profiles.sort.status')}</option>
-        <option value="lastUsed">{t('profiles.sort.lastUsed')}</option>
+      <select value={proxyFilter} onChange={(e) => onProxyFilterChange(e.target.value)}>
+        <option value="">{t('profiles.proxy.all')}</option>
+        <option value={NO_PROXY_FILTER}>{t('profiles.proxy.none')}</option>
+        {proxies.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
       </select>
+      <button className="btn btn-ghost" onClick={onManageGroups}>+ {t('profiles.group.manage')}</button>
+      <div style={{ display: 'inline-flex' }}>
+        <select value={sortKey} onChange={(e) => onSortKeyChange(e.target.value as SortKey)}>
+          <option value="name">{t('profiles.sort.name')}</option>
+          <option value="status">{t('profiles.sort.status')}</option>
+          <option value="lastUsed">{t('profiles.sort.lastUsed')}</option>
+        </select>
+        <button
+          className="btn btn-ghost btn-sm"
+          title={sortDirection === 'asc' ? t('profiles.sort.ascending') : t('profiles.sort.descending')}
+          onClick={onToggleSortDirection}
+        >
+          {sortDirection === 'asc' ? '↑' : '↓'}
+        </button>
+      </div>
+      <button className="btn btn-ghost btn-sm" onClick={onInvertSelection}>
+        {t('profiles.selection.invert')}
+      </button>
       <div style={{ flex: 1 }} />
       <select value={templateId} onChange={(e) => onTemplateIdChange(e.target.value)}>
         <option value="">{t('profiles.template.auto')}</option>
@@ -108,7 +161,37 @@ export function ProfilesToolbar({
           </option>
         ))}
       </select>
-      <input placeholder={t('profiles.newNamePlaceholder')} value={newName} onChange={(e) => onNewNameChange(e.target.value)} />
+      <input
+        id="profiles-create-name-input"
+        placeholder={t('profiles.newNamePlaceholder')}
+        value={newName}
+        onChange={(e) => onNewNameChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onCreate();
+        }}
+      />
+      <select value={newGroupId} onChange={(e) => onNewGroupIdChange(e.target.value)} title={t('profiles.group.assign')}>
+        <option value="">{t('profiles.group.none')}</option>
+        {groups.map((g) => (
+          <option key={g.id} value={g.id}>
+            {g.name}
+          </option>
+        ))}
+      </select>
+      <select value={newProxyId} onChange={(e) => onNewProxyIdChange(e.target.value)} title={t('profiles.proxy.assign')}>
+        <option value="">{t('profiles.proxy.none')}</option>
+        {proxies.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <input
+        placeholder={t('profiles.newTagsPlaceholder')}
+        style={{ width: 120 }}
+        value={newTags}
+        onChange={(e) => onNewTagsChange(e.target.value)}
+      />
       <button className="btn btn-primary" onClick={onCreate}>
         {t('profiles.create')}
       </button>

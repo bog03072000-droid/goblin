@@ -129,6 +129,30 @@ export function SettingsPage(): JSX.Element {
           />
         </label>
       </div>
+
+      <div className="panel">
+        <h3>{t('settings.title.help')}</h3>
+        <table>
+          <tbody>
+            {(
+              [
+                ['Ctrl+N', 'help.shortcut.createProfile'],
+                ['Ctrl+F', 'help.shortcut.search'],
+                ['Ctrl+A', 'help.shortcut.selectAll'],
+                ['Delete', 'help.shortcut.deleteSelected'],
+                ['Enter', 'help.shortcut.openSelected'],
+              ] as const
+            ).map(([keys, key]) => (
+              <tr key={keys}>
+                <th style={{ width: 100 }} className="mono">
+                  {keys}
+                </th>
+                <td>{t(key)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

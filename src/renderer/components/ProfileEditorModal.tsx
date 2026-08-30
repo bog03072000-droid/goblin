@@ -11,6 +11,15 @@ import { FingerprintTab, type FingerprintDraft, type SpoofingPatch } from './pro
 import { ProxyTab } from './profileEditor/ProxyTab';
 import { StorageTab } from './profileEditor/StorageTab';
 import { AdvancedTab } from './profileEditor/AdvancedTab';
+import { ConfirmDialog } from './ConfirmDialog';
+
+interface EditableSnapshot {
+  name: string;
+  description: string;
+  tagsText: string;
+  groupId: string;
+  proxyId: string;
+}
 
 type Tab = 'general' | 'fingerprint' | 'proxy' | 'storage' | 'advanced';
 
@@ -37,6 +46,24 @@ export function ProfileEditorModal({
   const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
+  // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
+  // compared against current state to detect unsaved edits, so closing the
+  // modal (or the Reset button) can act on them instead of silently
+  // discarding or ignoring in-progress changes.
+  const [savedSnapshot, setSavedSnapshot] = useState<EditableSnapshot>({
+    name: '',
+    description: '',
+    tagsText: '',
+    groupId: '',
+    proxyId: '',
+  });
+  const [confirmClose, setConfirmClose] = useState(false);
+  const isDirty =
+    name !== savedSnapshot.name ||
+    description !== savedSnapshot.description ||
+    tagsText !== savedSnapshot.tagsText ||
+    groupId !== savedSnapshot.groupId ||
+    proxyId !== savedSnapshot.proxyId;
 
   const loadAction = useAsyncAction();
   const saveAction = useAsyncAction();
@@ -54,6 +81,13 @@ export function ProfileEditorModal({
       setTagsText(p.tags.join(', '));
       setProxyId(p.proxyId ?? '');
       setGroupId(p.groupId ?? '');
+      setSavedSnapshot({
+        name: p.name,
+        description: p.description,
+        tagsText: p.tags.join(', '),
+        groupId: p.groupId ?? '',
+        proxyId: p.proxyId ?? '',
+      });
       const fp = await callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId });
       setFingerprint(fp);
       if (fp) resetDraft(fp);
@@ -81,6 +115,7 @@ export function ProfileEditorModal({
           .map((t2) => t2.trim())
           .filter(Boolean),
       });
+      setSavedSnapshot((prev) => ({ ...prev, name, description, tagsText, groupId }));
       onSaved();
     });
   }
@@ -88,9 +123,26 @@ export function ProfileEditorModal({
   async function saveProxy(): Promise<void> {
     await saveAction.run(async () => {
       await callApi('profiles:update', { id: profileId, proxyId: proxyId || null });
+      setSavedSnapshot((prev) => ({ ...prev, proxyId }));
       onSaved();
       await load();
     });
+  }
+
+  /** Reverts any unsaved General/Proxy edits back to the last-loaded-or-saved
+   * values — a plain form reset, distinct from Fingerprint's "Regenerate"
+   * (which creates a brand-new random identity, not a revert). */
+  function resetFields(): void {
+    setName(savedSnapshot.name);
+    setDescription(savedSnapshot.description);
+    setTagsText(savedSnapshot.tagsText);
+    setGroupId(savedSnapshot.groupId);
+    setProxyId(savedSnapshot.proxyId);
+  }
+
+  function requestClose(): void {
+    if (isDirty) setConfirmClose(true);
+    else onClose();
   }
 
   function resetDraft(fp: Fingerprint): void {
@@ -213,7 +265,7 @@ export function ProfileEditorModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={requestClose}>
       <div
         className="modal-panel"
         style={{
@@ -236,7 +288,12 @@ export function ProfileEditorModal({
             </div>
           ))}
           <div style={{ flex: 1 }} />
-          <button className="btn btn-ghost btn-sm" style={{ margin: 8 }} onClick={onClose}>
+          {isDirty && (
+            <button className="btn btn-ghost btn-sm" style={{ margin: '8px 0' }} onClick={resetFields}>
+              {t('common.reset')}
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" style={{ margin: 8 }} onClick={requestClose}>
             {t('common.close')}
           </button>
         </div>
@@ -288,6 +345,17 @@ export function ProfileEditorModal({
           {profile && tab === 'advanced' && <AdvancedTab profile={profile} />}
         </div>
       </div>
+      {confirmClose && (
+        <ConfirmDialog
+          message={t('editor.unsavedChanges.confirm')}
+          confirmLabel={t('editor.unsavedChanges.discard')}
+          onCancel={() => setConfirmClose(false)}
+          onConfirm={() => {
+            setConfirmClose(false);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,13 +9,30 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { GroupsModal } from '../components/GroupsModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
-import { ProfilesToolbar, UNGROUPED_FILTER, type StatusFilter, type SortKey } from './profiles/ProfilesToolbar';
+import {
+  ProfilesToolbar,
+  UNGROUPED_FILTER,
+  NO_PROXY_FILTER,
+  type StatusFilter,
+  type SortKey,
+  type SortDirection,
+} from './profiles/ProfilesToolbar';
 import { BulkToolbar } from './profiles/BulkToolbar';
 import { ProfilesTable } from './profiles/ProfilesTable';
 
 interface BulkResult {
   succeeded: string[];
   failed: Array<{ id: string; message: string }>;
+}
+
+/** True while the user is typing into any text input/select — used so
+ * page-level keyboard shortcuts (Ctrl+A, Delete, Enter) never hijack normal
+ * typing, while Ctrl+N/Ctrl+F still work from anywhere as quick jumps. */
+function isEditingText(): boolean {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
 }
 
 export function ProfilesPage(): JSX.Element {
@@ -25,13 +42,20 @@ export function ProfilesPage(): JSX.Element {
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
+  const [proxyFilter, setProxyFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [newName, setNewName] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [newGroupId, setNewGroupId] = useState('');
+  const [newProxyId, setNewProxyId] = useState('');
+  const [newTags, setNewTags] = useState('');
   const [info, setInfo] = useState<string | null>(null);
+  const [bulkFailures, setBulkFailures] = useState<Array<{ id: string; name: string; message: string }>>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -44,10 +68,18 @@ export function ProfilesPage(): JSX.Element {
   const bulkAction = useAsyncAction();
   const error = generalAction.error ?? rowAction.error ?? bulkAction.error;
 
+  // A 250ms debounce keeps every keystroke from firing its own IPC round-trip
+  // + full list refetch — the search box stays instantly responsive to type
+  // into, but the actual query only fires once typing pauses.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   async function refresh(): Promise<void> {
     await generalAction.run(async () => {
       const list = await callApi<'profiles:list', ProfileListItem[]>('profiles:list', {
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         tag: tagFilter || undefined,
         groupId: groupFilter && groupFilter !== UNGROUPED_FILTER ? groupFilter : undefined,
       });
@@ -66,7 +98,7 @@ export function ProfilesPage(): JSX.Element {
     void callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}).then(setProxies);
     void refreshGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter, groupFilter]);
+  }, [debouncedSearch, tagFilter, groupFilter]);
 
   // Start/Stop resolve to a terminal RUNNING/STOPPED/CRASHED status asynchronously
   // (the browser process's own 'exit' event), not synchronously when the IPC call
@@ -84,18 +116,22 @@ export function ProfilesPage(): JSX.Element {
 
   const visibleProfiles = useMemo(() => {
     let filtered = statusFilter === 'ALL' ? profiles : profiles.filter((p) => p.status === statusFilter);
-    // The backend has no "ungrouped" filter concept (groupId is either a
-    // real id or "match anything") — cheap enough to filter client-side
-    // rather than teach the IPC contract a special sentinel value.
+    // The backend has no "ungrouped"/"no proxy" filter concept (the id param
+    // is either a real id or "match anything") — cheap enough to filter
+    // client-side rather than teach the IPC contract two special sentinels.
     if (groupFilter === UNGROUPED_FILTER) filtered = filtered.filter((p) => p.groupId === null);
+    if (proxyFilter === NO_PROXY_FILTER) filtered = filtered.filter((p) => p.proxyId === null);
+    else if (proxyFilter) filtered = filtered.filter((p) => p.proxyId === proxyFilter);
     const sorted = [...filtered];
     sorted.sort((a, b) => {
-      if (sortKey === 'name') return a.name.localeCompare(b.name);
-      if (sortKey === 'status') return a.status.localeCompare(b.status);
-      return (b.lastStartedAt ?? '').localeCompare(a.lastStartedAt ?? '');
+      let cmp: number;
+      if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sortKey === 'status') cmp = a.status.localeCompare(b.status);
+      else cmp = (a.lastStartedAt ?? '').localeCompare(b.lastStartedAt ?? '');
+      return sortDirection === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [profiles, statusFilter, sortKey, groupFilter]);
+  }, [profiles, statusFilter, sortKey, sortDirection, groupFilter, proxyFilter]);
 
   const selectedVisible = visibleProfiles.filter((p) => selected.has(p.id));
   const allVisibleSelected = visibleProfiles.length > 0 && selectedVisible.length === visibleProfiles.length;
@@ -106,6 +142,16 @@ export function ProfilesPage(): JSX.Element {
     } else {
       setSelected(new Set(visibleProfiles.map((p) => p.id)));
     }
+  }
+
+  function invertSelection(): void {
+    setSelected((prev) => {
+      const next = new Set<string>();
+      for (const p of visibleProfiles) {
+        if (!prev.has(p.id)) next.add(p.id);
+      }
+      return next;
+    });
   }
 
   function toggleSelect(id: string): void {
@@ -120,8 +166,20 @@ export function ProfilesPage(): JSX.Element {
   async function createProfile(): Promise<void> {
     if (!newName.trim()) return;
     await generalAction.run(async () => {
-      await callApi('profiles:create', { name: newName.trim(), templateId: templateId || undefined });
+      await callApi('profiles:create', {
+        name: newName.trim(),
+        templateId: templateId || undefined,
+        groupId: newGroupId || undefined,
+        proxyId: newProxyId || undefined,
+        tags: newTags
+          .split(',')
+          .map((tg) => tg.trim())
+          .filter(Boolean),
+      });
       setNewName('');
+      setNewGroupId('');
+      setNewProxyId('');
+      setNewTags('');
       await refresh();
     });
   }
@@ -205,15 +263,39 @@ export function ProfilesPage(): JSX.Element {
     });
   }
 
+  /** Shared by every bulk action: shows that action's own specific success
+   * message (unchanged from before — "Tag added to 2 profile(s)", not a
+   * generic count) AND, when any profile failed, exactly which ones and why
+   * — never just a silent count that discards the per-item detail the
+   * backend already computed. */
+  function reportBulkResult(successMessage: string, result: BulkResult): void {
+    setInfo(successMessage);
+    setBulkFailures(
+      result.failed.map((f) => ({
+        id: f.id,
+        name: profiles.find((p) => p.id === f.id)?.name ?? f.id,
+        message: f.message,
+      })),
+    );
+  }
+
   async function bulk(
-    action: 'profiles:bulkStart' | 'profiles:bulkStop' | 'profiles:bulkDelete' | 'profiles:bulkClone',
+    action: 'profiles:bulkStart' | 'profiles:bulkStop' | 'profiles:bulkRestart' | 'profiles:bulkDelete' | 'profiles:bulkClone',
   ): Promise<void> {
     if (selected.size === 0) return;
     await bulkAction.run(async () => {
       const result = await callApi<typeof action, BulkResult>(action, { ids: Array.from(selected) });
-      setInfo(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }));
+      reportBulkResult(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }), result);
       setSelected(new Set());
       await refresh();
+    });
+  }
+
+  async function bulkBackup(): Promise<void> {
+    if (selected.size === 0) return;
+    await bulkAction.run(async () => {
+      const result = await callApi<'profiles:bulkBackup', BulkResult>('profiles:bulkBackup', { ids: Array.from(selected) });
+      reportBulkResult(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }), result);
     });
   }
 
@@ -224,7 +306,7 @@ export function ProfilesPage(): JSX.Element {
         ids: Array.from(selected),
         proxyId: proxyId || null,
       });
-      setInfo(t('profiles.msg.proxyAssigned', { count: result.succeeded.length }));
+      reportBulkResult(t('profiles.msg.proxyAssigned', { count: result.succeeded.length }), result);
       await refresh();
     });
   }
@@ -236,7 +318,7 @@ export function ProfilesPage(): JSX.Element {
         ids: Array.from(selected),
         groupId: groupIdValue || null,
       });
-      setInfo(t('profiles.msg.groupAssigned', { count: result.succeeded.length }));
+      reportBulkResult(t('profiles.msg.groupAssigned', { count: result.succeeded.length }), result);
       await refresh();
       await refreshGroups();
     });
@@ -249,7 +331,19 @@ export function ProfilesPage(): JSX.Element {
         ids: Array.from(selected),
         tags: [tag.trim()],
       });
-      setInfo(t('profiles.msg.tagAdded', { count: result.succeeded.length }));
+      reportBulkResult(t('profiles.msg.tagAdded', { count: result.succeeded.length }), result);
+      await refresh();
+    });
+  }
+
+  async function bulkRemoveTag(tag: string): Promise<void> {
+    if (selected.size === 0 || !tag.trim()) return;
+    await bulkAction.run(async () => {
+      const result = await callApi<'profiles:bulkRemoveTags', BulkResult>('profiles:bulkRemoveTags', {
+        ids: Array.from(selected),
+        tags: [tag.trim()],
+      });
+      reportBulkResult(t('profiles.msg.tagRemoved', { count: result.succeeded.length }), result);
       await refresh();
     });
   }
@@ -277,6 +371,40 @@ export function ProfilesPage(): JSX.Element {
     });
   }
 
+  // Page-level shortcuts: Ctrl+N (focus the create-name field), Ctrl+F
+  // (focus search), Ctrl+A (select all visible), Delete (delete selection),
+  // Enter (start the single selected profile). Ctrl+F/Ctrl+N work from
+  // anywhere; Ctrl+A/Delete/Enter are suppressed while typing so they never
+  // fight with normal text editing (Ctrl+A to select text, Enter in a form).
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        document.getElementById('profiles-create-name-input')?.focus();
+      } else if (mod && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        document.getElementById('profiles-search-input')?.focus();
+      } else if (mod && e.key.toLowerCase() === 'a' && !isEditingText()) {
+        e.preventDefault();
+        setSelected(new Set(visibleProfiles.map((p) => p.id)));
+      } else if (e.key === 'Delete' && !isEditingText() && selected.size > 0) {
+        e.preventDefault();
+        setConfirmBulkDelete(true);
+      } else if (e.key === 'Enter' && !isEditingText() && selected.size === 1) {
+        e.preventDefault();
+        const id = Array.from(selected)[0]!;
+        const target = visibleProfiles.find((p) => p.id === id);
+        if (target && target.status !== 'RUNNING' && target.status !== 'STARTING') {
+          void runAction(id, 'profiles:start');
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleProfiles, selected]);
+
   return (
     <>
       <ProfilesToolbar
@@ -291,13 +419,25 @@ export function ProfilesPage(): JSX.Element {
         onGroupFilterChange={setGroupFilter}
         groups={groups}
         onManageGroups={() => setShowGroupsModal(true)}
+        proxyFilter={proxyFilter}
+        onProxyFilterChange={setProxyFilter}
+        proxies={proxies}
         sortKey={sortKey}
         onSortKeyChange={setSortKey}
+        sortDirection={sortDirection}
+        onToggleSortDirection={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        onInvertSelection={invertSelection}
         templateId={templateId}
         onTemplateIdChange={setTemplateId}
         templates={templates}
         newName={newName}
         onNewNameChange={setNewName}
+        newGroupId={newGroupId}
+        onNewGroupIdChange={setNewGroupId}
+        newProxyId={newProxyId}
+        onNewProxyIdChange={setNewProxyId}
+        newTags={newTags}
+        onNewTagsChange={setNewTags}
         onCreate={() => void createProfile()}
         onImport={() => void importProfiles()}
         onRestore={() => void restoreProfile()}
@@ -312,19 +452,35 @@ export function ProfilesPage(): JSX.Element {
           groups={groups}
           onStart={() => void bulk('profiles:bulkStart')}
           onStop={() => void bulk('profiles:bulkStop')}
+          onRestart={() => void bulk('profiles:bulkRestart')}
           onClone={() => void bulk('profiles:bulkClone')}
           onDeleteRequest={() => setConfirmBulkDelete(true)}
           onExportSelected={() => void exportSelected()}
+          onBackup={() => void bulkBackup()}
           onAssignProxy={(proxyId) => void bulkAssignProxy(proxyId)}
           onAssignGroup={(groupId) => void bulkAssignGroup(groupId)}
           onAddTag={(tag) => void bulkAddTag(tag)}
+          onRemoveTag={(tag) => void bulkRemoveTag(tag)}
           onClearSelection={() => setSelected(new Set())}
         />
       )}
 
       <div className="content">
         {error && <div className="banner banner-error">{error}</div>}
-        {info && <div className="banner banner-success">{info}</div>}
+        {info && (
+          <div className={`banner ${bulkFailures.length > 0 ? 'banner-warn' : 'banner-success'}`}>
+            {info}
+            {bulkFailures.length > 0 && (
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                {bulkFailures.map((f) => (
+                  <li key={f.id}>
+                    <strong>{f.name}</strong>: {f.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <ProfilesTable
           profiles={visibleProfiles}
           totalProfileCount={profiles.length}

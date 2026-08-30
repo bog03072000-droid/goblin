@@ -9,12 +9,15 @@ export function BulkToolbar({
   groups,
   onStart,
   onStop,
+  onRestart,
   onClone,
   onDeleteRequest,
   onExportSelected,
+  onBackup,
   onAssignProxy,
   onAssignGroup,
   onAddTag,
+  onRemoveTag,
   onClearSelection,
 }: {
   selectedCount: number;
@@ -23,12 +26,15 @@ export function BulkToolbar({
   groups: Group[];
   onStart: () => void;
   onStop: () => void;
+  onRestart: () => void;
   onClone: () => void;
   onDeleteRequest: () => void;
   onExportSelected: () => void;
+  onBackup: () => void;
   onAssignProxy: (proxyId: string) => void;
   onAssignGroup: (groupId: string) => void;
   onAddTag: (tag: string) => void;
+  onRemoveTag: (tag: string) => void;
   onClearSelection: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -44,6 +50,9 @@ export function BulkToolbar({
       <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={onStop}>
         {t('profiles.bulk.stop')}
       </button>
+      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={onRestart}>
+        {t('profiles.bulk.restart')}
+      </button>
       <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={onClone}>
         {t('profiles.bulk.clone')}
       </button>
@@ -52,6 +61,9 @@ export function BulkToolbar({
       </button>
       <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={onExportSelected}>
         {t('profiles.bulk.exportSelected')}
+      </button>
+      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={onBackup}>
+        {t('profiles.bulk.backup')}
       </button>
       <select
         disabled={bulkBusy}
@@ -96,6 +108,17 @@ export function BulkToolbar({
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             onAddTag(e.currentTarget.value);
+            e.currentTarget.value = '';
+          }
+        }}
+      />
+      <input
+        placeholder={t('profiles.bulk.removeTagPlaceholder')}
+        style={{ width: 140 }}
+        disabled={bulkBusy}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onRemoveTag(e.currentTarget.value);
             e.currentTarget.value = '';
           }
         }}

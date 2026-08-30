@@ -35,16 +35,18 @@ describe('Bulk import (multi-file, error isolation, name collisions)', () => {
   let workDir: string;
   let importExport: ImportExportService;
   let profiles: ProfileRepository;
+  let fingerprints: FingerprintRepository;
+  let manager: ProfileManager;
 
   beforeEach(() => {
     db = createTestDb(migrationsDir);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-bulk-import-'));
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-bulk-import-src-'));
     profiles = new ProfileRepository(db);
-    const fingerprints = new FingerprintRepository(db);
+    fingerprints = new FingerprintRepository(db);
     const proxies = new ProxyRepository(db);
     const logs = new ActivityLogRepository(db);
-    const manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
+    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
     importExport = new ImportExportService(profiles, fingerprints, proxies, logs, manager);
   });
 
@@ -104,5 +106,38 @@ describe('Bulk import (multi-file, error isolation, name collisions)', () => {
     expect(second.created[0]!.name).toBe('Same Name (imported 2)');
     expect(first.created[0]!.id).not.toBe(second.created[0]!.id);
     expect(profiles.list().length).toBe(2);
+  });
+});
+
+describe('ImportExportService.bulkBackup', () => {
+  let root: string;
+  let importExport: ImportExportService;
+  let manager: ProfileManager;
+  let fingerprints: FingerprintRepository;
+
+  beforeEach(() => {
+    const db = createTestDb(migrationsDir);
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-bulk-backup-'));
+    const profiles = new ProfileRepository(db);
+    fingerprints = new FingerprintRepository(db);
+    const proxies = new ProxyRepository(db);
+    const logs = new ActivityLogRepository(db);
+    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
+    importExport = new ImportExportService(profiles, fingerprints, proxies, logs, manager);
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('backs up each requested profile independently, isolating per-item failures', async () => {
+    const ids = ['x', 'y'].map((seed) => {
+      const fp = fingerprints.create(generateFingerprint({ seed: `backup-${seed}` }));
+      return manager.create({ name: `Backup ${seed}` }, fp.id).id;
+    });
+
+    const result = await importExport.bulkBackup([...ids, 'not-a-real-id']);
+    expect(result.succeeded.sort()).toEqual([...ids].sort());
+    expect(result.failed.length).toBe(1);
   });
 });

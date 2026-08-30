@@ -62,10 +62,13 @@ export const IpcRequestSchemas = {
 
   'profiles:bulkStart': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:bulkStop': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkRestart': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:bulkDelete': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:bulkClone': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkBackup': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:bulkAssignProxy': z.object({ ids: z.array(ProfileIdSchema).min(1), proxyId: z.string().uuid().nullable() }),
   'profiles:bulkAddTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
+  'profiles:bulkRemoveTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
   'profiles:bulkAssignGroup': z.object({ ids: z.array(ProfileIdSchema).min(1), groupId: z.string().uuid().nullable() }),
 
   'groups:list': z.object({}),

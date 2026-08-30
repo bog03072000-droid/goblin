@@ -292,6 +292,29 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
   border-radius: var(--radius-input);
 }
 
+/* ---------- Context menu ---------- */
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 180px;
+  background: var(--char-raised);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+}
+.context-menu-item {
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--paper);
+}
+.context-menu-item:hover { background: var(--char-hi); color: var(--lime); }
+.context-menu-item.danger { color: var(--danger); }
+.context-menu-item.danger:hover { background: rgba(229, 72, 77, 0.12); }
+.context-menu-divider { height: 1px; background: var(--stroke); margin: 4px 2px; }
+
 /* ---------- Modal (glassmorphism) ---------- */
 .modal-overlay {
   position: fixed;

@@ -186,6 +186,22 @@ export class ImportExportService {
     return destZip;
   }
 
+  /** Bulk backup: each profile independently reported success/failure —
+   * one corrupted or locked profile must never abort backing up the rest. */
+  async bulkBackup(ids: string[]): Promise<{ succeeded: string[]; failed: Array<{ id: string; message: string }> }> {
+    const succeeded: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (const id of ids) {
+      try {
+        await this.backupProfile(id);
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({ id, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { succeeded, failed };
+  }
+
   /** Restore = import from a backup .zip. Per project rule, this never
    * overwrites the original profile — it always creates a new, independent
    * one, defaulting the picker to this app's own backups directory. */

@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { useTranslation } from '../../i18n';
 import { STATUS_LABEL_KEYS } from './ProfilesToolbar';
+import { ProfileContextMenu, type ContextMenuState } from './ProfileContextMenu';
 
 const PILL_VARIANT: Record<ProfileStatus, string> = {
   RUNNING: 'on',
@@ -52,6 +54,7 @@ export function ProfilesTable({
   onDeleteRequest: (profile: ProfileListItem) => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   return (
     <div className="panel">
       <table>
@@ -73,7 +76,15 @@ export function ProfilesTable({
         </thead>
         <tbody>
           {profiles.map((p) => (
-            <tr key={p.id} data-status={p.status} data-profile-id={p.id}>
+            <tr
+              key={p.id}
+              data-status={p.status}
+              data-profile-id={p.id}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ x: e.clientX, y: e.clientY, profile: p });
+              }}
+            >
               <td>
                 <input type="checkbox" checked={selected.has(p.id)} onChange={() => onToggleSelect(p.id)} />
               </td>
@@ -136,6 +147,20 @@ export function ProfilesTable({
           )}
         </tbody>
       </table>
+      {contextMenu && (
+        <ProfileContextMenu
+          state={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onStart={onStart}
+          onStop={onStop}
+          onRestart={onRestart}
+          onEdit={onEdit}
+          onClone={onClone}
+          onBackup={onBackup}
+          onExport={onExport}
+          onDeleteRequest={onDeleteRequest}
+        />
+      )}
     </div>
   );
 }

@@ -108,10 +108,16 @@ export function registerIpc(deps: IpcDependencies): void {
     return deps.profileManager.bulkStart(p.ids, concurrency);
   });
   handle('profiles:bulkStop', (p) => deps.profileManager.bulkStop(p.ids));
+  handle('profiles:bulkRestart', (p) => {
+    const concurrency = deps.settings.getAll().maxConcurrentLaunches;
+    return deps.profileManager.bulkRestart(p.ids, concurrency);
+  });
   handle('profiles:bulkDelete', (p) => deps.profileManager.bulkDelete(p.ids));
   handle('profiles:bulkClone', (p) => deps.profileManager.bulkClone(p.ids));
+  handle('profiles:bulkBackup', (p) => deps.importExport.bulkBackup(p.ids));
   handle('profiles:bulkAssignProxy', (p) => deps.profileManager.bulkAssignProxy(p.ids, p.proxyId));
   handle('profiles:bulkAddTags', (p) => deps.profileManager.bulkAddTags(p.ids, p.tags));
+  handle('profiles:bulkRemoveTags', (p) => deps.profileManager.bulkRemoveTags(p.ids, p.tags));
   handle('profiles:bulkAssignGroup', (p) => deps.profileManager.bulkAssignGroup(p.ids, p.groupId));
 
   handle('groups:list', () => deps.groups.list());
