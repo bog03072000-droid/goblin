@@ -83,3 +83,21 @@ export function webrtcModeToPolicy(
 export function applyWebrtcPolicy(wc: WebContents, mode: WebrtcMode): void {
   wc.setWebRTCIPHandlingPolicy(webrtcModeToPolicy(mode));
 }
+
+/**
+ * Injects a script into the MAIN world of every future document this
+ * WebContents navigates to, via CDP `Page.addScriptToEvaluateOnNewDocument`
+ * — it runs before any of the page's own scripts, same category of native
+ * Chromium mechanism as the `Emulation.*` overrides above (not a preload/
+ * contextBridge isolated-world hack, which couldn't reach the page's own
+ * canvas/audio/WebGL prototypes under contextIsolation anyway). Used for the
+ * Canvas/Audio/WebGL/deviceMemory/Fonts/MediaDevices spoofing built by
+ * spoofingScript.ts — see docs/FINGERPRINT_AUDIT.md.
+ */
+export async function injectSpoofingScript(wc: WebContents, script: string): Promise<void> {
+  if (!wc.debugger.isAttached()) {
+    wc.debugger.attach('1.3');
+  }
+  await wc.debugger.sendCommand('Page.enable');
+  await wc.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: script });
+}

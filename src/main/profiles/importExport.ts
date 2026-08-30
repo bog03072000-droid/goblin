@@ -72,6 +72,7 @@ export class ImportExportService {
         webrtcMode: fingerprint.webrtcMode,
         fontsMode: fingerprint.fontsMode,
         mediaDevicesMode: fingerprint.mediaDevicesMode,
+        webglSpoofingMode: fingerprint.webglSpoofingMode,
         seed: fingerprint.seed,
       },
       // Password is never included in an export, by design (see SECURITY.md) —

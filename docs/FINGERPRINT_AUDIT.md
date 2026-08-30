@@ -35,14 +35,14 @@ wanted it to say.
 | Viewport (`window.innerWidth/Height`) | n/a (real window size is the viewport) | ✅ by construction | ✅ | n/a | manual | `BrowserWindow` sized directly; deliberately **not** overridden via CDP (see Finding 2) | **A** |
 | devicePixelRatio | ✅ (`deviceScaleFactor`) | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setDeviceMetricsOverride({deviceScaleFactor})` | **A** |
 | hardwareConcurrency | ✅ | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setHardwareConcurrencyOverride` | **A** |
-| deviceMemory | ✅ | ❌ | real device value | ✅ (range only) | ✅ (asserts NOT_IMPLEMENTED) | none exists (see Finding 3) | **D** |
-| WebGL vendor | ✅ | ❌ | real GPU value | ✅ (plausibility only) | ✅ (asserts NOT_IMPLEMENTED) | none exists (see Finding 4) | **D** |
-| WebGL renderer | ✅ | ❌ | real GPU value | ✅ (Apple-only-on-macOS check) | ✅ (asserts NOT_IMPLEMENTED) | none exists (see Finding 4) | **D** |
-| Canvas | ✅ (`canvasMode`) | ❌ | real canvas output | schema only | ✅ (asserts NOT_IMPLEMENTED) | none without a Chromium fork or fragile JS monkeypatch — see §Canvas | **D** |
-| AudioContext | ✅ (`audioMode`) | ❌ | not read by diagnostics (no reliable enumeration) | schema only | not applicable | same as Canvas — see §Audio | **D** |
+| deviceMemory | ✅ | ✅ (unconditional) | ✅ configured value | ✅ (range only) | ✅ (asserts PASS) | `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument` — see Finding 6 | **A** |
+| WebGL vendor | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (plausibility only) | ✅ (asserts NOT_IMPLEMENTED by default) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — off by default, see §WebGL spoofing (opt-in) | **C** (→ **B** when the toggle is enabled) |
+| WebGL renderer | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (Apple-only-on-macOS check) | ✅ (asserts NOT_IMPLEMENTED by default) | same as WebGL vendor | **C** (→ **B** when the toggle is enabled) |
+| Canvas | ✅ (`canvasMode`, default `noise`) | ✅ | ✅ deterministic per-profile noise | schema only | ✅ (asserts APPLIED + determinism, cross-profile difference) | seeded noise on `toDataURL()`/`getImageData()`, injected via CDP main-world script — see §Canvas (implemented) | **B** |
+| AudioContext | ✅ (`audioMode`, default `noise`) | ✅ | not read back numerically by diagnostics (override presence checked instead) | schema only | ✅ (asserts APPLIED — override installed) | seeded noise on `AudioBuffer.prototype.getChannelData`, same injection mechanism — see §Audio (implemented) | **B** |
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
-| Fonts | ✅ (`fontsMode`) | ❌ | not probed (see §Fonts) | schema only | ✅ (asserts NOT_IMPLEMENTED) | none — see §Fonts | **D** |
-| Media devices | ✅ (`mediaDevicesMode`) | ❌ | ✅ real enumeration | schema only | ✅ (asserts NOT_IMPLEMENTED) | see §Media devices | **D** |
+| Fonts | ✅ (`fontsMode`, default `system`) | opt-in (`restricted` mode) | real fonts unless opted in | schema only | ✅ (asserts NOT_IMPLEMENTED by default) | `document.fonts.check`/`navigator.fonts.query` override to a fixed allow-list — partial coverage only, see §Fonts (implemented) | **C** (→ **B** when `restricted`) |
+| Media devices | ✅ (`mediaDevicesMode`, default `real`) | opt-in (`hidden` mode) | ✅ real enumeration unless opted in | schema only | ✅ (asserts NOT_IMPLEMENTED by default) | `navigator.mediaDevices.enumerateDevices` override returning a seeded synthetic device list — see §Media devices (implemented) | **C** (→ **B** when `hidden`) |
 | Permissions | — | ❌ | — | — | — | not in the data model at all yet | **D** |
 | Geolocation | — | ❌ | — | — | — | not in the data model at all yet | **D** |
 
@@ -114,54 +114,127 @@ reason "no ICE candidates gathered — policy could not be exercised", because
 no candidates were gathered — the honest outcome when the mechanism can't be
 exercised, not a false `APPLIED`.
 
-## Why Canvas, Audio, and Fonts are D — and what real implementation would need
+## Canvas, Audio, Fonts, and Media Devices — implemented this stage
 
-**Canvas.** Real anti-fingerprint browsers (Tor Browser, Brave, LibreWolf)
-add per-session noise to `toDataURL()`/`getImageData()` at the *compiled
-Chromium/Firefox source level*, inside the actual canvas rasterization path.
-There is no Chromium command-line flag or CDP method that does this. The only
-mechanism reachable from application code is a preload script that
-monkeypatches `HTMLCanvasElement.prototype.toDataURL`/`getContext` in the
-page's JS context. The brief explicitly says not to ship "crude global random
-noise" as a production feature, and a naive override is both detectable (the
-patched function's `.toString()` differs, timing differs, and non-seeded
-noise breaks legitimate uses like canvas-based CAPTCHAs or image editors) and
-would make the diagnostics page's own canvas read lie about what real content
-pages see. **Required future architecture**, if this is prioritized later: a
-preload script scoped per-partition that wraps the canvas 2D/WebGL read-back
-methods with a *deterministic, seeded* per-profile noise function (keyed off
-the same seed already used for fingerprint generation), clearly labeled in
-the UI as "experimental" until it has its own detectability review — not
-attempted in this stage.
+The previous stage of this audit graded these D and described the required
+future architecture: "a preload script scoped per-partition that wraps the
+canvas 2D/WebGL read-back methods with a *deterministic, seeded* per-profile
+noise function (keyed off the same seed already used for fingerprint
+generation)". That architecture is now implemented, with one correction: a
+**preload script cannot actually do this**, because both the manager window
+and every profile webview run with `contextIsolation: true`, and a preload
+script's `contextBridge` world is isolated from the page's own DOM
+prototypes — `HTMLCanvasElement.prototype`, `AudioBuffer.prototype`, and
+`WebGL(2)RenderingContext.prototype` in a preload script are *different
+objects* from the ones the page's own scripts see. Patching them there has no
+effect on the actual page.
 
-**Audio.** Same category of problem as Canvas — `AudioContext` fingerprinting
-noise is normally added inside the audio rendering pipeline at the browser's
-native code level. No CDP/session mechanism exists. Same future architecture
-note applies (seeded noise via a preload wrapper around
-`AudioBuffer`/`AnalyserNode` methods), not attempted here.
+**Finding 6 — CDP `Page.addScriptToEvaluateOnNewDocument` reaches the real
+page world.** This is the same category of native Chromium mechanism as the
+`Emulation.*` CDP calls used for User-Agent/screen/hardware-concurrency above
+— not a homegrown injection hack. `wc.debugger.sendCommand('Page.enable')`
+followed by `Page.addScriptToEvaluateOnNewDocument({source})` (implemented in
+`injectSpoofingScript()`, `src/main/browser/fingerprintEnforcement.ts`)
+registers a script that Chromium itself runs in the page's actual main
+world, before any of the page's own `<script>` tags execute, on every future
+navigation. This is the mechanism CDP-based automation tools use precisely
+because it runs on the *browser* side of the isolation boundary, so it can
+reach and monkeypatch the real `HTMLCanvasElement.prototype` etc. that page
+scripts will subsequently see.
 
-**Fonts.** Font enumeration via CSS-fallback measurement (or the permission-
-gated Local Font Access API) reads the real installed system font set. There
-is no Chromium flag to swap in a different font list per-profile without
-actually isolating the OS-level font directory per profile (e.g. a sandboxed
-per-profile font path), which is an OS-level capability outside Chromium's
-own configuration surface and outside this project's current architecture.
-Documented as D; the diagnostics page deliberately does not attempt a fake
-font-enumeration probe.
+**Deterministic, seeded noise — not "crude global random noise".** The
+project's design brief explicitly forbids the latter. The spoofing script
+(`src/main/browser/spoofingScript.ts`, built once per profile from its
+fingerprint row and injected as a JS source string) implements each override
+as follows:
 
-## Media devices
+- **Canvas** — overrides `CanvasRenderingContext2D.prototype.getImageData`
+  and `HTMLCanvasElement.prototype.toDataURL`. Reads the real pixel data
+  first, computes a cheap content hash from those actual bytes, seeds a
+  `mulberry32` PRNG with `hashStr(profile.seed) XOR contentHash`, then
+  perturbs each RGB channel (not alpha) by at most ±1. Same profile + same
+  canvas content → same seed → byte-identical output on every call within
+  the session (verified by `canvasIsDeterministic()` in diagnostics.html,
+  which draws the same content twice and asserts equality — and by the E2E
+  test, which additionally asserts *different* profiles get *different*
+  results for identical content). Off by default is not the case here —
+  `canvasMode` already defaulted to `'noise'` in the generator before this
+  stage; this stage made that existing default actually take effect.
+- **Audio** — overrides `AudioBuffer.prototype.getChannelData`, adding
+  `(rand() - 0.5) * 0.0001` per sample using the same seeded-PRNG pattern
+  (profile seed XOR a hash of the buffer's own initial content). Same
+  determinism property as Canvas.
+- **Device Memory** — `Object.defineProperty(Navigator.prototype,
+  'deviceMemory', {get: () => configuredValue})`. Unconditional (no on/off
+  mode — there's nothing plausibility-sensitive about always reporting the
+  profile's stored value), applied via the same injected script. This is the
+  first genuinely-enforced fix for Finding 3 (no CDP-native mechanism exists,
+  which remains true — this is a JS-level override, not a CDP Emulation call,
+  and is graded A because it's unconditional and the diagnostics page
+  verifies the real, configured value are equal every time).
+- **Fonts** — overrides `document.fonts.check()` and (where present)
+  `navigator.fonts.query()` to only ever report matches against a fixed
+  five-font allow-list (`RESTRICTED_FONT_ALLOWLIST` in spoofingScript.ts:
+  Arial, Times New Roman, Courier New, Segoe UI, Verdana), only when
+  `fontsMode === 'restricted'` (default remains `'system'`, i.e. off).
+  **Documented partial coverage**: this blocks the CSS Font Loading API and
+  the permission-gated Local Font Access API, but does **not** block the far
+  more common CSS-fallback-width-measurement technique (rendering text in a
+  candidate font and measuring its width against a known fallback) — that
+  technique reads real layout metrics from the actual installed system fonts
+  and has no interception point reachable from page-world JS without
+  rewriting Chromium's text-layout/shaping internals. The Fingerprint tab's
+  hint text and this document both say so explicitly; the diagnostics page
+  never claims more than "override installed", never "fonts fully hidden".
+- **Media devices** — overrides `navigator.mediaDevices.enumerateDevices()`
+  to return a precomputed, seeded synthetic device list
+  (`buildFakeMediaDevices()`, reusing the project's existing
+  `createSeededRandom()`/`pick()` helpers from `seededRandom.ts` — same
+  determinism guarantee as the rest of fingerprint generation), only when
+  `mediaDevicesMode === 'hidden'` (default remains `'real'`). All labels are
+  empty strings and device IDs are prefixed `ai-`/`ao-`/`vi-`, which the
+  diagnostics page's `mediaDevicesLookFake()` check uses to verify the
+  override is genuinely active rather than trusting the mode flag alone.
+  This addresses the semantic gap the previous audit stage flagged (a
+  Chromium flag like `--use-fake-device-for-media-stream` would replace real
+  devices with **generic** synthetic ones — not a per-profile-*consistent*
+  fake list, which is what "hidden" as a per-profile identity property
+  actually requires).
 
-`navigator.mediaDevices.enumerateDevices()` reflects the real system's actual
-audio/video devices (verified on the dev machine: 3 audio inputs, 1 video
-input, 6 audio outputs — the real hardware, not a fabricated list).
-`mediaDevicesMode: 'hidden'` is stored and validated but not enforced: doing
-so honestly would require either denying camera/microphone permission
-(`session.setPermissionRequestHandler`, which mostly redacts device *labels*,
-not device *count*) or providing fake virtual devices (a Chromium flag,
-`--use-fake-device-for-media-stream`, replaces devices with **synthetic**
-ones — not "hidden", a different semantic than our schema's field name
-implies). Left as D rather than shipping a mechanism that doesn't match the
-field's stated meaning.
+## WebGL spoofing (opt-in, off by default)
+
+**This one is deliberately different from the other four.** `getParameter()`
+interception on `WebGL(2)RenderingContext.prototype` is architecturally the
+same injection mechanism as Canvas/Audio above, and is implemented
+(`webglSpoofingMode: 'spoof'` in spoofingScript.ts intercepts parameter
+`37445`/`37446`, i.e. `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL`, and
+returns the profile's stored `webglVendor`/`webglRenderer` strings instead of
+the real ones). But unlike Canvas/Audio noise (a few LSBs of pixel/sample
+perturbation that legitimate content never depends on) or the Device
+Memory/Fonts/Media-Devices overrides (values pages read but essentially never
+branch rendering logic on), **WebGL vendor/renderer strings are sometimes
+read by real sites to select a rendering code path** — GPU-tier detection in
+games, some map/3D renderers, and certain bot-detection/CAPTCHA systems key
+behavior off the reported GPU string. Overriding it carries genuine
+compatibility risk that the other four overrides don't.
+
+Per the project's own stated resolution for exactly this situation, this is
+shipped as a separate schema field (`webglSpoofingMode: z.enum(['off',
+'spoof'])`, migration `003_webgl_spoofing_mode.sql`) **defaulting to `'off'`
+for every profile**, with its own UI toggle in the Fingerprint tab's Spoofing
+panel carrying an explicit warning banner
+(`editor.fingerprint.spoofing.webglWarning`: *"Experimental — overrides a
+real WebGL API used by some games, map renderers, and CAPTCHAs. May break
+page compatibility. Off by default; enable only if you understand the
+risk."*, shown in both English and Ukrainian). `webglVendor`/`webglRenderer`
+themselves are still generated and stored per-profile as before (unchanged,
+still class **C** on their own) — the new field controls only whether the
+JS-level override is actually installed. Turning it on is graded **B**, same
+category as Canvas/Audio, since the diagnostics page can only verify "the
+override is installed and returns the configured string", not that every
+possible WebGL-reading code path on every real site sees a fully consistent
+picture — the same category of partial-verifiability limitation as WebRTC's
+grade B.
 
 ## Permissions and geolocation
 
@@ -228,50 +301,65 @@ control the nested Electron window's UI directly. This is a test-harness
 convenience, not a fingerprint-spoofing mechanism — it changes only which
 page loads, not any reported value.
 
-## Automated test coverage added this stage
+## Automated test coverage
 
-- `tests/e2e/fingerprintEnforcement.spec.ts` (2 tests) — starts a real
+- `tests/e2e/fingerprintEnforcement.spec.ts` (3 tests) — starts a real
   profile, asserts the enforced fields (userAgent, platform, languages,
-  timezone, screenWidth, screenHeight, hardwareConcurrency) are `PASS` in the
-  real browser-generated snapshot, **and** asserts the unenforced fields
-  (deviceMemory, webglVendor, webglRenderer, canvasMode, fontsMode,
+  timezone, screenWidth, screenHeight, hardwareConcurrency, **deviceMemory**,
+  **canvasMode**, **audioMode**) are `PASS`/`APPLIED` in the real
+  browser-generated snapshot, with an explicit assertion that canvas noise
+  is deterministic (`observed.canvasDeterministic === true`); asserts the
+  fields that remain off by default (webglVendor, webglRenderer, fontsMode,
   mediaDevicesMode) are honestly `NOT_IMPLEMENTED` — guarding against a
-  regression that silently starts claiming false coverage.
+  regression that silently starts claiming false coverage; and a third test
+  starts a **second** profile and asserts its canvas noise tail differs from
+  the first profile's despite drawing identical content, proving the noise is
+  genuinely per-profile-seeded rather than a single fixed patch.
+- `tests/unit/spoofingScript.test.ts` (11 tests) — `buildFakeMediaDevices()`
+  determinism (same seed → identical list) and cross-seed variation;
+  `buildSpoofingScript()` emits each conditional patch (canvas/audio/webgl/
+  fonts/media-devices) only when its mode flag calls for it, emits the
+  unconditional deviceMemory override always, and produces syntactically
+  valid JS (`new Function(script)` smoke test).
 - `tests/unit/consistencyEngine.test.ts` (5 tests) — impossible-combination
   rejection + hardware plausibility warnings.
 - `tests/unit/browserCompatibility.test.ts` (3 tests) — the new Chromium
   version drift check.
 
-## Acceptance checklist for this stage
+## Acceptance checklist — spoofing-gaps stage
 
-- [x] Existing 62 tests still pass (now 63 unit/integration + 9 E2E = 72 total)
-- [x] New fingerprint tests pass (10 new: 2 E2E + 5 consistency + 3 compat)
-- [x] User-Agent verified (real browser read, E2E)
-- [x] Locale verified (real browser read, E2E)
-- [x] Languages verified (real browser read, E2E)
-- [x] Timezone verified (real browser read, E2E)
-- [x] Screen/viewport verified (real browser read, E2E; viewport vs. screen
-      distinction explicitly documented and tested)
-- [x] WebGL audited (confirmed D — no native override mechanism exists)
-- [x] Canvas audited (confirmed D — documented required future architecture)
-- [x] Audio audited (confirmed D — same category as Canvas)
-- [x] WebRTC audited (graded B — real native leak-protection policy applied;
-      "disabled" mode's honest limitation documented; live ICE probe added)
-- [x] Fonts audited (confirmed D — no reliable per-profile mechanism exists)
-- [x] Media devices audited (confirmed D — real enumeration verified,
-      "hidden" mode's mismatch with available mechanisms documented)
-- [x] Hardware concurrency audited (confirmed A — CDP override verified)
-- [x] Device memory audited (confirmed D — CDP method does not exist, tested)
-- [x] Fingerprint consistency validated (existing checks + new tests for the
-      brief's own named impossible-combination examples + hardware plausibility)
-- [x] Diagnostic page shows configured vs observed (rewritten with an explicit
-      PASS/MISMATCH/NOT_IMPLEMENTED/APPLIED status column per property)
-- [x] Unsupported features are explicitly marked (status column; never a
-      silent PASS on an unenforced field, even when values coincidentally match
-      — verified: deviceMemory showed matching values by coincidence during
-      testing and was still correctly reported NOT_IMPLEMENTED)
-- [x] No fake implementations exist (every A/B-graded mechanism is backed by
-      a real Chromium/Electron API, verified empirically before being coded)
-- [x] Documentation is updated (this file + README/SECURITY/ARCHITECTURE/
-      PLAN/TESTING/CHANGELOG)
+- [x] Existing 98 tests still pass, plus 11 new (`spoofingScript.test.ts`) =
+      109 unit/integration; fingerprint E2E suite now 3 tests, all passing
+- [x] Canvas noise implemented: seeded, deterministic per-profile (E2E-verified
+      via double-read equality **and** cross-profile difference on identical
+      content), on by default (`canvasMode: 'noise'`, unchanged generator default)
+- [x] Audio noise implemented: same seeding pattern, override presence
+      verified via `isOverridden()`, on by default
+- [x] Device Memory implemented: unconditional override, E2E-verified equal
+      to the configured value (upgraded from D to A)
+- [x] WebGL vendor/renderer spoofing implemented **behind a new, off-by-default
+      opt-in toggle** (`webglSpoofingMode`) with an explicit compatibility-risk
+      warning in the UI, per the explicit instruction to do so for anything
+      "technically difficult or risky to implement reliably" — see §WebGL
+      spoofing above for the full tradeoff writeup
+- [x] Fonts restriction implemented behind its existing `fontsMode` toggle
+      (default remains `'system'`/off); partial-coverage limitation (CSS
+      fallback-measurement technique not blocked) documented in both the audit
+      and the Fingerprint tab's own UI hint text
+- [x] Media devices masking implemented behind its existing `mediaDevicesMode`
+      toggle (default remains `'real'`/off); seeded synthetic device list,
+      structurally verified as non-real by the diagnostics page
+- [x] Every new field's UI control lives in ProfileEditorModal's Fingerprint
+      tab, auto-saves on change via `fingerprint:update`, consistent with the
+      rest of the tab's existing fields
+- [x] All new i18n strings added in lockstep to `en.ts`/`uk.ts` — key parity
+      re-verified (195/195, 0 missing, 0 extra)
+- [x] Diagnostic page extended: `isOverridden()`, `canvasIsDeterministic()`,
+      `mediaDevicesLookFake()` give genuine behavioral verification instead of
+      trusting the configured mode flag — never a false PASS/APPLIED
+- [x] No fake implementations exist (every override runs via the same native
+      CDP `Page.addScriptToEvaluateOnNewDocument` injection mechanism, verified
+      end-to-end against a real Electron/Chromium process, not simulated)
+- [x] Documentation updated (this file)
+- [x] Typecheck, lint, full unit suite, and the fingerprint E2E suite all pass
 - [x] Production build succeeds

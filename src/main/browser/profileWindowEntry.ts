@@ -2,8 +2,9 @@ import { app, BrowserWindow, ipcMain, protocol, screen, session, shell } from 'e
 import type { DownloadItem } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
-import type { WebrtcMode } from '../../shared/schemas/fingerprint';
+import { enforceFingerprint, applyWebrtcPolicy, injectSpoofingScript } from './fingerprintEnforcement';
+import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
+import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
 import type { DownloadEvent } from './browserShellPreload';
 
 const BROWSER_START_URL = 'https://www.google.com';
@@ -201,6 +202,18 @@ export function runProfileWindowProcess(): void {
       applyWebrtcPolicy(webviewContents, webrtcMode);
 
       const fp = args.fingerprintConfig;
+      const spoofableFingerprint: SpoofableFingerprint = {
+        seed: String(fp['seed'] ?? args.profileId),
+        canvasMode: (fp['canvasMode'] as Fingerprint['canvasMode']) ?? 'off',
+        audioMode: (fp['audioMode'] as Fingerprint['audioMode']) ?? 'off',
+        deviceMemory: Number(fp['deviceMemory'] ?? 8),
+        webglSpoofingMode: (fp['webglSpoofingMode'] as Fingerprint['webglSpoofingMode']) ?? 'off',
+        webglVendor: String(fp['webglVendor'] ?? 'Google Inc.'),
+        webglRenderer: String(fp['webglRenderer'] ?? 'ANGLE'),
+        fontsMode: (fp['fontsMode'] as Fingerprint['fontsMode']) ?? 'system',
+        mediaDevicesMode: (fp['mediaDevicesMode'] as Fingerprint['mediaDevicesMode']) ?? 'real',
+      };
+
       enforceFingerprint(webviewContents, {
         userAgent: args.userAgent,
         platform: String(fp['platform'] ?? 'Win32'),
@@ -210,6 +223,7 @@ export function runProfileWindowProcess(): void {
         screenHeight: Number(fp['screenHeight'] ?? 1080),
         deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
       })
+        .then(() => injectSpoofingScript(webviewContents, buildSpoofingScript(spoofableFingerprint)))
         .catch((err: unknown) => {
           console.error('[ProfileForge] fingerprint enforcement failed:', err);
         })

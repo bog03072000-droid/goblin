@@ -54,6 +54,10 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     webrtcMode: 'proxy-only',
     fontsMode: 'system',
     mediaDevicesMode: 'real',
+    // Off by default — a JS-level getParameter() override carries real
+    // compatibility risk for WebGL-heavy sites (see docs/FINGERPRINT_AUDIT.md).
+    // The user opts in per profile via the Fingerprint tab.
+    webglSpoofingMode: 'off',
     seed: options.seed,
   };
 }

@@ -43,6 +43,8 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
       audioMode: params.fingerprint.audioMode,
       fontsMode: params.fingerprint.fontsMode,
       mediaDevicesMode: params.fingerprint.mediaDevicesMode,
+      webglSpoofingMode: params.fingerprint.webglSpoofingMode,
+      seed: params.fingerprint.seed,
     }),
   ).toString('base64');
 

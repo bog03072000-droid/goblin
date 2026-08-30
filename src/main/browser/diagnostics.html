@@ -69,13 +69,34 @@
       } catch (e) { return 'unavailable'; }
     }
 
+    // Drawing the exact same content twice and checking the two results
+    // match doesn't merely confirm nothing crashed — it's the actual
+    // determinism property the spoofing script is supposed to have (same
+    // canvas, same profile seed -> same perturbed bytes every time). See
+    // spoofingScript.ts and the E2E test, which additionally confirms two
+    // *different* profiles get *different* results for identical content.
+    function canvasIsDeterministic() {
+      const a = getCanvasTail();
+      const b = getCanvasTail();
+      return a !== 'unavailable' && a === b;
+    }
+
+    function isOverridden(fn) {
+      try { return typeof fn === 'function' && fn.toString().indexOf('[native code]') === -1; } catch (e) { return false; }
+    }
+
+    function mediaDevicesLookFake(devices) {
+      if (devices.length === 0) return false;
+      return devices.every((d) => d.label === '' && /^(ai|ao|vi)-/.test(d.deviceId));
+    }
+
     async function getMediaDevices() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const kinds = devices.reduce((acc, d) => ({ ...acc, [d.kind]: (acc[d.kind] || 0) + 1 }), {});
-        return JSON.stringify(kinds);
+        return { summary: JSON.stringify(kinds), looksFake: mediaDevicesLookFake(devices) };
       } catch (e) {
-        return 'enumerateDevices() failed: ' + e.message;
+        return { summary: 'enumerateDevices() failed: ' + e.message, looksFake: false };
       }
     }
 
@@ -129,6 +150,11 @@
         webglVendor: webgl.vendor,
         webglRenderer: webgl.renderer,
         canvasFingerprintTail: getCanvasTail(),
+        canvasDeterministic: canvasIsDeterministic(),
+        canvasOverridden: isOverridden(HTMLCanvasElement.prototype.toDataURL),
+        audioOverridden: isOverridden(window.AudioBuffer && AudioBuffer.prototype.getChannelData),
+        webglOverridden: isOverridden(window.WebGLRenderingContext && WebGLRenderingContext.prototype.getParameter),
+        fontsOverridden: isOverridden(document.fonts && document.fonts.check),
         mediaDevices: await getMediaDevices(),
         webrtc: await probeWebrtc(),
       };
@@ -139,7 +165,7 @@
     // unenforced field must never be reported as PASS.
     const ENFORCED_FIELDS = new Set([
       'userAgent', 'platform', 'locale', 'languages', 'screenWidth', 'screenHeight',
-      'deviceScaleFactor', 'timezone', 'hardwareConcurrency',
+      'deviceScaleFactor', 'timezone', 'hardwareConcurrency', 'deviceMemory',
     ]);
 
     function classify(field, cVal, oVal) {
@@ -153,6 +179,58 @@
       try { configured = JSON.parse(atob(params.get('config') || '')); } catch (e) { configured = {}; }
       const observed = await getObserved();
 
+      const webglSpoofing = configured.webglSpoofingMode === 'spoof';
+
+      // Fields with a static ENFORCED_FIELDS membership use plain value
+      // equality (classify()). Everything below needs a *behavioral* check
+      // instead — comparing the mode string to itself would be meaningless,
+      // and WebGL's status now depends on a per-profile toggle rather than
+      // being permanently D-graded. Each returns its own [status, observedText].
+      const customFields = [
+        [
+          'WebGL Vendor', 'webglVendor',
+          () => String(configured.webglVendor ?? '—'),
+          () => webglSpoofing
+            ? [String(observed.webglVendor) === String(configured.webglVendor) ? 'PASS' : 'MISMATCH', observed.webglVendor]
+            : ['NOT_IMPLEMENTED', observed.webglVendor + ' (real GPU — spoofing off)'],
+        ],
+        [
+          'WebGL Renderer', 'webglRenderer',
+          () => String(configured.webglRenderer ?? '—'),
+          () => webglSpoofing
+            ? [String(observed.webglRenderer) === String(configured.webglRenderer) ? 'PASS' : 'MISMATCH', observed.webglRenderer]
+            : ['NOT_IMPLEMENTED', observed.webglRenderer + ' (real GPU — spoofing off)'],
+        ],
+        [
+          'Canvas noise', 'canvasMode',
+          () => String(configured.canvasMode ?? '—'),
+          () => configured.canvasMode === 'noise'
+            ? [observed.canvasOverridden && observed.canvasDeterministic ? 'APPLIED' : 'MISMATCH', 'tail ' + observed.canvasFingerprintTail + ', deterministic: ' + observed.canvasDeterministic]
+            : ['NOT_IMPLEMENTED', 'tail ' + observed.canvasFingerprintTail + ' (real canvas — noise off)'],
+        ],
+        [
+          'Audio noise', 'audioMode',
+          () => String(configured.audioMode ?? '—'),
+          () => configured.audioMode === 'noise'
+            ? [observed.audioOverridden ? 'APPLIED' : 'MISMATCH', 'AudioBuffer.getChannelData() overridden: ' + observed.audioOverridden]
+            : ['NOT_IMPLEMENTED', 'real audio pipeline — noise off'],
+        ],
+        [
+          'Fonts', 'fontsMode',
+          () => String(configured.fontsMode ?? '—'),
+          () => configured.fontsMode === 'restricted'
+            ? [observed.fontsOverridden ? 'APPLIED' : 'MISMATCH', 'document.fonts.check() overridden (partial coverage only — see audit)']
+            : ['NOT_IMPLEMENTED', '(not probed — real system fonts visible)'],
+        ],
+        [
+          'Media Devices', 'mediaDevicesMode',
+          () => String(configured.mediaDevicesMode ?? '—'),
+          () => configured.mediaDevicesMode === 'hidden'
+            ? [observed.mediaDevices.looksFake ? 'APPLIED' : 'MISMATCH', observed.mediaDevices.summary + ' (fake list: ' + observed.mediaDevices.looksFake + ')']
+            : ['NOT_IMPLEMENTED', observed.mediaDevices.summary + ' (real devices — hidden mode off)'],
+        ],
+      ];
+
       const fieldMap = [
         ['User-Agent', 'userAgent', 'userAgent', 'userAgent'],
         ['Platform', 'platform', 'platform', 'platform'],
@@ -164,11 +242,6 @@
         ['Timezone', 'timezone', 'timezone', 'timezone'],
         ['Hardware Concurrency', 'hardwareConcurrency', 'hardwareConcurrency', 'hardwareConcurrency'],
         ['Device Memory (GB)', 'deviceMemory', 'deviceMemory', 'deviceMemory'],
-        ['WebGL Vendor', 'webglVendor', 'webglVendor', 'webglVendor'],
-        ['WebGL Renderer', 'webglRenderer', 'webglRenderer', 'webglRenderer'],
-        ['Canvas fingerprint (tail)', 'canvasMode', null, 'canvasFingerprintTail'],
-        ['Fonts', 'fontsMode', null, '(not probed — no reliable enumeration API; see audit)'],
-        ['Media Devices', 'mediaDevicesMode', null, 'mediaDevices'],
       ];
 
       const rows = document.getElementById('rows');
@@ -184,6 +257,14 @@
         statusByField[fieldKey] = status;
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${label}</td><td>${cVal}</td><td>${oVal}</td><td class="status status-${status}">${status.replace('_', ' ')}</td>`;
+        rows.appendChild(tr);
+      }
+
+      for (const [label, fieldKey, getConfigured, getResult] of customFields) {
+        const [status, oVal] = getResult();
+        statusByField[fieldKey] = status;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${label}</td><td>${getConfigured()}</td><td>${oVal}</td><td class="status status-${status}">${status.replace('_', ' ')}</td>`;
         rows.appendChild(tr);
       }
 

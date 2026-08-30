@@ -7,7 +7,7 @@ import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
-import { FingerprintTab, type FingerprintDraft } from './profileEditor/FingerprintTab';
+import { FingerprintTab, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
 import { ProxyTab } from './profileEditor/ProxyTab';
 import { StorageTab } from './profileEditor/StorageTab';
 import { AdvancedTab } from './profileEditor/AdvancedTab';
@@ -41,7 +41,8 @@ export function ProfileEditorModal({
   const loadAction = useAsyncAction();
   const saveAction = useAsyncAction();
   const miscAction = useAsyncAction();
-  const error = loadAction.error ?? saveAction.error ?? miscAction.error;
+  const spoofingAction = useAsyncAction();
+  const error = loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error;
 
   async function load(): Promise<void> {
     await loadAction.run(async () => {
@@ -179,6 +180,7 @@ export function ProfileEditorModal({
         webrtcMode: source.webrtcMode,
         fontsMode: source.fontsMode,
         mediaDevicesMode: source.mediaDevicesMode,
+        webglSpoofingMode: source.webglSpoofingMode,
         seed: source.seed,
       });
       setValidation(result);
@@ -188,6 +190,17 @@ export function ProfileEditorModal({
   async function clearCache(): Promise<void> {
     await miscAction.run(async () => {
       await callApi('profiles:clearCache', { id: profileId });
+    });
+  }
+
+  async function updateSpoofing(patch: SpoofingPatch): Promise<void> {
+    if (!fingerprint) return;
+    await spoofingAction.run(async () => {
+      const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
+        id: fingerprint.id,
+        ...patch,
+      });
+      setFingerprint(updated);
     });
   }
 
@@ -256,9 +269,11 @@ export function ProfileEditorModal({
               onManualModeChange={setManualMode}
               validation={validation}
               saving={saveAction.pending}
+              spoofingSaving={spoofingAction.pending}
               onRegenerate={() => void regenerateAuto()}
               onValidate={() => void runValidate()}
               onSaveManual={() => void saveManualFingerprint()}
+              onUpdateSpoofing={(patch) => void updateSpoofing(patch)}
             />
           )}
 

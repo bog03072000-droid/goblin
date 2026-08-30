@@ -9,6 +9,11 @@ export const WebrtcModeSchema = z.enum(['default', 'disabled', 'proxy-only']);
 export type WebrtcMode = z.infer<typeof WebrtcModeSchema>;
 export const FontsModeSchema = z.enum(['system', 'restricted']);
 export const MediaDevicesModeSchema = z.enum(['real', 'hidden']);
+// Separate from webglVendor/webglRenderer (which are always generated) because
+// spoofing getParameter() is a JS-level override with real compatibility risk
+// for WebGL-heavy sites (canvas games, map renderers, some CAPTCHAs) — opt-in,
+// off by default. See docs/FINGERPRINT_AUDIT.md.
+export const WebglSpoofingModeSchema = z.enum(['off', 'spoof']);
 
 export const FingerprintSchema = z.object({
   id: z.string().uuid(),
@@ -33,6 +38,7 @@ export const FingerprintSchema = z.object({
   webrtcMode: WebrtcModeSchema,
   fontsMode: FontsModeSchema,
   mediaDevicesMode: MediaDevicesModeSchema,
+  webglSpoofingMode: WebglSpoofingModeSchema,
   seed: z.string().min(1),
   createdAt: z.string(),
   updatedAt: z.string(),

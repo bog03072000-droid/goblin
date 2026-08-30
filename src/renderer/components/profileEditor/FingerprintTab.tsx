@@ -21,6 +21,7 @@ export const FIELD_ROW_KEYS: Array<[TranslationKey, keyof Fingerprint]> = [
   ['editor.fingerprint.field.webrtcMode', 'webrtcMode'],
   ['editor.fingerprint.row.fontsMode', 'fontsMode'],
   ['editor.fingerprint.row.mediaDevicesMode', 'mediaDevicesMode'],
+  ['editor.fingerprint.spoofing.webglLabel', 'webglSpoofingMode'],
   ['editor.fingerprint.row.seed', 'seed'],
 ];
 
@@ -51,6 +52,10 @@ const MANUAL_FIELD_KEYS: Array<
   ['editor.fingerprint.field.hardwareConcurrency', 'hardwareConcurrency'],
 ];
 
+export type SpoofingPatch = Partial<
+  Pick<Fingerprint, 'canvasMode' | 'audioMode' | 'fontsMode' | 'mediaDevicesMode' | 'webglSpoofingMode'>
+>;
+
 export function FingerprintTab({
   fingerprint,
   draft,
@@ -59,9 +64,11 @@ export function FingerprintTab({
   onManualModeChange,
   validation,
   saving,
+  spoofingSaving,
   onRegenerate,
   onValidate,
   onSaveManual,
+  onUpdateSpoofing,
 }: {
   fingerprint: Fingerprint;
   draft: FingerprintDraft;
@@ -70,9 +77,11 @@ export function FingerprintTab({
   onManualModeChange: (manual: boolean) => void;
   validation: FingerprintValidationResult | null;
   saving: boolean;
+  spoofingSaving: boolean;
   onRegenerate: () => void;
   onValidate: () => void;
   onSaveManual: () => void;
+  onUpdateSpoofing: (patch: SpoofingPatch) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -146,6 +155,76 @@ export function FingerprintTab({
           </button>
         </div>
       )}
+
+      <div className="panel" style={{ marginTop: 16 }}>
+        <h4 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {t('editor.fingerprint.spoofing.title')}
+          {spoofingSaving && <span className="spinner" />}
+        </h4>
+        <label style={{ display: 'block', marginBottom: 8 }}>
+          {t('editor.fingerprint.row.canvasMode')}
+          <select
+            value={fingerprint.canvasMode}
+            onChange={(e) => onUpdateSpoofing({ canvasMode: e.target.value as Fingerprint['canvasMode'] })}
+            style={{ display: 'block', width: '100%', marginTop: 4 }}
+          >
+            <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
+            <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
+          </select>
+        </label>
+        <label style={{ display: 'block', marginBottom: 8 }}>
+          {t('editor.fingerprint.row.audioMode')}
+          <select
+            value={fingerprint.audioMode}
+            onChange={(e) => onUpdateSpoofing({ audioMode: e.target.value as Fingerprint['audioMode'] })}
+            style={{ display: 'block', width: '100%', marginTop: 4 }}
+          >
+            <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
+            <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
+          </select>
+        </label>
+        <label style={{ display: 'block', marginBottom: 8 }}>
+          {t('editor.fingerprint.row.fontsMode')}
+          <select
+            value={fingerprint.fontsMode}
+            onChange={(e) => onUpdateSpoofing({ fontsMode: e.target.value as Fingerprint['fontsMode'] })}
+            style={{ display: 'block', width: '100%', marginTop: 4 }}
+          >
+            <option value="system">{t('editor.fingerprint.spoofing.fontsSystem')}</option>
+            <option value="restricted">{t('editor.fingerprint.spoofing.fontsRestricted')}</option>
+          </select>
+          <p style={{ color: 'var(--ash-dim)', fontSize: 11, marginTop: 4, marginBottom: 0 }}>
+            {t('editor.fingerprint.spoofing.fontsHint')}
+          </p>
+        </label>
+        <label style={{ display: 'block', marginBottom: 8 }}>
+          {t('editor.fingerprint.row.mediaDevicesMode')}
+          <select
+            value={fingerprint.mediaDevicesMode}
+            onChange={(e) => onUpdateSpoofing({ mediaDevicesMode: e.target.value as Fingerprint['mediaDevicesMode'] })}
+            style={{ display: 'block', width: '100%', marginTop: 4 }}
+          >
+            <option value="real">{t('editor.fingerprint.spoofing.mediaReal')}</option>
+            <option value="hidden">{t('editor.fingerprint.spoofing.mediaHidden')}</option>
+          </select>
+        </label>
+        <label style={{ display: 'block' }}>
+          {t('editor.fingerprint.spoofing.webglLabel')}
+          <select
+            value={fingerprint.webglSpoofingMode}
+            onChange={(e) => onUpdateSpoofing({ webglSpoofingMode: e.target.value as Fingerprint['webglSpoofingMode'] })}
+            style={{ display: 'block', width: '100%', marginTop: 4 }}
+          >
+            <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
+            <option value="spoof">{t('editor.fingerprint.spoofing.webglSpoof')}</option>
+          </select>
+          {fingerprint.webglSpoofingMode === 'spoof' && (
+            <div className="banner banner-warn" style={{ marginTop: 8, marginBottom: 0, fontSize: 11 }}>
+              {t('editor.fingerprint.spoofing.webglWarning')}
+            </div>
+          )}
+        </label>
+      </div>
 
       {validation && (
         <div style={{ marginTop: 10, fontSize: 12 }}>

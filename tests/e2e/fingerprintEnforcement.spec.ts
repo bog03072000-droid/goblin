@@ -89,25 +89,64 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(snapshot.statusByField['hardwareConcurrency']).toBe('PASS');
   expect(Number(snapshot.observed['hardwareConcurrency'])).toBe(Number(snapshot.configured['hardwareConcurrency']));
 
+  // deviceMemory is now genuinely applied via the CDP-injected spoofing
+  // script (there's still no CDP Emulation method for it — see Finding 3 —
+  // this is the JS-override path added for this stage).
+  expect(snapshot.statusByField['deviceMemory']).toBe('PASS');
+  expect(Number(snapshot.observed['deviceMemory'])).toBe(Number(snapshot.configured['deviceMemory']));
+
+  // Canvas/audio noise default to 'on' for a new profile (generator.ts) —
+  // verify the override is actually installed and, critically, that it's
+  // *deterministic*: the same canvas content read twice in a row produces
+  // byte-identical output, not fresh random noise every call.
+  expect(snapshot.statusByField['canvasMode']).toBe('APPLIED');
+  expect(snapshot.observed['canvasDeterministic']).toBe(true);
+  expect(snapshot.statusByField['audioMode']).toBe('APPLIED');
+
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
-test('honestly unenforced properties are reported NOT_IMPLEMENTED, never a false PASS', async () => {
+test('honestly unenforced-by-default properties are reported NOT_IMPLEMENTED, never a false PASS', async () => {
   const snapshot = readSnapshot();
 
-  // deviceMemory: confirmed during the audit that Chromium 128 has no CDP
-  // override for it — must never be silently reported as matching.
-  expect(snapshot.statusByField['deviceMemory']).toBe('NOT_IMPLEMENTED');
-
-  // WebGL vendor/renderer reflect the real GPU/ANGLE backend; there is no
-  // Chromium-native mechanism to force arbitrary configured strings.
+  // WebGL vendor/renderer: off by default (opt-in, see WEBGL_SPOOFING_ENABLED
+  // test below) — reflects the real GPU/ANGLE backend until explicitly enabled.
   expect(snapshot.statusByField['webglVendor']).toBe('NOT_IMPLEMENTED');
   expect(snapshot.statusByField['webglRenderer']).toBe('NOT_IMPLEMENTED');
 
-  // Canvas/fonts/media-devices have no Chromium-native override mechanism
-  // either — the diagnostics page reports the real values, not a fake pass.
-  expect(snapshot.statusByField['canvasMode']).toBe('NOT_IMPLEMENTED');
+  // Fonts/media-devices default to their non-spoofing mode ('system'/'real')
+  // — the diagnostics page reports the real values, not a fake pass.
   expect(snapshot.statusByField['fontsMode']).toBe('NOT_IMPLEMENTED');
   expect(snapshot.statusByField['mediaDevicesMode']).toBe('NOT_IMPLEMENTED');
+});
+
+test('canvas noise is profile-specific: two profiles reading identical content get different results', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Fingerprint Profile 2');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Fingerprint Profile 2' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  const newestSnapshotPath = () => {
+    const dirs = fs
+      .readdirSync(path.join(userDataDir, 'profiles'))
+      .map((d) => path.join(userDataDir, 'profiles', d))
+      .sort((a, b) => fs.statSync(b).birthtimeMs - fs.statSync(a).birthtimeMs);
+    return path.join(dirs[0]!, 'fingerprint-snapshot.json');
+  };
+  await expect.poll(() => fs.existsSync(newestSnapshotPath()), { timeout: 30_000 }).toBe(true);
+  const secondSnapshot = JSON.parse(fs.readFileSync(newestSnapshotPath(), 'utf-8')) as ReturnType<typeof readSnapshot>;
+  const firstSnapshot = readSnapshot();
+
+  expect(firstSnapshot.configured['seed']).not.toBe(secondSnapshot.configured['seed']);
+  // Same drawn content ("pf-diag" in 14px Arial on a 50x50 canvas — identical
+  // on every profile), but the noise is seeded per-profile, so the resulting
+  // bytes differ between the two profiles despite the identical input.
+  expect(firstSnapshot.observed['canvasFingerprintTail']).not.toBe(secondSnapshot.observed['canvasFingerprintTail']);
+
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });

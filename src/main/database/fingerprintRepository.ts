@@ -25,6 +25,7 @@ interface FingerprintRow {
   webrtc_mode: string;
   fonts_mode: string;
   media_devices_mode: string;
+  webgl_spoofing_mode: string;
   seed: string;
   created_at: string;
   updated_at: string;
@@ -54,6 +55,7 @@ function rowToFingerprint(row: FingerprintRow): Fingerprint {
     webrtcMode: row.webrtc_mode as Fingerprint['webrtcMode'],
     fontsMode: row.fonts_mode as Fingerprint['fontsMode'],
     mediaDevicesMode: row.media_devices_mode as Fingerprint['mediaDevicesMode'],
+    webglSpoofingMode: row.webgl_spoofing_mode as Fingerprint['webglSpoofingMode'],
     seed: row.seed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -73,12 +75,12 @@ export class FingerprintRepository {
           languages, timezone, screen_width, screen_height, device_scale_factor,
           hardware_concurrency, device_memory, webgl_vendor, webgl_renderer,
           canvas_mode, audio_mode, webrtc_mode, fonts_mode, media_devices_mode,
-          seed, created_at, updated_at
+          webgl_spoofing_mode, seed, created_at, updated_at
         ) VALUES (@id, @name, @os, @osVersion, @browserVersion, @userAgent, @platform, @locale,
           @languages, @timezone, @screenWidth, @screenHeight, @deviceScaleFactor,
           @hardwareConcurrency, @deviceMemory, @webglVendor, @webglRenderer,
           @canvasMode, @audioMode, @webrtcMode, @fontsMode, @mediaDevicesMode,
-          @seed, @createdAt, @updatedAt)`,
+          @webglSpoofingMode, @seed, @createdAt, @updatedAt)`,
       )
       .run({
         id,
@@ -110,7 +112,8 @@ export class FingerprintRepository {
           device_scale_factor=@deviceScaleFactor, hardware_concurrency=@hardwareConcurrency,
           device_memory=@deviceMemory, webgl_vendor=@webglVendor, webgl_renderer=@webglRenderer,
           canvas_mode=@canvasMode, audio_mode=@audioMode, webrtc_mode=@webrtcMode,
-          fonts_mode=@fontsMode, media_devices_mode=@mediaDevicesMode, seed=@seed,
+          fonts_mode=@fontsMode, media_devices_mode=@mediaDevicesMode,
+          webgl_spoofing_mode=@webglSpoofingMode, seed=@seed,
           updated_at=@updatedAt WHERE id=@id`,
       )
       .run({

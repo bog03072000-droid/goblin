@@ -108,6 +108,7 @@ class FingerprintRepositoryHelper {
       webrtcMode: 'proxy-only',
       fontsMode: 'system',
       mediaDevicesMode: 'real',
+      webglSpoofingMode: 'off',
       seed,
     }).id;
   }
