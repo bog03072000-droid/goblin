@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
-import type { Fingerprint, FingerprintValidationResult } from '@shared/schemas/fingerprint';
+import type { Fingerprint, FingerprintInput, FingerprintValidationResult } from '@shared/schemas/fingerprint';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 
@@ -48,6 +48,19 @@ export function ProfileEditorModal({
   const [proxyId, setProxyId] = useState('');
   const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [draft, setDraft] = useState<{
+    userAgent: string;
+    platform: string;
+    locale: string;
+    languages: string;
+    timezone: string;
+    screenWidth: string;
+    screenHeight: string;
+    deviceScaleFactor: string;
+    hardwareConcurrency: string;
+    webrtcMode: string;
+  } | null>(null);
 
   async function load(): Promise<void> {
     try {
@@ -60,6 +73,7 @@ export function ProfileEditorModal({
       setProxyId(p.proxyId ?? '');
       const fp = await callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId });
       setFingerprint(fp);
+      if (fp) resetDraft(fp);
       const proxyList = await callApi<'proxy:list', ProxyRecord[]>('proxy:list', {});
       setProxies(proxyList);
     } catch (err) {
@@ -99,32 +113,100 @@ export function ProfileEditorModal({
     }
   }
 
-  async function runValidate(): Promise<void> {
+  function resetDraft(fp: Fingerprint): void {
+    setDraft({
+      userAgent: fp.userAgent,
+      platform: fp.platform,
+      locale: fp.locale,
+      languages: fp.languages.join(', '),
+      timezone: fp.timezone,
+      screenWidth: String(fp.screenWidth),
+      screenHeight: String(fp.screenHeight),
+      deviceScaleFactor: String(fp.deviceScaleFactor),
+      hardwareConcurrency: String(fp.hardwareConcurrency),
+      webrtcMode: fp.webrtcMode,
+    });
+  }
+
+  /** Only the fields verified to be genuinely enforced in the real browser
+   * (see docs/FINGERPRINT_AUDIT.md) are editable here — editing a field that
+   * isn't actually applied would be a fake control. */
+  async function saveManualFingerprint(): Promise<void> {
+    if (!fingerprint || !draft) return;
+    try {
+      const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
+        id: fingerprint.id,
+        userAgent: draft.userAgent,
+        platform: draft.platform,
+        locale: draft.locale,
+        languages: draft.languages
+          .split(',')
+          .map((l) => l.trim())
+          .filter(Boolean),
+        timezone: draft.timezone,
+        screenWidth: Number(draft.screenWidth),
+        screenHeight: Number(draft.screenHeight),
+        deviceScaleFactor: Number(draft.deviceScaleFactor),
+        hardwareConcurrency: Number(draft.hardwareConcurrency),
+        webrtcMode: draft.webrtcMode as Fingerprint['webrtcMode'],
+      });
+      setFingerprint(updated);
+      resetDraft(updated);
+      setError(null);
+      await runValidate(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  /** AUTO mode: regenerates a fresh coherent bundle from a new random seed and
+   * applies it to this profile's existing fingerprint row (same id). */
+  async function regenerateAuto(): Promise<void> {
     if (!fingerprint) return;
     try {
+      const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
+        seed: `${profileId}-${Date.now()}`,
+      });
+      const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
+        id: fingerprint.id,
+        ...generated,
+      });
+      setFingerprint(updated);
+      resetDraft(updated);
+      setError(null);
+      await runValidate(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function runValidate(fpArg?: Fingerprint): Promise<void> {
+    const source = fpArg ?? fingerprint;
+    if (!source) return;
+    try {
       const result = await callApi<'fingerprint:validate', FingerprintValidationResult>('fingerprint:validate', {
-        name: fingerprint.name,
-        os: fingerprint.os,
-        osVersion: fingerprint.osVersion,
-        browserVersion: fingerprint.browserVersion,
-        userAgent: fingerprint.userAgent,
-        platform: fingerprint.platform,
-        locale: fingerprint.locale,
-        languages: fingerprint.languages,
-        timezone: fingerprint.timezone,
-        screenWidth: fingerprint.screenWidth,
-        screenHeight: fingerprint.screenHeight,
-        deviceScaleFactor: fingerprint.deviceScaleFactor,
-        hardwareConcurrency: fingerprint.hardwareConcurrency,
-        deviceMemory: fingerprint.deviceMemory,
-        webglVendor: fingerprint.webglVendor,
-        webglRenderer: fingerprint.webglRenderer,
-        canvasMode: fingerprint.canvasMode,
-        audioMode: fingerprint.audioMode,
-        webrtcMode: fingerprint.webrtcMode,
-        fontsMode: fingerprint.fontsMode,
-        mediaDevicesMode: fingerprint.mediaDevicesMode,
-        seed: fingerprint.seed,
+        name: source.name,
+        os: source.os,
+        osVersion: source.osVersion,
+        browserVersion: source.browserVersion,
+        userAgent: source.userAgent,
+        platform: source.platform,
+        locale: source.locale,
+        languages: source.languages,
+        timezone: source.timezone,
+        screenWidth: source.screenWidth,
+        screenHeight: source.screenHeight,
+        deviceScaleFactor: source.deviceScaleFactor,
+        hardwareConcurrency: source.hardwareConcurrency,
+        deviceMemory: source.deviceMemory,
+        webglVendor: source.webglVendor,
+        webglRenderer: source.webglRenderer,
+        canvasMode: source.canvasMode,
+        audioMode: source.audioMode,
+        webrtcMode: source.webrtcMode,
+        fontsMode: source.fontsMode,
+        mediaDevicesMode: source.mediaDevicesMode,
+        seed: source.seed,
       });
       setValidation(result);
     } catch (err) {
@@ -210,27 +292,88 @@ export function ProfileEditorModal({
             </div>
           )}
 
-          {profile && tab === 'fingerprint' && fingerprint && (
+          {profile && tab === 'fingerprint' && fingerprint && draft && (
             <div>
-              <table>
-                <tbody>
-                  {FIELD_ROWS.map(([label, key]) => (
-                    <tr key={key}>
-                      <th style={{ width: 180 }}>{label}</th>
-                      <td>
-                        {key === 'languages'
-                          ? fingerprint.languages.join(', ')
-                          : key === 'screenWidth'
-                            ? `${fingerprint.screenWidth} x ${fingerprint.screenHeight}`
-                            : String(fingerprint[key])}
-                      </td>
-                    </tr>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+                <button className={!manualMode ? 'primary' : ''} onClick={() => setManualMode(false)}>
+                  AUTO
+                </button>
+                <button className={manualMode ? 'primary' : ''} onClick={() => setManualMode(true)}>
+                  MANUAL
+                </button>
+                {!manualMode && (
+                  <button onClick={() => void regenerateAuto()}>Regenerate (new random identity)</button>
+                )}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => void runValidate()}>Validate</button>
+              </div>
+
+              {!manualMode && (
+                <table>
+                  <tbody>
+                    {FIELD_ROWS.map(([label, key]) => (
+                      <tr key={key}>
+                        <th style={{ width: 180 }}>{label}</th>
+                        <td>
+                          {key === 'languages'
+                            ? fingerprint.languages.join(', ')
+                            : key === 'screenWidth'
+                              ? `${fingerprint.screenWidth} x ${fingerprint.screenHeight}`
+                              : String(fingerprint[key])}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {manualMode && (
+                <div>
+                  <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 0 }}>
+                    Only fields verified to actually be enforced in the running browser are
+                    editable here (see docs/FINGERPRINT_AUDIT.md) — editing anything else would be
+                    a control that does nothing.
+                  </p>
+                  {(
+                    [
+                      ['User-Agent', 'userAgent'],
+                      ['Platform', 'platform'],
+                      ['Locale', 'locale'],
+                      ['Languages (comma-separated)', 'languages'],
+                      ['Timezone', 'timezone'],
+                      ['Screen Width', 'screenWidth'],
+                      ['Screen Height', 'screenHeight'],
+                      ['Device Scale Factor', 'deviceScaleFactor'],
+                      ['Hardware Concurrency', 'hardwareConcurrency'],
+                    ] as const
+                  ).map(([label, key]) => (
+                    <label key={key} style={{ display: 'block', marginBottom: 8 }}>
+                      {label}
+                      <input
+                        value={draft[key]}
+                        onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+                        style={{ display: 'block', width: '100%', marginTop: 4 }}
+                      />
+                    </label>
                   ))}
-                </tbody>
-              </table>
-              <button style={{ marginTop: 10 }} onClick={() => void runValidate()}>
-                Validate
-              </button>
+                  <label style={{ display: 'block', marginBottom: 8 }}>
+                    WebRTC Mode
+                    <select
+                      value={draft.webrtcMode}
+                      onChange={(e) => setDraft({ ...draft, webrtcMode: e.target.value })}
+                      style={{ display: 'block', width: '100%', marginTop: 4 }}
+                    >
+                      <option value="default">Default (no protection)</option>
+                      <option value="proxy-only">Proxy only (block direct IP)</option>
+                      <option value="disabled">Disabled (strongest available)</option>
+                    </select>
+                  </label>
+                  <button className="primary" onClick={() => void saveManualFingerprint()}>
+                    Save
+                  </button>
+                </div>
+              )}
+
               {validation && (
                 <div style={{ marginTop: 10, fontSize: 12 }}>
                   <p style={{ color: validation.valid ? 'var(--green)' : 'var(--red)' }}>

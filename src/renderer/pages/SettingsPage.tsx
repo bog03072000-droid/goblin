@@ -44,6 +44,17 @@ export function SettingsPage(): JSX.Element {
         />
         Automatic cache cleanup
       </label>
+      <label style={{ display: 'block', marginBottom: 8 }}>
+        Max simultaneous profile launches (bulk start)
+        <input
+          type="number"
+          min={1}
+          max={20}
+          value={settings.maxConcurrentLaunches}
+          onChange={(e) => void save({ maxConcurrentLaunches: Number(e.target.value) })}
+          style={{ display: 'block', width: 160, marginTop: 4 }}
+        />
+      </label>
 
       <h3>Storage</h3>
       <label style={{ display: 'block', marginBottom: 8 }}>

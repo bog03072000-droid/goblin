@@ -80,7 +80,21 @@ export function registerIpc(deps: IpcDependencies): void {
 
   handle('profiles:exportConfig', (p) => deps.importExport.exportConfig(p.id));
   handle('profiles:exportFull', (p) => deps.importExport.exportFull(p.id));
-  handle('profiles:import', () => deps.importExport.importProfile());
+  handle('profiles:exportSelected', (p) => deps.importExport.exportSelected(p.ids));
+  handle('profiles:exportAll', () => deps.importExport.exportAll());
+  handle('profiles:import', () => deps.importExport.importProfiles());
+  handle('profiles:backup', (p) => deps.importExport.backupProfile(p.id));
+  handle('profiles:restore', () => deps.importExport.restoreProfile());
+
+  handle('profiles:bulkStart', (p) => {
+    const concurrency = deps.settings.getAll().maxConcurrentLaunches;
+    return deps.profileManager.bulkStart(p.ids, concurrency);
+  });
+  handle('profiles:bulkStop', (p) => deps.profileManager.bulkStop(p.ids));
+  handle('profiles:bulkDelete', (p) => deps.profileManager.bulkDelete(p.ids));
+  handle('profiles:bulkClone', (p) => deps.profileManager.bulkClone(p.ids));
+  handle('profiles:bulkAssignProxy', (p) => deps.profileManager.bulkAssignProxy(p.ids, p.proxyId));
+  handle('profiles:bulkAddTags', (p) => deps.profileManager.bulkAddTags(p.ids, p.tags));
 
   handle('settings:get', () => deps.settings.getAll());
   handle('settings:update', (p) => deps.settings.update(p));

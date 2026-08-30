@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import type { Profile, ProfileStatus } from '../../shared/schemas/profile';
+import type { Profile, ProfileListItem, ProfileStatus } from '../../shared/schemas/profile';
 
 interface ProfileRow {
   id: string;
@@ -14,6 +14,11 @@ interface ProfileRow {
   updated_at: string;
   last_started_at: string | null;
   last_stopped_at: string | null;
+}
+
+interface ProfileListRow extends ProfileRow {
+  os: string;
+  browser_version: string;
 }
 
 export class ProfileRepository {
@@ -95,25 +100,39 @@ export class ProfileRepository {
     return row ? this.rowToProfile(row) : null;
   }
 
-  list(filter?: { search?: string; tag?: string }): Profile[] {
-    let rows: ProfileRow[];
+  /** Includes OS/browser version via a single SQL join — not a per-profile
+   * fingerprint lookup — so this stays fast at 200 stored profiles (see
+   * tests/performance/profileScale.test.ts). */
+  list(filter?: { search?: string; tag?: string }): ProfileListItem[] {
+    let rows: ProfileListRow[];
     if (filter?.tag) {
       rows = this.db
         .prepare(
-          `SELECT p.* FROM profiles p
+          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
+           JOIN fingerprints f ON f.id = p.fingerprint_id
            JOIN profile_tags pt ON pt.profile_id = p.id
            JOIN tags t ON t.id = pt.tag_id
            WHERE t.name = ? ORDER BY p.updated_at DESC`,
         )
-        .all(filter.tag) as ProfileRow[];
+        .all(filter.tag) as ProfileListRow[];
     } else if (filter?.search) {
       rows = this.db
-        .prepare('SELECT * FROM profiles WHERE name LIKE ? ORDER BY updated_at DESC')
-        .all(`%${filter.search}%`) as ProfileRow[];
+        .prepare(
+          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
+           JOIN fingerprints f ON f.id = p.fingerprint_id
+           WHERE p.name LIKE ? ORDER BY p.updated_at DESC`,
+        )
+        .all(`%${filter.search}%`) as ProfileListRow[];
     } else {
-      rows = this.db.prepare('SELECT * FROM profiles ORDER BY updated_at DESC').all() as ProfileRow[];
+      rows = this.db
+        .prepare(
+          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
+           JOIN fingerprints f ON f.id = p.fingerprint_id
+           ORDER BY p.updated_at DESC`,
+        )
+        .all() as ProfileListRow[];
     }
-    return rows.map((r) => this.rowToProfile(r));
+    return rows.map((r) => ({ ...this.rowToProfile(r), os: r.os, browserVersion: r.browser_version }));
   }
 
   update(

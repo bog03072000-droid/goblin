@@ -17,6 +17,11 @@ import {
 } from '../storage/profileStorage';
 import type { Profile, ProfileCreateInput } from '../../shared/schemas/profile';
 
+export interface BulkResult {
+  succeeded: string[];
+  failed: Array<{ id: string; message: string }>;
+}
+
 /**
  * Orchestrates the full profile lifecycle: DB state + on-disk storage + OS
  * process + lock file all move together so they never drift out of sync.
@@ -172,6 +177,72 @@ export class ProfileManager {
     }
     this.logs.record('PROFILE_CLONED', created.id, `Cloned from "${source.name}" (mode: ${mode})`);
     return created;
+  }
+
+  /** Bulk actions never let one profile's failure abort the rest of the
+   * batch; each id's outcome is reported independently. */
+  private bulkRun(ids: string[], action: (id: string) => void): BulkResult {
+    const succeeded: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (const id of ids) {
+      try {
+        action(id);
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({ id, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { succeeded, failed };
+  }
+
+  /** Launches profiles in small chunks (never all at once) so bulk-starting
+   * dozens of stored profiles doesn't try to spin up dozens of Chromium
+   * processes in the same instant — stored profiles never need to run
+   * simultaneously at scale, only a handful at a time in practice. */
+  async bulkStart(ids: string[], concurrency = 4): Promise<BulkResult> {
+    const succeeded: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (let i = 0; i < ids.length; i += concurrency) {
+      const chunk = ids.slice(i, i + concurrency);
+      const result = this.bulkRun(chunk, (id) => this.start(id));
+      succeeded.push(...result.succeeded);
+      failed.push(...result.failed);
+      if (i + concurrency < ids.length) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    return { succeeded, failed };
+  }
+
+  bulkStop(ids: string[]): BulkResult {
+    return this.bulkRun(ids, (id) => this.stop(id));
+  }
+
+  bulkDelete(ids: string[]): BulkResult {
+    return this.bulkRun(ids, (id) => this.delete(id));
+  }
+
+  bulkClone(ids: string[]): BulkResult {
+    return this.bulkRun(ids, (id) => {
+      const source = this.mustGet(id);
+      this.clone(id, 'config', `${source.name} (clone)`);
+    });
+  }
+
+  bulkAssignProxy(ids: string[], proxyId: string | null): BulkResult {
+    return this.bulkRun(ids, (id) => {
+      this.mustGet(id);
+      this.profiles.update(id, { proxyId });
+    });
+  }
+
+  /** Adds tags without clobbering each profile's existing ones. */
+  bulkAddTags(ids: string[], tags: string[]): BulkResult {
+    return this.bulkRun(ids, (id) => {
+      const profile = this.mustGet(id);
+      const merged = Array.from(new Set([...profile.tags, ...tags]));
+      this.profiles.update(id, { tags: merged });
+    });
   }
 
   private mustGet(id: string): Profile {

@@ -8,6 +8,7 @@ export const SettingsSchema = z.object({
   cacheLimitMb: z.number().int().min(50).max(20000).default(2000),
   startupBehavior: StartupBehaviorSchema.default('showProfileList'),
   logRetentionDays: z.number().int().min(1).max(365).default(30),
+  maxConcurrentLaunches: z.number().int().min(1).max(20).default(4),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

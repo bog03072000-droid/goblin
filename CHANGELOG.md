@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased — Octo-like functional pass: bulk ops, backup/restore, list columns
+
+- Bulk profile operations: multi-select checkboxes + a bulk action toolbar
+  (Start, Stop, Clone, Delete, Export Selected, assign proxy, add tag) on the
+  Profiles page. Bulk start launches in small chunks (default 4 at a time,
+  configurable in Settings as "max simultaneous launches") instead of
+  spawning every selected profile's Chromium process at once.
+- Backup/Restore: one-click `Backup` per profile (writes full config+storage
+  to `<userData>/backups/` automatically, no dialog) and a `Restore` action
+  that imports from that folder — always creates a new independent profile,
+  never overwrites.
+- Import now accepts multiple files/folders in one dialog, isolates failures
+  per item (one corrupt file doesn't abort the batch), and never collides on
+  duplicate names (numbered suffix instead of overwrite). New `Export
+  Selected` / `Export All` bulk export actions.
+- Manual fingerprint editing: the profile editor's Fingerprint tab now has
+  AUTO/MANUAL modes. MANUAL exposes editable fields only for what's verified
+  to actually be enforced in the real browser (User-Agent, platform, locale,
+  languages, timezone, screen, device scale, hardware concurrency, WebRTC
+  mode) — no control that does nothing. AUTO adds a "Regenerate" button for a
+  fresh coherent identity.
+- Profile list now shows OS and Browser columns (via a single SQL join, not
+  a per-row fingerprint lookup — verified still ~2ms at 200 profiles) plus
+  sorting (Name/Status/Last Used).
+- Browser window gained Home and DevTools toolbar buttons.
+- 14 new tests (bulk operations, bulk import error isolation/dedup, one new
+  E2E spec for multi-select) — 72 unit/integration + 10 E2E, all passing.
+
 ## Unreleased — fingerprint reality audit & deep browser integration
 
 Full audit of every fingerprint property against the actual running browser

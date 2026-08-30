@@ -25,8 +25,10 @@
     <button id="back">&#8592;</button>
     <button id="fwd">&#8594;</button>
     <button id="reload">&#8635;</button>
+    <button id="home">&#8962;</button>
     <input id="address" type="text" value="about:blank" />
     <button id="go">Go</button>
+    <button id="devtools">DevTools</button>
     <button id="diagnostics">Diagnostics</button>
     <span id="label"></span>
   </div>
@@ -61,9 +63,14 @@
       if (e.key === 'Enter') navigate(document.getElementById('address').value);
     });
     document.getElementById('diagnostics').addEventListener('click', () => navigate(diagnosticsUrl));
+    document.getElementById('home').addEventListener('click', () => navigate(startUrl));
     document.getElementById('back').addEventListener('click', () => view.goBack());
     document.getElementById('fwd').addEventListener('click', () => view.goForward());
     document.getElementById('reload').addEventListener('click', () => view.reload());
+    document.getElementById('devtools').addEventListener('click', () => {
+      if (view.isDevToolsOpened()) view.closeDevTools();
+      else view.openDevTools();
+    });
     view.addEventListener('did-navigate', (e) => {
       document.getElementById('address').value = e.url;
     });

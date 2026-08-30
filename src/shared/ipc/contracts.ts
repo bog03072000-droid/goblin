@@ -49,7 +49,18 @@ export const IpcRequestSchemas = {
 
   'profiles:exportConfig': z.object({ id: ProfileIdSchema }),
   'profiles:exportFull': z.object({ id: ProfileIdSchema }),
+  'profiles:exportSelected': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:exportAll': z.object({}),
   'profiles:import': z.object({}),
+  'profiles:backup': z.object({ id: ProfileIdSchema }),
+  'profiles:restore': z.object({}),
+
+  'profiles:bulkStart': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkStop': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkDelete': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkClone': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
+  'profiles:bulkAssignProxy': z.object({ ids: z.array(ProfileIdSchema).min(1), proxyId: z.string().uuid().nullable() }),
+  'profiles:bulkAddTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
 
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,

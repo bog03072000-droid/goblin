@@ -34,6 +34,14 @@ export const ProfileSchema = z.object({
 });
 export type Profile = z.infer<typeof ProfileSchema>;
 
+/** What the profile list actually needs to show OS/Browser columns without an
+ * N+1 fingerprint lookup per row — filled in via a single SQL join in
+ * ProfileRepository.list(), not a separate round trip per profile. */
+export interface ProfileListItem extends Profile {
+  os: string;
+  browserVersion: string;
+}
+
 export const ProfileCreateInputSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
