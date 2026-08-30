@@ -39,6 +39,17 @@ function AppShell(): JSX.Element {
   return (
     <>
       <div className="sidebar">
+        <div className="sidebar-brand">
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <rect x="1" y="1" width="30" height="30" rx="10" fill="var(--lime)" stroke="var(--ink)" strokeWidth="2" />
+            <path d="M9 13c-2-3-1-6 1-7 0 2 1 3 2 3" fill="var(--lime)" stroke="var(--ink)" strokeWidth="1.4" strokeLinejoin="round" />
+            <path d="M23 13c2-3 1-6-1-7 0 2-1 3-2 3" fill="var(--lime)" stroke="var(--ink)" strokeWidth="1.4" strokeLinejoin="round" />
+            <ellipse cx="16" cy="18" rx="8" ry="7" fill="var(--lime)" stroke="var(--ink)" strokeWidth="1.6" />
+            <path d="M10.5 16.5c1.5-1.5 4-1.5 5.5 0M16 16.5c1.5-1.5 4-1.5 5.5 0" stroke="var(--ink)" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+            <path d="M12 22c2 1.5 6 1.5 8 0" stroke="var(--ink)" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          </svg>
+          <span className="sidebar-brand-name">Goblin</span>
+        </div>
         <div className={`sidebar-item ${page === 'profiles' ? 'active' : ''}`} onClick={() => setPage('profiles')}>
           {t('app.sidebar.profiles')}
         </div>

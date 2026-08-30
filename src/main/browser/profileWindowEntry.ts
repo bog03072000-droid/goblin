@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, session } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
@@ -77,10 +77,16 @@ export function runProfileWindowProcess(): void {
       return new Response(html, { headers: { 'content-type': 'text/html' } });
     });
 
+    // Fixed 1280x800 previously ignored the actual screen size, leaving the
+    // window visibly smaller than the available desktop on most monitors.
+    // Sizing to the work area (and maximizing) fills it properly regardless
+    // of display resolution.
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     const win = new BrowserWindow({
-      width: 1280,
-      height: 800,
+      width,
+      height,
       title: `ProfileForge — ${args.profileName}`,
+      icon: path.join(__dirname, '..', '..', 'icon.png'),
       webPreferences: {
         webviewTag: true,
         contextIsolation: true,
@@ -89,6 +95,7 @@ export function runProfileWindowProcess(): void {
         partition,
       },
     });
+    win.maximize();
 
     // Forced here (main process) rather than left to the <webview> tag's own
     // `preload` attribute, so a compromised/malicious page loaded inside the

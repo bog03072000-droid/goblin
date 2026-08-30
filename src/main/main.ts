@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { log } from './logger';
 import { getDb } from './database/db';
 import { ProfileRepository } from './database/profileRepository';
 import { FingerprintRepository } from './database/fingerprintRepository';
@@ -12,6 +13,23 @@ import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { registerIpc } from './ipc/registerIpc';
 import { runProfileWindowProcess } from './browser/profileWindowEntry';
+
+// Last-resort safety net: without these, an uncaught error in either process
+// role would otherwise only ever appear in a console nobody is watching in a
+// packaged build, with no record left behind to debug from afterwards.
+// uncaughtException still exits after logging — Node's own default behavior
+// for an unhandled exception is to crash immediately, and merely attaching a
+// listener suppresses that (the process would otherwise stay alive in a
+// possibly-corrupted state, e.g. having failed before app.whenReady() ever
+// ran, with no window and no way to recover). This only adds a durable
+// record on the way out, it does not change whether the process survives.
+process.on('uncaughtException', (err) => {
+  log.error('[uncaughtException]', err);
+  app.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  log.error('[unhandledRejection]', reason);
+});
 
 // This same compiled entry point is used for both the manager app and every
 // per-profile child process (see browserLauncher.ts) — the flag decides which
@@ -67,6 +85,7 @@ function runManagerProcess(): void {
       width: 1400,
       height: 900,
       title: 'ProfileForge',
+      icon: path.join(__dirname, '..', 'icon.png'),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,

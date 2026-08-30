@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { log } from '../logger';
 import { IpcRequestSchemas, type IpcChannel } from '../../shared/ipc/contracts';
 import type { ProfileManager } from '../profiles/profileManager';
 import type { ProfileRepository } from '../database/profileRepository';
@@ -32,10 +33,20 @@ export function registerIpc(deps: IpcDependencies): void {
     channel: C,
     fn: (payload: ReturnType<(typeof IpcRequestSchemas)[C]['parse']>) => unknown,
   ): void {
-    ipcMain.handle(channel, (_event, rawPayload: unknown) => {
-      const schema = IpcRequestSchemas[channel];
-      const payload = schema.parse(rawPayload);
-      return fn(payload as never);
+    ipcMain.handle(channel, async (_event, rawPayload: unknown) => {
+      try {
+        const schema = IpcRequestSchemas[channel];
+        const payload = schema.parse(rawPayload);
+        return await fn(payload as never);
+      } catch (err) {
+        // Logged here, centrally, before the error is rethrown so it still
+        // reaches the renderer as a rejection exactly as before — this only
+        // adds a durable record for debugging a packaged build. The raw
+        // payload is never logged: several channels (proxy:create/update)
+        // carry a plaintext password field the renderer sends on submit.
+        log.error(`[ipc:${channel}]`, err);
+        throw err;
+      }
     });
   }
 

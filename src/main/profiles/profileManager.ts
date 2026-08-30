@@ -5,6 +5,7 @@ import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
 import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
+import { log } from '../logger';
 import { LockManager } from './lockManager';
 import { launchProfileProcess } from '../browser/browserLauncher';
 import { checkBrowserCompatibility } from '../fingerprint/browserCompatibility';
@@ -96,6 +97,7 @@ export class ProfileManager {
       });
     } catch (err) {
       this.profiles.updateStatus(id, 'ERROR');
+      log.error(`[profile:start] failed to launch process for profile ${id}`, err);
       throw err;
     }
 
@@ -103,6 +105,7 @@ export class ProfileManager {
     this.running.set(id, child);
     this.profiles.updateStatus(id, 'RUNNING');
     this.logs.record('PROFILE_STARTED', id, `Profile "${profile.name}" started (pid ${child.pid})`);
+    log.info(`[profile:start] "${profile.name}" (${id}) started, pid ${child.pid}`);
 
     child.on('exit', (code) => {
       this.running.delete(id);
@@ -114,6 +117,11 @@ export class ProfileManager {
         id,
         `Profile "${profile.name}" exited with code ${code}`,
       );
+      if (crashed) {
+        log.warn(`[profile:crash] "${profile.name}" (${id}) exited with code ${code}`);
+      } else {
+        log.info(`[profile:stop] "${profile.name}" (${id}) stopped`);
+      }
     });
 
     return this.mustGet(id);

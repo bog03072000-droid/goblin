@@ -66,6 +66,7 @@ test('search filters the profile list', async () => {
 test('deleting a profile removes it from the list', async () => {
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile Two' }) });
   await row.getByRole('button', { name: 'Delete' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile Two' })).toHaveCount(0, { timeout: 15_000 });
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible();
 });

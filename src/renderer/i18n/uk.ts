@@ -16,6 +16,16 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'common.none': 'Немає',
   'common.yes': 'Так',
   'common.no': 'Ні',
+  'common.working': 'Виконується…',
+  'common.unexpectedError': 'Щось пішло не так. Спробуйте ще раз.',
+
+  'errors.profileAlreadyRunning': 'Цей профіль уже запущено.',
+  'errors.profileLocked': 'Профіль заблоковано іншим запущеним екземпляром. Спочатку зупиніть його.',
+  'errors.stopProfileFirst': 'Спочатку зупиніть профіль, щоб виконати цю дію.',
+  'errors.fingerprintMissing': 'Дані відбитку цього профілю відсутні або були видалені.',
+  'errors.profileNotFound': 'Цього профілю вже не існує — можливо, його видалили деінде.',
+  'errors.proxyNotFound': 'Цього проксі вже не існує — можливо, його видалили деінде.',
+  'errors.invalidInput': 'Деякі введені значення некоректні. Перевірте форму і спробуйте ще раз.',
 
   'profiles.searchPlaceholder': 'Пошук профілів...',
   'profiles.status.all': 'Усі статуси',
@@ -71,6 +81,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.action.export': 'Експорт',
   'profiles.action.backup': 'Резервна копія',
   'profiles.action.delete': 'Видалити',
+  'profiles.confirmDelete': 'Видалити профіль "{name}"? Цю дію неможливо скасувати.',
+  'profiles.bulk.confirmDelete': 'Видалити вибрані профілі ({count})? Цю дію неможливо скасувати.',
   'profiles.empty.none': 'Профілів ще немає. Створіть перший вище.',
   'profiles.empty.noMatch': 'Немає профілів, що відповідають фільтрам.',
   'profiles.msg.exportedConfig': 'Конфігурацію експортовано до {path}',
@@ -145,6 +157,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'proxy.create': 'Додати проксі',
   'proxy.test': 'Перевірити',
   'proxy.delete': 'Видалити',
+  'proxy.confirmDelete': 'Видалити проксі "{name}"? Цю дію неможливо скасувати.',
   'proxy.table.name': 'Назва',
   'proxy.table.protocol': 'Протокол',
   'proxy.table.host': 'Хост',
@@ -154,6 +167,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'proxy.table.actions': 'Дії',
   'proxy.status.ok': 'OK ({ms}мс)',
   'proxy.status.failed': 'Помилка: {error}',
+  'proxy.empty.none': 'Проксі ще немає. Додайте перший вище.',
 
   'settings.title.performance': 'Продуктивність',
   'settings.title.storage': 'Сховище',
@@ -178,6 +192,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'logs.table.event': 'Подія',
   'logs.table.profile': 'Профіль',
   'logs.table.message': 'Повідомлення',
+  'logs.empty.none': 'Активності ще немає. Дії з профілями з’являтимуться тут.',
 };
 
 export default uk;

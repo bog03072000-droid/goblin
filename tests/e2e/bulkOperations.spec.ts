@@ -55,6 +55,7 @@ test('multi-select and bulk tag + bulk delete work end to end', async () => {
   await rowOne.locator('input[type="checkbox"]').check();
   await rowTwo.locator('input[type="checkbox"]').check();
   await bulkToolbar.getByRole('button', { name: 'Delete', exact: true }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Delete', exact: true }).click();
 
   await expect(window.locator('td', { hasText: 'Bulk E2E One' })).toHaveCount(0, { timeout: 15_000 });
   await expect(window.locator('td', { hasText: 'Bulk E2E Two' })).toHaveCount(0);

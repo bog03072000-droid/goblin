@@ -5,6 +5,8 @@ import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { describeError } from '../services/errorMessages';
 import { useTranslation, type TranslationKey } from '../i18n';
 
 type StatusFilter = 'ALL' | ProfileStatus;
@@ -23,6 +25,16 @@ const STATUS_LABEL_KEYS: Record<ProfileStatus, TranslationKey> = {
   CRASHED: 'profiles.status.crashed',
   ERROR: 'profiles.status.error',
   LOCKED: 'profiles.status.locked',
+};
+
+const PILL_VARIANT: Record<ProfileStatus, string> = {
+  RUNNING: 'on',
+  STOPPED: 'idle',
+  STARTING: 'warn',
+  STOPPING: 'warn',
+  CRASHED: 'danger',
+  ERROR: 'danger',
+  LOCKED: 'lock',
 };
 
 export function ProfilesPage(): JSX.Element {
@@ -44,6 +56,8 @@ export function ProfilesPage(): JSX.Element {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<ProfileListItem | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   async function refresh(): Promise<void> {
     try {
@@ -55,7 +69,7 @@ export function ProfilesPage(): JSX.Element {
       setProfiles(list);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -124,7 +138,7 @@ export function ProfilesPage(): JSX.Element {
       setNewName('');
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -137,7 +151,7 @@ export function ProfilesPage(): JSX.Element {
       await callApi(action, { id });
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBusyId(null);
     }
@@ -149,7 +163,7 @@ export function ProfilesPage(): JSX.Element {
       await callApi('profiles:clone', { id: p.id, mode: 'config', name: `${p.name} (clone)` });
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBusyId(null);
     }
@@ -160,7 +174,7 @@ export function ProfilesPage(): JSX.Element {
       const savedPath = await callApi<'profiles:exportConfig', string | null>('profiles:exportConfig', { id });
       if (savedPath) setInfo(t('profiles.msg.exportedConfig', { path: savedPath }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -169,7 +183,7 @@ export function ProfilesPage(): JSX.Element {
       const savedPath = await callApi<'profiles:backup', string>('profiles:backup', { id });
       setInfo(t('profiles.msg.backedUp', { path: savedPath }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -181,7 +195,7 @@ export function ProfilesPage(): JSX.Element {
         await refresh();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -201,7 +215,7 @@ export function ProfilesPage(): JSX.Element {
         setError(result.errors.map((e) => `${e.path}: ${e.message}`).join('; '));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -212,7 +226,7 @@ export function ProfilesPage(): JSX.Element {
       });
       if (dir) setInfo(t('profiles.msg.exportedSelected', { count: selected.size, path: dir }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -221,7 +235,7 @@ export function ProfilesPage(): JSX.Element {
       const dir = await callApi<'profiles:exportAll', string | null>('profiles:exportAll', {});
       if (dir) setInfo(t('profiles.msg.exportedAll', { path: dir }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -236,7 +250,7 @@ export function ProfilesPage(): JSX.Element {
       setSelected(new Set());
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBulkBusy(false);
     }
@@ -253,7 +267,7 @@ export function ProfilesPage(): JSX.Element {
       setInfo(t('profiles.msg.proxyAssigned', { count: result.succeeded.length }));
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBulkBusy(false);
     }
@@ -271,7 +285,7 @@ export function ProfilesPage(): JSX.Element {
       await refresh();
       await refreshGroups();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBulkBusy(false);
     }
@@ -288,7 +302,7 @@ export function ProfilesPage(): JSX.Element {
       setInfo(t('profiles.msg.tagAdded', { count: result.succeeded.length }));
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     } finally {
       setBulkBusy(false);
     }
@@ -301,7 +315,7 @@ export function ProfilesPage(): JSX.Element {
       await callApi('groups:create', { name: name.trim() });
       await refreshGroups();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -312,7 +326,7 @@ export function ProfilesPage(): JSX.Element {
       await callApi('groups:rename', { id: group.id, name: name.trim() });
       await refreshGroups();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -324,7 +338,7 @@ export function ProfilesPage(): JSX.Element {
       await refreshGroups();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -356,7 +370,7 @@ export function ProfilesPage(): JSX.Element {
             </option>
           ))}
         </select>
-        <button onClick={() => void createGroup()}>+ {t('profiles.group.manage')}</button>
+        <button className="btn btn-ghost" onClick={() => void createGroup()}>+ {t('profiles.group.manage')}</button>
         <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
           <option value="name">{t('profiles.sort.name')}</option>
           <option value="status">{t('profiles.sort.status')}</option>
@@ -372,23 +386,23 @@ export function ProfilesPage(): JSX.Element {
           ))}
         </select>
         <input placeholder={t('profiles.newNamePlaceholder')} value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <button className="primary" onClick={() => void createProfile()}>
+        <button className="btn btn-primary" onClick={() => void createProfile()}>
           {t('profiles.create')}
         </button>
-        <button onClick={() => void importProfiles()}>{t('profiles.import')}</button>
-        <button onClick={() => void restoreProfile()}>{t('profiles.restore')}</button>
-        <button onClick={() => void exportAll()}>{t('profiles.exportAll')}</button>
+        <button className="btn btn-ghost" onClick={() => void importProfiles()}>{t('profiles.import')}</button>
+        <button className="btn btn-ghost" onClick={() => void restoreProfile()}>{t('profiles.restore')}</button>
+        <button className="btn btn-ghost" onClick={() => void exportAll()}>{t('profiles.exportAll')}</button>
       </div>
 
       {groups.length > 0 && (
-        <div className="toolbar" style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+        <div className="toolbar" style={{ fontSize: 12, color: 'var(--ash-dim)' }}>
           {groups.map((g) => (
             <span key={g.id} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginRight: 10 }}>
               {g.name} ({g.profileCount})
-              <button style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => void renameGroup(g)}>
+              <button className="btn btn-ghost btn-sm" onClick={() => void renameGroup(g)}>
                 ✎
               </button>
-              <button style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => void deleteGroup(g)}>
+              <button className="btn btn-ghost btn-sm" onClick={() => void deleteGroup(g)}>
                 ✕
               </button>
             </span>
@@ -397,21 +411,24 @@ export function ProfilesPage(): JSX.Element {
       )}
 
       {selected.size > 0 && (
-        <div className="toolbar bulk-toolbar" style={{ background: 'var(--bg-hover)' }}>
-          <strong style={{ fontSize: 12 }}>{t('profiles.selectedCount', { count: selected.size })}</strong>
-          <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStart')}>
+        <div className="toolbar bulk-toolbar">
+          <strong style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center' }}>
+            {bulkBusy && <span className="spinner" />}
+            {bulkBusy ? t('common.working') : t('profiles.selectedCount', { count: selected.size })}
+          </strong>
+          <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStart')}>
             {t('profiles.bulk.start')}
           </button>
-          <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStop')}>
+          <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStop')}>
             {t('profiles.bulk.stop')}
           </button>
-          <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkClone')}>
+          <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => void bulk('profiles:bulkClone')}>
             {t('profiles.bulk.clone')}
           </button>
-          <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkDelete')}>
+          <button className="btn btn-danger-ghost btn-sm" disabled={bulkBusy} onClick={() => setConfirmBulkDelete(true)}>
             {t('profiles.bulk.delete')}
           </button>
-          <button disabled={bulkBusy} onClick={() => void exportSelected()}>
+          <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => void exportSelected()}>
             {t('profiles.bulk.exportSelected')}
           </button>
           <select
@@ -461,19 +478,16 @@ export function ProfilesPage(): JSX.Element {
               }
             }}
           />
-          <button disabled={bulkBusy} onClick={() => setSelected(new Set())}>
+          <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => setSelected(new Set())}>
             {t('profiles.bulk.clearSelection')}
           </button>
         </div>
       )}
 
       <div className="content">
-        {error && <div className="error-banner">{error}</div>}
-        {info && (
-          <div className="error-banner" style={{ borderColor: 'var(--green)', color: '#a6f0b4' }}>
-            {info}
-          </div>
-        )}
+        {error && <div className="banner banner-error">{error}</div>}
+        {info && <div className="banner banner-success">{info}</div>}
+        <div className="panel">
         <table>
           <thead>
             <tr>
@@ -499,8 +513,7 @@ export function ProfilesPage(): JSX.Element {
                 </td>
                 <td>{p.name}</td>
                 <td>
-                  <span className={`status-dot status-${p.status}`} />
-                  {t(STATUS_LABEL_KEYS[p.status])}
+                  <span className={`pill ${PILL_VARIANT[p.status]}`}>{t(STATUS_LABEL_KEYS[p.status])}</span>
                 </td>
                 <td style={{ textTransform: 'capitalize' }}>{p.os}</td>
                 <td>Chrome {p.browserVersion.split('.')[0]}</td>
@@ -513,33 +526,36 @@ export function ProfilesPage(): JSX.Element {
                     </span>
                   ))}
                 </td>
-                <td>{p.lastStartedAt ?? '—'}</td>
+                <td className="mono">{p.lastStartedAt ?? '—'}</td>
                 <td>
                   {p.status === 'RUNNING' ? (
-                    <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:stop')}>
+                    <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:stop')}>
+                      {busyId === p.id && <span className="spinner" />}
                       {t('profiles.action.stop')}
                     </button>
                   ) : (
-                    <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:start')}>
+                    <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:start')}>
+                      {busyId === p.id && <span className="spinner" />}
                       {t('profiles.action.start')}
                     </button>
                   )}
-                  <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:restart')}>
+                  <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:restart')}>
+                    {busyId === p.id && <span className="spinner" />}
                     {t('profiles.action.restart')}
                   </button>
-                  <button disabled={busyId === p.id} onClick={() => setEditingId(p.id)}>
+                  <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => setEditingId(p.id)}>
                     {t('profiles.action.edit')}
                   </button>
-                  <button disabled={busyId === p.id} onClick={() => void cloneOne(p)}>
+                  <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void cloneOne(p)}>
                     {t('profiles.action.clone')}
                   </button>
-                  <button disabled={busyId === p.id} onClick={() => void exportConfig(p.id)}>
+                  <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void exportConfig(p.id)}>
                     {t('profiles.action.export')}
                   </button>
-                  <button disabled={busyId === p.id} onClick={() => void backupOne(p.id)}>
+                  <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => void backupOne(p.id)}>
                     {t('profiles.action.backup')}
                   </button>
-                  <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:delete')}>
+                  <button className="btn btn-danger-ghost btn-sm" disabled={busyId === p.id} onClick={() => setConfirmDeleteProfile(p)}>
                     {t('profiles.action.delete')}
                   </button>
                 </td>
@@ -547,19 +563,43 @@ export function ProfilesPage(): JSX.Element {
             ))}
             {visibleProfiles.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ color: 'var(--text-dim)' }}>
+                <td colSpan={10} style={{ color: 'var(--ash-dim)' }}>
                   {profiles.length === 0 ? t('profiles.empty.none') : t('profiles.empty.noMatch')}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
       {editingId && (
         <ProfileEditorModal
           profileId={editingId}
           onClose={() => setEditingId(null)}
           onSaved={() => void refresh()}
+        />
+      )}
+      {confirmDeleteProfile && (
+        <ConfirmDialog
+          message={t('profiles.confirmDelete', { name: confirmDeleteProfile.name })}
+          confirmLabel={t('profiles.action.delete')}
+          onCancel={() => setConfirmDeleteProfile(null)}
+          onConfirm={() => {
+            const id = confirmDeleteProfile.id;
+            setConfirmDeleteProfile(null);
+            void runAction(id, 'profiles:delete');
+          }}
+        />
+      )}
+      {confirmBulkDelete && (
+        <ConfirmDialog
+          message={t('profiles.bulk.confirmDelete', { count: selected.size })}
+          confirmLabel={t('profiles.bulk.delete')}
+          onCancel={() => setConfirmBulkDelete(false)}
+          onConfirm={() => {
+            setConfirmBulkDelete(false);
+            void bulk('profiles:bulkDelete');
+          }}
         />
       )}
     </>

@@ -4,6 +4,7 @@ import type { Fingerprint, FingerprintInput, FingerprintValidationResult } from 
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
+import { describeError } from '../services/errorMessages';
 import { useTranslation, type TranslationKey } from '../i18n';
 
 type Tab = 'general' | 'fingerprint' | 'proxy' | 'storage' | 'advanced';
@@ -68,6 +69,7 @@ export function ProfileEditorModal({
   const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [manualMode, setManualMode] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<{
     userAgent: string;
     platform: string;
@@ -99,7 +101,7 @@ export function ProfileEditorModal({
       const groupList = await callApi<'groups:list', Group[]>('groups:list', {});
       setGroups(groupList);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -109,6 +111,7 @@ export function ProfileEditorModal({
   }, [profileId]);
 
   async function saveGeneral(): Promise<void> {
+    setSaving(true);
     try {
       await callApi('profiles:update', {
         id: profileId,
@@ -122,17 +125,22 @@ export function ProfileEditorModal({
       });
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
+    } finally {
+      setSaving(false);
     }
   }
 
   async function saveProxy(): Promise<void> {
+    setSaving(true);
     try {
       await callApi('profiles:update', { id: profileId, proxyId: proxyId || null });
       onSaved();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,6 +164,7 @@ export function ProfileEditorModal({
    * isn't actually applied would be a fake control. */
   async function saveManualFingerprint(): Promise<void> {
     if (!fingerprint || !draft) return;
+    setSaving(true);
     try {
       const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
         id: fingerprint.id,
@@ -178,7 +187,9 @@ export function ProfileEditorModal({
       setError(null);
       await runValidate(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -199,7 +210,7 @@ export function ProfileEditorModal({
       setError(null);
       await runValidate(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -233,7 +244,7 @@ export function ProfileEditorModal({
       });
       setValidation(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -242,7 +253,7 @@ export function ProfileEditorModal({
       await callApi('profiles:clearCache', { id: profileId });
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(describeError(err, t));
     }
   }
 
@@ -255,23 +266,10 @@ export function ProfileEditorModal({
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 100,
-      }}
-      onClick={onClose}
-    >
+    <div className="modal-overlay" onClick={onClose}>
       <div
+        className="modal-panel"
         style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 6,
           width: 640,
           maxHeight: '80vh',
           display: 'flex',
@@ -279,24 +277,24 @@ export function ProfileEditorModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--stroke)', alignItems: 'center' }}>
           {(['general', 'fingerprint', 'proxy', 'storage', 'advanced'] as Tab[]).map((tabKey) => (
             <div
               key={tabKey}
-              className={`sidebar-item ${tab === tabKey ? 'active' : ''}`}
-              style={{ textTransform: 'capitalize', cursor: 'pointer' }}
+              className={`tab-item ${tab === tabKey ? 'active' : ''}`}
+              style={{ textTransform: 'capitalize' }}
               onClick={() => setTab(tabKey)}
             >
               {t(TAB_LABEL_KEYS[tabKey])}
             </div>
           ))}
           <div style={{ flex: 1 }} />
-          <button style={{ margin: 8 }} onClick={onClose}>
+          <button className="btn btn-ghost btn-sm" style={{ margin: 8 }} onClick={onClose}>
             {t('common.close')}
           </button>
         </div>
         <div style={{ padding: 16, overflow: 'auto' }}>
-          {error && <div className="error-banner">{error}</div>}
+          {error && <div className="banner banner-error">{error}</div>}
           {!profile && <p>{t('common.loading')}</p>}
 
           {profile && tab === 'general' && (
@@ -328,7 +326,8 @@ export function ProfileEditorModal({
                   ))}
                 </select>
               </label>
-              <button className="primary" onClick={() => void saveGeneral()}>
+              <button className="btn btn-primary" disabled={saving} onClick={() => void saveGeneral()}>
+                {saving && <span className="spinner" />}
                 {t('common.save')}
               </button>
             </div>
@@ -337,15 +336,21 @@ export function ProfileEditorModal({
           {profile && tab === 'fingerprint' && fingerprint && draft && (
             <div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                <button className={!manualMode ? 'primary' : ''} onClick={() => setManualMode(false)}>
+                <button className={`btn btn-sm ${!manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setManualMode(false)}>
                   {t('editor.fingerprint.auto')}
                 </button>
-                <button className={manualMode ? 'primary' : ''} onClick={() => setManualMode(true)}>
+                <button className={`btn btn-sm ${manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setManualMode(true)}>
                   {t('editor.fingerprint.manual')}
                 </button>
-                {!manualMode && <button onClick={() => void regenerateAuto()}>{t('editor.fingerprint.regenerate')}</button>}
+                {!manualMode && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => void regenerateAuto()}>
+                    {t('editor.fingerprint.regenerate')}
+                  </button>
+                )}
                 <div style={{ flex: 1 }} />
-                <button onClick={() => void runValidate()}>{t('editor.fingerprint.validate')}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => void runValidate()}>
+                  {t('editor.fingerprint.validate')}
+                </button>
               </div>
 
               {!manualMode && (
@@ -354,7 +359,7 @@ export function ProfileEditorModal({
                     {FIELD_ROW_KEYS.map(([labelKey, key]) => (
                       <tr key={key}>
                         <th style={{ width: 180 }}>{t(labelKey)}</th>
-                        <td>
+                        <td className="mono">
                           {key === 'languages'
                             ? fingerprint.languages.join(', ')
                             : key === 'screenWidth'
@@ -369,11 +374,12 @@ export function ProfileEditorModal({
 
               {manualMode && (
                 <div>
-                  <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 0 }}>{t('editor.fingerprint.manualHint')}</p>
+                  <p style={{ color: 'var(--ash-dim)', fontSize: 12, marginTop: 0 }}>{t('editor.fingerprint.manualHint')}</p>
                   {MANUAL_FIELD_KEYS.map(([labelKey, key]) => (
                     <label key={key} style={{ display: 'block', marginBottom: 8 }}>
                       {t(labelKey)}
                       <input
+                        className="mono"
                         value={draft[key]}
                         onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
                         style={{ display: 'block', width: '100%', marginTop: 4 }}
@@ -392,7 +398,8 @@ export function ProfileEditorModal({
                       <option value="disabled">{t('editor.fingerprint.webrtc.disabled')}</option>
                     </select>
                   </label>
-                  <button className="primary" onClick={() => void saveManualFingerprint()}>
+                  <button className="btn btn-primary" disabled={saving} onClick={() => void saveManualFingerprint()}>
+                    {saving && <span className="spinner" />}
                     {t('common.save')}
                   </button>
                 </div>
@@ -400,16 +407,16 @@ export function ProfileEditorModal({
 
               {validation && (
                 <div style={{ marginTop: 10, fontSize: 12 }}>
-                  <p style={{ color: validation.valid ? 'var(--green)' : 'var(--red)' }}>
+                  <p style={{ color: validation.valid ? 'var(--lime)' : 'var(--danger)' }}>
                     {validation.valid ? t('editor.fingerprint.valid') : t('editor.fingerprint.invalid')}
                   </p>
                   {validation.errors.map((e) => (
-                    <p key={e} style={{ color: 'var(--red)' }}>
+                    <p key={e} style={{ color: 'var(--danger)' }}>
                       ERROR: {e}
                     </p>
                   ))}
                   {validation.warnings.map((w) => (
-                    <p key={w} style={{ color: 'var(--yellow)' }}>
+                    <p key={w} style={{ color: 'var(--warn)' }}>
                       WARNING: {w}
                     </p>
                   ))}
@@ -431,7 +438,8 @@ export function ProfileEditorModal({
                   ))}
                 </select>
               </label>
-              <button className="primary" onClick={() => void saveProxy()}>
+              <button className="btn btn-primary" disabled={saving} onClick={() => void saveProxy()}>
+                {saving && <span className="spinner" />}
                 {t('common.save')}
               </button>
             </div>
@@ -440,10 +448,10 @@ export function ProfileEditorModal({
           {profile && tab === 'storage' && (
             <div>
               <p>
-                <strong>{t('editor.storage.path')}</strong> {profile.profilePath}
+                <strong>{t('editor.storage.path')}</strong> <span className="mono">{profile.profilePath}</span>
               </p>
-              <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>{t('editor.storage.hint')}</p>
-              <button onClick={() => void clearCache()}>{t('editor.storage.clearCache')}</button>
+              <p style={{ color: 'var(--ash-dim)', fontSize: 12 }}>{t('editor.storage.hint')}</p>
+              <button className="btn btn-ghost btn-sm" onClick={() => void clearCache()}>{t('editor.storage.clearCache')}</button>
             </div>
           )}
 
@@ -452,23 +460,23 @@ export function ProfileEditorModal({
               <tbody>
                 <tr>
                   <th style={{ width: 180 }}>{t('editor.advanced.id')}</th>
-                  <td>{profile.id}</td>
+                  <td className="mono">{profile.id}</td>
                 </tr>
                 <tr>
                   <th>{t('editor.advanced.created')}</th>
-                  <td>{profile.createdAt}</td>
+                  <td className="mono">{profile.createdAt}</td>
                 </tr>
                 <tr>
                   <th>{t('editor.advanced.updated')}</th>
-                  <td>{profile.updatedAt}</td>
+                  <td className="mono">{profile.updatedAt}</td>
                 </tr>
                 <tr>
                   <th>{t('editor.advanced.lastStarted')}</th>
-                  <td>{profile.lastStartedAt ?? '—'}</td>
+                  <td className="mono">{profile.lastStartedAt ?? '—'}</td>
                 </tr>
                 <tr>
                   <th>{t('editor.advanced.lastStopped')}</th>
-                  <td>{profile.lastStoppedAt ?? '—'}</td>
+                  <td className="mono">{profile.lastStoppedAt ?? '—'}</td>
                 </tr>
               </tbody>
             </table>

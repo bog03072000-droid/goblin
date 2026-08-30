@@ -14,6 +14,16 @@ const en = {
   'common.none': 'None',
   'common.yes': 'Yes',
   'common.no': 'No',
+  'common.working': 'Working…',
+  'common.unexpectedError': 'Something went wrong. Please try again.',
+
+  'errors.profileAlreadyRunning': 'This profile is already running.',
+  'errors.profileLocked': 'This profile is locked by another running instance. Stop it first.',
+  'errors.stopProfileFirst': 'Stop the profile before doing this.',
+  'errors.fingerprintMissing': "This profile's fingerprint data is missing or was deleted.",
+  'errors.profileNotFound': 'This profile no longer exists — it may have been deleted elsewhere.',
+  'errors.proxyNotFound': 'This proxy no longer exists — it may have been deleted elsewhere.',
+  'errors.invalidInput': 'Some of the entered values are invalid. Please check the form and try again.',
 
   'profiles.searchPlaceholder': 'Search profiles...',
   'profiles.status.all': 'All statuses',
@@ -69,6 +79,8 @@ const en = {
   'profiles.action.export': 'Export',
   'profiles.action.backup': 'Backup',
   'profiles.action.delete': 'Delete',
+  'profiles.confirmDelete': 'Delete profile "{name}"? This cannot be undone.',
+  'profiles.bulk.confirmDelete': 'Delete {count} selected profile(s)? This cannot be undone.',
   'profiles.empty.none': 'No profiles yet. Create one above.',
   'profiles.empty.noMatch': 'No profiles match the current filters.',
   'profiles.msg.exportedConfig': 'Exported configuration to {path}',
@@ -143,6 +155,7 @@ const en = {
   'proxy.create': 'Add Proxy',
   'proxy.test': 'Test',
   'proxy.delete': 'Delete',
+  'proxy.confirmDelete': 'Delete proxy "{name}"? This cannot be undone.',
   'proxy.table.name': 'Name',
   'proxy.table.protocol': 'Protocol',
   'proxy.table.host': 'Host',
@@ -152,6 +165,7 @@ const en = {
   'proxy.table.actions': 'Actions',
   'proxy.status.ok': 'OK ({ms}ms)',
   'proxy.status.failed': 'Failed: {error}',
+  'proxy.empty.none': 'No proxies yet. Add one above.',
 
   'settings.title.performance': 'Performance',
   'settings.title.storage': 'Storage',
@@ -176,6 +190,7 @@ const en = {
   'logs.table.event': 'Event',
   'logs.table.profile': 'Profile',
   'logs.table.message': 'Message',
+  'logs.empty.none': 'No activity yet. Actions on your profiles will show up here.',
 } as const;
 
 export default en;
