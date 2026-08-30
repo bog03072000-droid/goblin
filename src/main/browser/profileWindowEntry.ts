@@ -32,7 +32,12 @@ export function runProfileWindowProcess(): void {
   // Requested by ProfileManager.stop() (see its comment for why): app.quit()
   // runs Electron/Chromium's normal shutdown sequence, which flushes the
   // cookie/localStorage backing stores to disk before the process actually
-  // exits — a hard kill() from the parent can't guarantee that.
+  // exits — a hard kill() from the parent can't guarantee that. Verified by
+  // instrumenting this handler directly (message receipt + before-quit/
+  // will-quit firing, confirmed via a throwaway diagnostic script) — the
+  // mechanism itself works correctly; the E2E flakiness this was suspected
+  // of causing was actually a read-side race in the test, now fixed by
+  // polling instead of reading once (see profileBrowserLifecycle.spec.ts).
   process.on('message', (msg) => {
     if (msg === 'graceful-quit') app.quit();
   });

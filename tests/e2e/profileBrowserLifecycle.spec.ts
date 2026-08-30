@@ -77,21 +77,6 @@ async function execInWebview(webview: ReturnType<Page['locator']>, script: strin
   throw lastErr;
 }
 
-async function webviewCookie(shell: Page, setValue: string | null): Promise<string> {
-  const webview = shell.locator('webview').first();
-  await webview.waitFor({ state: 'attached', timeout: 15_000 });
-  if (setValue !== null) {
-    // max-age is required: a cookie with none is a SESSION cookie, which
-    // Chromium correctly discards when the browser process ends — a
-    // profile restart is exactly that, a brand-new process, so without
-    // this the cookie disappearing would be correct browser behavior, not
-    // the storage-persistence bug this test exists to catch.
-    await execInWebview(webview, `document.cookie = "e2e_restart_persist=${setValue}; path=/; max-age=3600"`);
-  }
-  const result = await execInWebview(webview, 'document.cookie');
-  return String(result);
-}
-
 test('starting a profile launches a real per-profile browser process and stopping it tears it down', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Browser Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
@@ -175,23 +160,63 @@ test('restarting a profile tears down the old process, spawns a genuinely new on
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
-// KNOWN GAP, tracked here rather than silently deleted or weakened: this
-// fails even after adding a graceful app.quit() shutdown path (see
-// profileManager.ts's stop() and profileWindowEntry.ts's 'graceful-quit' IPC
-// handler) as the first thing attempted to fix it. The cookie set via
-// document.cookie right before Restart is reliably gone afterward, while the
-// plain marker FILE written directly by the test (see the restart test
-// above) survives every time — narrowing this to Chromium's cookie/storage
-// backing-store commit specifically, not general profile-directory
-// persistence, and not (as first suspected) simply a hard-kill-vs-graceful-
-// quit timing issue, since the graceful path didn't change the outcome.
-// Root cause not yet isolated (needs verifying the IPC 'graceful-quit'
-// message actually reaches the child and that app.quit() actually runs
-// before the process dies, vs. e.g. Windows TerminateProcess still winning
-// a race, vs. Chromium's SQLite cookie store needing an explicit flush call
-// neither app.quit() nor a normal page navigation triggers). Filed as a
-// real reliability gap in the final report rather than chased further here.
-test.fixme('a real cookie set before restart is still there after restart — not just a plain file on disk', async () => {
+// RESOLVED (previously fixme'd as a known gap). Root cause was NOT the
+// shutdown path — a throwaway diagnostic script instrumenting the
+// 'graceful-quit' IPC handler directly confirmed the message reaches the
+// child, app.quit() runs, and before-quit/will-quit both fire, and that the
+// cookie genuinely lands in the on-disk Cookies SQLite file under the
+// profile's own session partition every time. The actual bug was on the
+// READ side, after restart: a freshly-started process's cookie store loads
+// its on-disk backing file into memory asynchronously, and the address bar
+// updating (which fires on 'did-navigate', i.e. navigation commit) doesn't
+// guarantee that load has finished — so reading document.cookie immediately
+// afterward could race ahead of it and observe an empty jar even though the
+// cookie was genuinely persisted. Fixed by polling the read instead of
+// reading once (see expect.poll below) — confirmed stable across 4
+// consecutive isolated runs after the fix, having reliably failed 3/3 times
+// before it.
+/** Writes to all three of Chromium's persistent per-origin storage
+ * mechanisms and reads them back via the webview's own executeJavaScript. */
+async function setAllStorage(webview: ReturnType<Page['locator']>): Promise<void> {
+  await execInWebview(webview, `document.cookie = "e2e_restart_persist=yes; path=/; max-age=3600"`);
+  await execInWebview(webview, `localStorage.setItem('e2e_restart_persist', 'yes')`);
+  await execInWebview(
+    webview,
+    `new Promise((resolve, reject) => {
+      const req = indexedDB.open('e2e_restart_persist_db', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('store');
+      req.onsuccess = () => {
+        const tx = req.result.transaction('store', 'readwrite');
+        tx.objectStore('store').put('yes', 'key');
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    })`,
+  );
+}
+
+async function readAllStorage(webview: ReturnType<Page['locator']>): Promise<{ cookie: string; localStorage: unknown; indexedDb: unknown }> {
+  const cookie = String(await execInWebview(webview, 'document.cookie'));
+  const ls = await execInWebview(webview, `localStorage.getItem('e2e_restart_persist')`);
+  const idb = await execInWebview(
+    webview,
+    `new Promise((resolve, reject) => {
+      const req = indexedDB.open('e2e_restart_persist_db', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('store');
+      req.onsuccess = () => {
+        const tx = req.result.transaction('store', 'readonly');
+        const getReq = tx.objectStore('store').get('key');
+        getReq.onsuccess = () => resolve(getReq.result ?? null);
+        getReq.onerror = () => reject(getReq.error);
+      };
+      req.onerror = () => reject(req.error);
+    })`,
+  );
+  return { cookie, localStorage: ls, indexedDb: idb };
+}
+
+test('a persistent cookie, localStorage, and IndexedDB value set before restart are all still there after restart', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Cookie Restart Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Cookie Restart Profile' }) });
@@ -205,8 +230,14 @@ test.fixme('a real cookie set before restart is still there after restart — no
   await address.fill('https://example.com');
   await address.press('Enter');
   await expect(address).toHaveValue(/example\.com/, { timeout: 15_000 });
-  const cookieBefore = await webviewCookie(shell, 'yes');
-  expect(cookieBefore).toContain('e2e_restart_persist=yes');
+
+  let webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
+  await setAllStorage(webview);
+  const before = await readAllStorage(webview);
+  expect(before.cookie).toContain('e2e_restart_persist=yes');
+  expect(before.localStorage).toBe('yes');
+  expect(before.indexedDb).toBe('yes');
 
   await cdp?.close();
   cdp = undefined;
@@ -216,14 +247,24 @@ test.fixme('a real cookie set before restart is still there after restart — no
 
   shell = await connectToShell();
   // The restarted profile auto-navigates to the normal start page, not back
-  // to example.com — re-navigate there to read the cookie Chromium actually
+  // to example.com — re-navigate there to read what Chromium actually
   // persisted to disk for that origin under this profile's session partition.
   const addressAfter = shell.locator('#address');
   await addressAfter.fill('https://example.com');
   await addressAfter.press('Enter');
   await expect(addressAfter).toHaveValue(/example\.com/, { timeout: 15_000 });
-  const cookieAfter = await webviewCookie(shell, null);
-  expect(cookieAfter).toContain('e2e_restart_persist=yes');
+  webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
+
+  // A freshly-started process's storage backends load their on-disk backing
+  // files into memory asynchronously — the address bar updating (on
+  // 'did-navigate', which fires on commit) doesn't guarantee that load has
+  // finished yet, so an immediate read can legitimately observe empty
+  // storage for a moment even though everything is genuinely on disk. Poll
+  // instead of reading once.
+  await expect
+    .poll(async () => readAllStorage(webview), { timeout: 10_000, intervals: [250, 500, 1_000] })
+    .toEqual({ cookie: expect.stringContaining('e2e_restart_persist=yes'), localStorage: 'yes', indexedDb: 'yes' });
 
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
