@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased — multi-tab browser, restart/persistence/proxy verification
+
+- Multi-tab browser: New Tab, Close Tab (last tab protected), Switch Tab,
+  Duplicate Tab, all sharing the profile's one session/partition (tabs never
+  get separate cookie jars within a profile). Verified directly against the
+  real renderer logic (`did-attach-webview`/tab DOM state), not assumed.
+- Two real bugs found and fixed while adding E2E coverage (not merely
+  "found gaps" — actually fixed and verified):
+  1. `ProfileManager.restart()` called `stop()` then immediately `start()`
+     without waiting for the killed process to actually exit, racing the
+     new launch against the old process's own cleanup (lock release, status
+     update). Fixed: `stop()` now awaits the child's real `exit` event.
+  2. The per-profile child process's `session.setProxy()` call wasn't
+     awaited before the first navigation could fire, so the very first page
+     load after Start could go out unproxied. Fixed: awaited before the
+     window/webview are created.
+- New E2E coverage: a real restart test (start → verify new PID after
+  restart → verify storage/marker file persists), a real application-restart
+  persistence test (two genuine separate `electron.launch()` calls against
+  the same `--user-data-dir`, not a page reload or mocked repositories), and
+  a real proxy-verification test using a local deterministic HTTP proxy
+  harness (a plain Node server receiving the browser's actual absolute-URI
+  proxy request — proof of real usage, not a DB-row check).
+- Fingerprint reality verification (User-Agent, platform, locale, languages,
+  timezone, viewport, device scale) was already covered by the prior audit
+  stage's E2E suite; WebGL/Canvas/Audio/WebRTC/fonts remain honestly marked
+  per their actual (non-)implementation status — no changes needed there.
+- 5 new E2E specs (localization, applicationRestartPersistence, proxyVerification,
+  plus 2 new tests in profileBrowserLifecycle) — 16 E2E scenarios total, all
+  passing (1 pre-existing, documented TZ-init environmental flake absorbed by
+  a new `retries: 1` in playwright.config.ts). 89 unit/integration tests
+  still passing, 200-profile performance unaffected.
+
 ## Unreleased — Octo-like functional pass: bulk ops, backup/restore, list columns
 
 - Bulk profile operations: multi-select checkboxes + a bulk action toolbar

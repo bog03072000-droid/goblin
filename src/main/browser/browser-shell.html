@@ -4,7 +4,20 @@
 <meta charset="utf-8" />
 <title>ProfileForge Browser</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #1e1f22; font-family: Segoe UI, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #1e1f22; font-family: Segoe UI, sans-serif; overflow: hidden; }
+  #tabbar { display: flex; align-items: flex-end; gap: 2px; padding: 6px 8px 0; background: #1a1b1e; -webkit-app-region: drag; }
+  .tab {
+    display: flex; align-items: center; gap: 6px; max-width: 180px; min-width: 100px;
+    background: #26272b; color: #aaa; border-radius: 6px 6px 0 0; padding: 6px 8px;
+    cursor: pointer; font-size: 12px; -webkit-app-region: no-drag; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .tab.active { background: #33343a; color: #eee; }
+  .tab .tab-title { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .tab .tab-close { color: #888; padding: 0 3px; border-radius: 3px; }
+  .tab .tab-close:hover { background: #4a4b50; color: #eee; }
+  #new-tab { -webkit-app-region: no-drag; color: #aaa; padding: 6px 10px; cursor: pointer; font-size: 14px; }
+  #new-tab:hover { color: #eee; }
   #toolbar { display: flex; gap: 6px; padding: 6px 8px; background: #26272b; -webkit-app-region: drag; }
   #toolbar button, #toolbar input { -webkit-app-region: no-drag; }
   #toolbar button {
@@ -17,10 +30,14 @@
     color: #eee; padding: 4px 10px; font-size: 13px; outline: none;
   }
   #label { color: #8a8d93; font-size: 11px; align-self: center; padding-left: 6px; }
-  webview { width: 100%; height: calc(100% - 40px); border: none; }
+  #webviews { position: relative; width: 100%; height: calc(100% - 74px); }
+  #webviews webview { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
 </style>
 </head>
 <body>
+  <div id="tabbar">
+    <span id="new-tab" title="New Tab">+</span>
+  </div>
   <div id="toolbar">
     <button id="back">&#8592;</button>
     <button id="fwd">&#8594;</button>
@@ -28,11 +45,12 @@
     <button id="home">&#8962;</button>
     <input id="address" type="text" value="about:blank" />
     <button id="go">Go</button>
+    <button id="duplicate">Duplicate Tab</button>
     <button id="devtools">DevTools</button>
     <button id="diagnostics">Diagnostics</button>
     <span id="label"></span>
   </div>
-  <webview id="view" src="about:blank"></webview>
+  <div id="webviews"></div>
   <script>
     const params = new URLSearchParams(location.search);
     const partition = params.get('partition') || '';
@@ -40,40 +58,139 @@
     const startUrl = params.get('start') || 'https://www.google.com';
     const label = params.get('label') || '';
     const diagnosticsUrl = params.get('diagnostics') || '';
-
-    const view = document.getElementById('view');
-    view.setAttribute('partition', partition);
-    if (userAgent) view.setAttribute('useragent', userAgent);
-    // Deliberately left at about:blank here — the main process applies CDP
-    // Emulation overrides (platform, languages, hardware concurrency, screen)
-    // on 'did-attach-webview' and only then navigates to startUrl, so the
-    // very first real page load already reflects the full fingerprint
-    // instead of racing it with a visible reload. See profileWindowEntry.ts.
-    document.getElementById('address').value = startUrl;
     document.getElementById('label').textContent = label;
 
-    function navigate(url) {
-      let target = url.trim();
-      if (!/^[a-zA-Z]+:\/\//.test(target)) target = 'https://' + target;
-      view.setAttribute('src', target);
+    // Multi-tab model: every profile keeps exactly ONE session (partition) —
+    // tabs are just multiple <webview> guests sharing that same partition, so
+    // cookies/localStorage/IndexedDB stay unified across tabs within a
+    // profile while still never touching any other profile's session.
+    let tabs = [];
+    let activeTabId = null;
+    let nextTabId = 1;
+    const webviewsEl = document.getElementById('webviews');
+    const tabbarEl = document.getElementById('tabbar');
+    const newTabBtn = document.getElementById('new-tab');
+
+    function createTab(options) {
+      const id = nextTabId++;
+      const webview = document.createElement('webview');
+      webview.setAttribute('partition', partition);
+      if (userAgent) webview.setAttribute('useragent', userAgent);
+      webview.setAttribute('src', 'about:blank');
+      webview.style.display = 'none';
+      webviewsEl.appendChild(webview);
+
+      const tabEl = document.createElement('div');
+      tabEl.className = 'tab';
+      tabEl.innerHTML = '<span class="tab-title">New Tab</span><span class="tab-close">&times;</span>';
+      tabbarEl.insertBefore(tabEl, newTabBtn);
+
+      const tab = { id, webview, tabEl, url: 'about:blank', title: 'New Tab' };
+      tabs.push(tab);
+
+      webview.addEventListener('did-navigate', (e) => {
+        tab.url = e.url;
+        if (tab.id === activeTabId) document.getElementById('address').value = e.url;
+      });
+      webview.addEventListener('did-navigate-in-page', (e) => {
+        tab.url = e.url;
+        if (tab.id === activeTabId) document.getElementById('address').value = e.url;
+      });
+      webview.addEventListener('page-title-updated', (e) => {
+        tab.title = e.title || tab.url;
+        tabEl.querySelector('.tab-title').textContent = tab.title;
+        tabEl.title = tab.title;
+      });
+
+      tabEl.querySelector('.tab-title').addEventListener('click', () => activateTab(id));
+      tabEl.querySelector('.tab-close').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        closeTab(id);
+      });
+
+      if (options && options.duplicateFromUrl) {
+        // The real per-profile fingerprint enforcement (CDP overrides) is
+        // applied by the main process on every webview attach, then it
+        // navigates to the normal start page — only after that do we hop to
+        // the URL being duplicated, so enforcement is never raced.
+        webview.addEventListener(
+          'did-navigate',
+          () => navigateTab(tab, options.duplicateFromUrl),
+          { once: true },
+        );
+      }
+
+      activateTab(id);
+      return tab;
     }
 
+    function activateTab(id) {
+      activeTabId = id;
+      for (const tab of tabs) {
+        const isActive = tab.id === id;
+        tab.webview.style.display = isActive ? 'block' : 'none';
+        tab.tabEl.classList.toggle('active', isActive);
+      }
+      const active = tabs.find((t) => t.id === id);
+      if (active) document.getElementById('address').value = active.url;
+    }
+
+    function closeTab(id) {
+      if (tabs.length <= 1) return; // always keep at least one tab open
+      const index = tabs.findIndex((t) => t.id === id);
+      if (index === -1) return;
+      const [tab] = tabs.splice(index, 1);
+      tab.webview.remove();
+      tab.tabEl.remove();
+      if (activeTabId === id) {
+        const next = tabs[index] || tabs[index - 1];
+        if (next) activateTab(next.id);
+      }
+    }
+
+    function activeTab() {
+      return tabs.find((t) => t.id === activeTabId) || null;
+    }
+
+    function navigateTab(tab, url) {
+      let target = url.trim();
+      if (!/^[a-zA-Z]+:\/\//.test(target)) target = 'https://' + target;
+      tab.webview.setAttribute('src', target);
+    }
+
+    function navigate(url) {
+      const tab = activeTab();
+      if (tab) navigateTab(tab, url);
+    }
+
+    newTabBtn.addEventListener('click', () => createTab());
+    document.getElementById('duplicate').addEventListener('click', () => {
+      const tab = activeTab();
+      if (tab) createTab({ duplicateFromUrl: tab.url });
+    });
     document.getElementById('go').addEventListener('click', () => navigate(document.getElementById('address').value));
     document.getElementById('address').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') navigate(document.getElementById('address').value);
     });
-    document.getElementById('diagnostics').addEventListener('click', () => navigate(diagnosticsUrl));
+    document.getElementById('diagnostics').addEventListener('click', () => createTab({ duplicateFromUrl: diagnosticsUrl }));
     document.getElementById('home').addEventListener('click', () => navigate(startUrl));
-    document.getElementById('back').addEventListener('click', () => view.goBack());
-    document.getElementById('fwd').addEventListener('click', () => view.goForward());
-    document.getElementById('reload').addEventListener('click', () => view.reload());
+    document.getElementById('back').addEventListener('click', () => activeTab() && activeTab().webview.goBack());
+    document.getElementById('fwd').addEventListener('click', () => activeTab() && activeTab().webview.goForward());
+    document.getElementById('reload').addEventListener('click', () => activeTab() && activeTab().webview.reload());
     document.getElementById('devtools').addEventListener('click', () => {
-      if (view.isDevToolsOpened()) view.closeDevTools();
-      else view.openDevTools();
+      const tab = activeTab();
+      if (!tab) return;
+      if (tab.webview.isDevToolsOpened()) tab.webview.closeDevTools();
+      else tab.webview.openDevTools();
     });
-    view.addEventListener('did-navigate', (e) => {
-      document.getElementById('address').value = e.url;
-    });
+
+    // First tab: left at about:blank (see attribute above) — the main
+    // process applies CDP Emulation overrides (platform, languages, hardware
+    // concurrency, screen) on 'did-attach-webview' and only then navigates to
+    // startUrl, so the very first real page load already reflects the full
+    // fingerprint instead of racing it with a visible reload. See
+    // profileWindowEntry.ts.
+    createTab();
   </script>
 </body>
 </html>

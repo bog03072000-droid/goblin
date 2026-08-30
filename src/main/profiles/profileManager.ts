@@ -119,12 +119,22 @@ export class ProfileManager {
     return this.mustGet(id);
   }
 
-  stop(id: string): Profile {
+  /** Waits for the child's actual OS-level exit (not just for the kill signal
+   * to be sent) before resolving — restart() below depends on this to avoid
+   * racing a new start() against the old process's cleanup (which runs in
+   * the 'exit' handler registered in start(): releasing this.running, the
+   * lock file, and the DB status). Without this wait, start() would
+   * immediately throw "already running"/"locked" against the not-yet-dead
+   * old process. */
+  async stop(id: string): Promise<Profile> {
     const profile = this.mustGet(id);
     this.profiles.updateStatus(id, 'STOPPING');
     const child = this.running.get(id);
     if (child) {
-      child.kill();
+      await new Promise<void>((resolve) => {
+        child.once('exit', () => resolve());
+        child.kill();
+      });
     } else {
       // No tracked process (e.g. app restarted) — just clear stale DB/lock state.
       this.lockManager.release(profile.profilePath);
@@ -134,9 +144,9 @@ export class ProfileManager {
     return this.mustGet(id);
   }
 
-  restart(id: string): Profile {
+  async restart(id: string): Promise<Profile> {
     if (this.running.has(id) || this.mustGet(id).status === 'RUNNING') {
-      this.stop(id);
+      await this.stop(id);
     }
     return this.start(id);
   }

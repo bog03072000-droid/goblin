@@ -37,11 +37,17 @@ export function runProfileWindowProcess(): void {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     const partition = `persist:${args.profileId}`;
     const ses = session.fromPartition(partition, { cache: true });
     if (args.proxyRules) {
-      void ses.setProxy({ proxyRules: args.proxyRules });
+      // Awaited: setProxy() resolves once the proxy config has actually been
+      // applied to the session's network context. Without this await, the
+      // very first navigation (which happens moments later, right after the
+      // webview attaches) could race ahead of the proxy actually being wired
+      // up and go out unproxied — a real bug found while adding proxy
+      // verification E2E coverage, not a hypothetical one.
+      await ses.setProxy({ proxyRules: args.proxyRules });
     }
 
     // Session-level UA/Accept-Language: covers HTTP headers and any request
@@ -94,12 +100,15 @@ export function runProfileWindowProcess(): void {
     const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
     const diagnosticsUrl = `profileforge://fingerprint-test?config=${configB64}`;
 
-    // Testing-only mechanism (see docs/FINGERPRINT_AUDIT.md and TESTING.md):
-    // when set by the E2E harness, skip straight to the diagnostics page
-    // instead of the real start page, so the automated test can read the
-    // resulting snapshot file without needing to drive the UI's Diagnostics
-    // button. Never set in a normal launch.
-    const autoNavigateTarget = process.env['PF_E2E_AUTO_DIAGNOSTICS'] === '1' ? diagnosticsUrl : BROWSER_START_URL;
+    // Testing-only mechanisms (see docs/FINGERPRINT_AUDIT.md and TESTING.md):
+    // when set by the E2E harness, skip straight to a specific page instead
+    // of the real start page, so an automated test doesn't need to drive the
+    // UI's address bar inside this separate, otherwise-unreachable-by-
+    // Playwright child process window. Never set in a normal launch.
+    const autoNavigateTarget =
+      process.env['PF_E2E_AUTO_DIAGNOSTICS'] === '1'
+        ? diagnosticsUrl
+        : (process.env['PF_E2E_PROXY_TEST_URL'] ?? BROWSER_START_URL);
 
     // The webview starts at about:blank (see browser-shell.html); once Electron
     // attaches its guest WebContents here, the CDP fingerprint overrides are
