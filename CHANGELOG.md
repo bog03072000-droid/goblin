@@ -1,5 +1,166 @@
 # Changelog
 
+## Unreleased — final technical hardening: WebGL enabled-mode E2E, fonts re-investigation, documentation refresh
+
+- Added the missing enabled-mode E2E test for WebGL vendor/renderer
+  spoofing: turns `webglSpoofingMode` on via the real UI, starts a profile,
+  and confirms both that the observed vendor/renderer genuinely match the
+  configured spoofed values, and that an unrelated real WebGL capability
+  (`MAX_TEXTURE_SIZE`) still returns a plausible value — proving the
+  `getParameter()` override doesn't break WebGL compatibility. (A comment
+  referencing this test existed since the fingerprint-spoofing stage; the
+  test itself had never actually been written.)
+- Re-investigated the Fonts CSS-measurement gap specifically to see whether
+  it could be closed without a Chromium patch or a fragile hack. Confirmed
+  it cannot — see `docs/FINGERPRINT_AUDIT.md`'s expanded Fonts section for
+  the structural reason (blocking the relevant layout-measurement APIs
+  would corrupt real page layout on most sites). Kept the existing
+  Local-Font-Access/`document.fonts.check()`-only coverage as-is, documented
+  more precisely rather than silently implied as broader.
+- Full documentation refresh: README/ARCHITECTURE/SECURITY/TESTING were
+  found to be ~9 commits stale (still describing the pre-rebrand,
+  pre-downloads/groups/bulk-ops state) — updated to accurately reflect the
+  current implementation, including the Goblin rebrand (was still
+  "ProfileForge" throughout), the `groups`/`downloads` subsystems and their
+  migrations, the CDP-injected spoofing-script mechanism, the graceful-quit
+  `'ipc'` stdio channel (now also documented from a security-review
+  standpoint), and corrected test counts (126 unit/integration across 21
+  files, 43 E2E across 15 files — both roughly double what was documented).
+- Added a final summary table to `docs/FINGERPRINT_AUDIT.md`
+  (Feature | Supported | Actually Applied | E2E Verified | Notes) covering
+  every currently-supported fingerprint field in one place.
+
+## Unreleased — reliability: cookie/storage-restart fix, clone/proxy/concurrency E2E gaps
+
+- Root-caused and fixed the cookie/localStorage/IndexedDB-not-surviving-
+  restart bug from the prior stage's fixme'd test. The graceful `app.quit()`
+  shutdown path (added previously) was already correct — verified directly
+  via a throwaway diagnostic script instrumenting the IPC handler. The real
+  bug was on the read side: a freshly-restarted process's storage backends
+  load their on-disk files into memory asynchronously, and the address bar
+  updating (on navigation commit) doesn't guarantee that load finished, so
+  an immediate read could race ahead of genuinely-persisted data. Fixed by
+  polling the read instead of reading once. Extended the test to cover all
+  three storage types, not just cookies.
+- New E2E coverage: `profileCloning.spec.ts` (clicking Clone in the real UI
+  copies proxy/group/tags, carries the fingerprint identity over verbatim,
+  gets independent storage), `proxyIsolation.spec.ts` (three profiles with
+  three different proxy configurations, each proven to use only its own),
+  `concurrentStartup.spec.ts` (bulk-starting 8 profiles against real
+  Chromium processes with `maxConcurrentLaunches` respected, UI stays
+  responsive, no orphan processes after bulk-stop).
+- Verified (no changes needed): Electron security hardening
+  (contextIsolation/nodeIntegration/sandbox, webview preload force-set,
+  path traversal protection, proxy credential encryption, Zod IPC
+  validation across all channels) and fingerprint consistency (existing
+  E2E suite, no regressions).
+
+## Unreleased — profile manager daily-use polish
+
+- Filter by proxy (including "no proxy"), sort direction toggle, invert
+  selection, debounced search (250ms) alongside the existing group/tag/
+  status filters and select-all/clear.
+- New bulk actions: Restart, Backup, Remove tag (previously only Start/
+  Stop/Clone/Delete/Export/assign-proxy/assign-group/Add-tag existed).
+  Fixed a real bug found while adding these: `bulkStop()` called an
+  unawaited promise, reporting every stop as "succeeded" the instant it was
+  *requested*, not when it actually finished. The shared `bulkRun()` is now
+  genuinely async and yields to the event loop periodically so a large
+  batch never blocks the main process for one long stretch.
+- Per-item bulk failure detail (which profile, why) is now shown instead of
+  being computed by the backend and silently discarded to an aggregate
+  count.
+- Profile creation: the toolbar's create-profile row now also accepts an
+  optional group/proxy/tags inline — no separate edit step for the common
+  case.
+- Profile editor: a Reset button (reverts unsaved General/Proxy edits) and
+  an unsaved-changes confirmation before closing with edits pending.
+- New: a real right-click context menu on profile rows (state-aware) and
+  page-level keyboard shortcuts (Ctrl+N/Ctrl+F/Ctrl+A/Delete/Enter),
+  documented in a new Settings → Keyboard Shortcuts panel.
+
+## Unreleased — daily-use reliability hardening
+
+- New translated (UK/EN) error messages for a missing profile storage
+  directory, corrupted fingerprint data, and a failed browser process
+  launch — previously these fell through to a generic "something went
+  wrong" message.
+- `ProfileManager.start()` now checks the profile's storage directory
+  actually exists before launching (previously Chromium would silently
+  recreate an empty one — a silent data-loss path) and now also handles
+  the child process's asynchronous `'error'` event (real spawn failures,
+  e.g. a missing binary, mostly fail this way — previously only a
+  synchronous throw from `spawn()` was handled, which real failures rarely
+  are).
+- `stop()` now asks the child process to shut down gracefully (`app.quit()`
+  over a new `'ipc'` stdio channel) before falling back to a hard kill after
+  3 seconds — Chromium gets a real chance to flush its cookie/localStorage
+  stores instead of being cut off mid-flight.
+- New E2E coverage for scenarios the UI itself can't normally reach a user
+  into: starting an already-running profile, stopping an already-stopped
+  one, and the missing-storage-directory case, all driven through real IPC/
+  UI interaction.
+
+## Unreleased — persistent downloads history
+
+- New `downloads` SQLite table, written to directly by each per-profile
+  child process's own `will-download` handler on every terminal download
+  outcome (completed/cancelled/failed) — the manager process reads the same
+  file (safe under SQLite's WAL mode).
+- New Downloads page in the manager UI: search by filename, filter by
+  profile/date range, Open/Show-in-folder/Delete/Re-download actions, and
+  honest "Missing" detection (checks the file still exists on disk at list
+  time, never a stale stored flag).
+- In-session downloads panel gains live speed (MB/s) and ETA, computed
+  client-side from consecutive progress samples.
+- Re-download launches the profile navigating straight at the original URL
+  (there's no back-channel into an already-running profile's separate OS
+  process to redirect it, so this only works when the profile isn't
+  currently running — documented as a known limitation, not silently
+  broken).
+
+## Unreleased — fingerprint spoofing: Canvas, Audio, Device Memory, WebGL, Fonts, Media Devices
+
+- Closed the D-graded gaps from the fingerprint audit by injecting a seeded
+  spoofing script into the page's real main JS world via CDP
+  `Page.addScriptToEvaluateOnNewDocument` — necessary because
+  `contextIsolation` blocks a preload script from ever reaching the page's
+  own canvas/audio/WebGL prototypes.
+- Canvas/audio noise: deterministic per profile (seeded off the profile's
+  own seed XOR the actual content being read), on by default. Device
+  memory: unconditional override, upgraded from "not implemented" to
+  genuinely enforced.
+- WebGL vendor/renderer spoofing shipped as a **new, off-by-default opt-in
+  toggle** (`webglSpoofingMode`) rather than enabled automatically, since a
+  `getParameter()` override carries real compatibility risk for sites that
+  branch rendering logic on the reported GPU (some games, map renderers,
+  CAPTCHAs).
+- Fonts/media-devices spoofing made opt-in via their existing mode fields;
+  the fonts partial-coverage limitation (blocks Local Font Access API and
+  `document.fonts.check()`, not CSS-measurement detection) documented
+  explicitly rather than implied as complete.
+- `diagnostics.html` extended with genuine behavioral verification
+  (`isOverridden()`, `canvasIsDeterministic()`, `mediaDevicesLookFake()`) so
+  no field can report a false PASS/APPLIED based on configuration alone.
+
+## Unreleased — Goblin rebrand: real tabs, downloads panel, proxy verification, groups UI
+
+- Application renamed from ProfileForge to **Goblin** throughout the UI,
+  installer (`productName`/`shortcutName`), and branding assets — a new
+  design system (dark/black interface, lime-green accent) rolled out across
+  every page.
+- Real multi-tab browser shell per profile (previously single-tab): New/
+  Close/Duplicate/Switch tab, all sharing the profile's one session
+  partition.
+- A minimal in-session downloads panel (list, progress, Open/Show-in-
+  folder/Cancel) — later replaced by the full persistent Downloads history
+  page (see above).
+- Real proxy verification (not just a stored DB row) and a Groups UI
+  (create/rename/delete via a real modal, filter, profile-count display).
+- `src/renderer/components/ProfilesPage.tsx`/`ProfileEditorModal.tsx` split
+  into smaller page/component modules with a shared `useAsyncAction` hook,
+  as the single-file versions had grown large enough to be hard to navigate.
+
 ## Unreleased — multi-tab browser, restart/persistence/proxy verification
 
 - Multi-tab browser: New Tab, Close Tab (last tab protected), Switch Tab,

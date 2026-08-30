@@ -43,6 +43,12 @@
     function getWebgl() {
       let vendor = 'unavailable';
       let renderer = 'unavailable';
+      // maxTextureSize is unrelated to the vendor/renderer override — a real
+      // WebGL capability read purely to prove the getParameter() patch
+      // (when webglSpoofingMode is 'spoof') only intercepts the two params
+      // it's supposed to and doesn't break WebGL for real sites that read
+      // other parameters. Never used in PASS/FAIL classification.
+      let maxTextureSize = null;
       try {
         const canvas = document.createElement('canvas');
         const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -52,9 +58,10 @@
             vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
             renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
           }
+          maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
         }
       } catch (e) { /* leave defaults */ }
-      return { vendor, renderer };
+      return { vendor, renderer, maxTextureSize };
     }
 
     function getCanvasTail() {
@@ -149,6 +156,7 @@
         deviceMemory: navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'not exposed by this origin',
         webglVendor: webgl.vendor,
         webglRenderer: webgl.renderer,
+        webglMaxTextureSize: webgl.maxTextureSize,
         canvasFingerprintTail: getCanvasTail(),
         canvasDeterministic: canvasIsDeterministic(),
         canvasOverridden: isOverridden(HTMLCanvasElement.prototype.toDataURL),

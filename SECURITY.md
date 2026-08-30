@@ -2,7 +2,7 @@
 
 ## Scope and intent
 
-ProfileForge is a profile-isolation and browser-configuration tool for
+Goblin is a profile-isolation and browser-configuration tool for
 legitimate use: QA/localization testing, development, and separating browser
 sessions. It does not implement, and will not implement, CAPTCHA/anti-bot
 bypass, authentication bypass, credential/cookie/token theft, or stealth
@@ -31,9 +31,26 @@ genuinely enforced in the running browser versus stored-and-validated-only.
   fingerprint snapshot or spam the IPC channel.
 - `webContents.debugger` (Chrome DevTools Protocol) is attached only to a
   profile's own webview `WebContents`, only to call the specific `Emulation.*`
-  methods needed for fingerprint enforcement
+  methods needed for fingerprint enforcement, plus
+  `Page.addScriptToEvaluateOnNewDocument` for the Canvas/Audio/WebGL/Device
+  Memory/Fonts/Media Devices spoofing script
   (`src/main/browser/fingerprintEnforcement.ts`) — it is never exposed to the
   renderer and grants no capability beyond those explicit CDP calls.
+- The manager process can ask a per-profile child process to shut down
+  gracefully over a dedicated `'ipc'` `child_process` stdio channel
+  (`browserLauncher.ts` spawns with
+  `stdio: ['ignore', 'ignore', 'ignore', 'ipc']`, added so Chromium's cookie/
+  localStorage/IndexedDB stores get a real chance to flush before the process
+  exits — see ARCHITECTURE.md). This is a new inter-process surface worth
+  calling out explicitly: the child's handler recognizes exactly one message,
+  the literal string `'graceful-quit'` (`profileWindowEntry.ts`), and ignores
+  anything else; the channel is written to only from `ProfileManager.stop()`
+  in the trusted manager process, is never forwarded to or from the renderer,
+  and is not reachable from page content running inside the profile's
+  webview. `stop()` still falls back to a hard `kill()` after a 3-second
+  timeout if the child doesn't exit on its own, so this channel is an
+  additional courtesy, not a new way for a hung process to avoid being
+  terminated.
 
 ## IPC validation
 
@@ -83,6 +100,25 @@ Each running profile is a separate OS process (see ARCHITECTURE.md). A
 malicious or misbehaving page in one profile cannot reach into another
 profile's process memory, and a renderer crash in one profile does not affect
 the manager process or other running profiles.
+
+## Cross-profile filesystem/storage isolation
+
+Every profile's cookies, localStorage, IndexedDB, and cache live under its
+own `<userData>/profiles/<uuid>/browser-data` directory, set as that child
+process's *own* Electron `userData` path before `app.whenReady()` — Chromium
+itself, not application code, is what keeps one profile's session partition
+(`persist:<profileId>`) from ever reading another's. This is verified
+behaviorally, not just by inspecting file paths: `tests/e2e/browserTabs.spec.ts`
+proves two profiles can never read each other's cookies for the same real
+origin, and `tests/e2e/profileCloning.spec.ts` proves a cloned profile's
+storage is independent from its source's from the moment it starts. Deleting
+one profile (`deleteProfileStorage`) only ever removes that profile's own
+resolved directory (see Path traversal below) — there is no code path that
+constructs or touches a second profile's path while acting on the first.
+Proxy configuration is likewise per-profile-row in SQLite with no shared
+mutable state between profiles; `tests/e2e/proxyIsolation.spec.ts` proves
+three profiles with three different proxy configurations (including "none")
+each only ever use their own.
 
 ## Locking
 

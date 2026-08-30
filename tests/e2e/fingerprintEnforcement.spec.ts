@@ -124,8 +124,9 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
 test('honestly unenforced-by-default properties are reported NOT_IMPLEMENTED, never a false PASS', async () => {
   const snapshot = readSnapshot();
 
-  // WebGL vendor/renderer: off by default (opt-in, see WEBGL_SPOOFING_ENABLED
-  // test below) — reflects the real GPU/ANGLE backend until explicitly enabled.
+  // WebGL vendor/renderer: off by default (opt-in, see the dedicated
+  // "webglSpoofingMode 'spoof'..." test below) — reflects the real GPU/ANGLE
+  // backend until explicitly enabled.
   expect(snapshot.statusByField['webglVendor']).toBe('NOT_IMPLEMENTED');
   expect(snapshot.statusByField['webglRenderer']).toBe('NOT_IMPLEMENTED');
 
@@ -160,6 +161,49 @@ test('canvas noise is profile-specific: two profiles reading identical content g
   // on every profile), but the noise is seeded per-profile, so the resulting
   // bytes differ between the two profiles despite the identical input.
   expect(firstSnapshot.observed['canvasFingerprintTail']).not.toBe(secondSnapshot.observed['canvasFingerprintTail']);
+
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});
+
+test('webglSpoofingMode "spoof" actually overrides the observed vendor/renderer, and only those two — WebGL itself keeps working', async () => {
+  const profilesRoot = path.join(userDataDir, 'profiles');
+  const dirsBefore = new Set(fs.readdirSync(profilesRoot));
+
+  await window.getByPlaceholder('New profile name').fill('E2E WebGL Spoof Profile');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E WebGL Spoof Profile' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await window.getByText('fingerprint', { exact: true }).click();
+  await window.getByLabel('WebGL Vendor/Renderer Spoofing').selectOption({ label: 'Spoof (experimental)' });
+  await expect(window.locator('.banner-warn')).toBeVisible(); // the compatibility-risk warning
+  await window.getByRole('button', { name: 'Close' }).click();
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
+  await expect.poll(() => newDirs().length, { timeout: 30_000 }).toBeGreaterThan(0);
+  const profileDir = newDirs()[0]!;
+  const snapshotPath = path.join(profilesRoot, profileDir, 'fingerprint-snapshot.json');
+  await expect.poll(() => fs.existsSync(snapshotPath), { timeout: 30_000 }).toBe(true);
+  const snapshot = readSnapshotFrom(profileDir);
+
+  // Enabled: the diagnostics page now reports a real, verified match instead
+  // of the honest NOT_IMPLEMENTED the previous test asserts for the default
+  // (off) case.
+  expect(snapshot.statusByField['webglVendor']).toBe('PASS');
+  expect(snapshot.observed['webglVendor']).toBe(snapshot.configured['webglVendor']);
+  expect(snapshot.statusByField['webglRenderer']).toBe('PASS');
+  expect(snapshot.observed['webglRenderer']).toBe(snapshot.configured['webglRenderer']);
+
+  // Compatibility: a real, unrelated WebGL capability (MAX_TEXTURE_SIZE) is
+  // still a plausible number — the getParameter() override only intercepts
+  // the two UNMASKED_* params it's supposed to, not the whole API. Real
+  // WebGL implementations report at least 2048 here (the GLES2 minimum).
+  expect(Number(snapshot.observed['webglMaxTextureSize'])).toBeGreaterThanOrEqual(2048);
 
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });

@@ -21,6 +21,37 @@ wanted it to say.
 - **D** — Not implemented. Either no reliable Chromium/Electron-native
   mechanism exists, or (for two properties) not yet in the data model at all.
 
+## Final summary table (this stage)
+
+The table below is the flow every field is actually checked against:
+**Configured** (what's stored per-profile) → **Chromium startup value**
+(what CDP/JS-override actually sets before the page loads) →
+**browser-observed value** (what `navigator`/`screen`/`WebGL`/etc. actually
+report once the page runs). "E2E Verified" means an automated test drives a
+real per-profile Electron/Chromium process and reads the live value back —
+never a mocked browser, never a hand-edited diagnostics page.
+
+| Feature | Supported | Actually Applied | E2E Verified | Notes |
+|---|---|---|---|---|
+| User-Agent | Yes | Yes, always | Yes | CDP `Emulation.setUserAgentOverride`. |
+| Platform | Yes | Yes, always | Yes | Same CDP call, `platform` field. |
+| Locale | Yes | Yes, always | Yes | CDP `acceptLanguage` (session-level `--lang` alone was found to leak host languages — not relied on, see Finding 1). |
+| Languages | Yes | Yes, always | Yes | Same CDP `acceptLanguage`, full list. |
+| Timezone | Yes | Yes, always | Yes | `TZ` env var on the per-profile child process; `Intl` resolves it directly. |
+| Screen (width/height) | Yes | Yes, always | Yes | CDP `Emulation.setDeviceMetricsOverride`. |
+| Viewport | Yes (by construction) | Yes | Yes (indirect) | Real `BrowserWindow` size; deliberately *not* CDP-overridden so it stays decoupled from the claimed screen size (Finding 2) — no visual distortion. |
+| Device Pixel Ratio | Yes | Yes, always | Yes | Same CDP `Emulation.setDeviceMetricsOverride` call. |
+| Hardware Concurrency | Yes | Yes, always | Yes | CDP `Emulation.setHardwareConcurrencyOverride`. |
+| Device Memory | Yes | Yes, always | Yes | No CDP method exists for this (Finding 3) — a JS-level `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument`, applied unconditionally. |
+| Canvas | Yes | Yes, on by default (`canvasMode: 'noise'`) | Yes | Seeded per-profile noise (±1 on RGB channels) on `toDataURL()`/`getImageData()` — same-content-same-profile is byte-deterministic (tested), different profiles diverge on identical content (tested). |
+| Audio | Yes | Yes, on by default (`audioMode: 'noise'`) | Partial | Seeded per-profile noise on `AudioBuffer.getChannelData()` — override-installed is directly verified; the noise's numeric effect isn't independently re-derived by the test (would require re-implementing the seeded-PRNG math in the test itself, not currently done). |
+| WebGL (vendor/renderer) | Yes | **Opt-in, off by default** (`webglSpoofingMode: 'off'`) | Yes — **both states** | Off: honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On: `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content. |
+| Media Devices | Yes | Opt-in, off by default (`mediaDevicesMode: 'real'`) | Yes | Off: real device enumeration (verified empirically: real inputs/outputs, not fabricated). On: `enumerateDevices()` returns a seeded synthetic list structurally distinguishable as fake by the diagnostics page's own check — not just trusting the mode flag. |
+| Fonts | Yes | Opt-in, off by default (`fontsMode: 'system'`); **partial even when on** | Yes | On: blocks `document.fonts.check()` and the Local Font Access API only. Does **not** block CSS-fallback-width-measurement font detection — re-investigated this stage (see §Fonts below), no clean fix exists without a Chromium patch or breaking real page layout; kept as-is and documented rather than silently claimed as full coverage. |
+
+The detailed per-field mechanism, empirical findings, and A/B/C/D grading
+(a stricter, more granular classification than the table above) follow below.
+
 ## Reality matrix
 
 | Property | Configured | Applied | Observed by diagnostics page | Validated (coherence) | Tested (E2E) | Implementation method | Class |
@@ -36,8 +67,8 @@ wanted it to say.
 | devicePixelRatio | ✅ (`deviceScaleFactor`) | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setDeviceMetricsOverride({deviceScaleFactor})` | **A** |
 | hardwareConcurrency | ✅ | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setHardwareConcurrencyOverride` | **A** |
 | deviceMemory | ✅ | ✅ (unconditional) | ✅ configured value | ✅ (range only) | ✅ (asserts PASS) | `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument` — see Finding 6 | **A** |
-| WebGL vendor | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (plausibility only) | ✅ (asserts NOT_IMPLEMENTED by default) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — off by default, see §WebGL spoofing (opt-in) | **C** (→ **B** when the toggle is enabled) |
-| WebGL renderer | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (Apple-only-on-macOS check) | ✅ (asserts NOT_IMPLEMENTED by default) | same as WebGL vendor | **C** (→ **B** when the toggle is enabled) |
+| WebGL vendor | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (plausibility only) | ✅ **both states** (off: asserts NOT_IMPLEMENTED; on: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — off by default, see §WebGL spoofing (opt-in) | **C** (→ **B**, verified, when the toggle is enabled) |
+| WebGL renderer | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (Apple-only-on-macOS check) | ✅ **both states** (same test as vendor) | same as WebGL vendor | **C** (→ **B**, verified, when the toggle is enabled) |
 | Canvas | ✅ (`canvasMode`, default `noise`) | ✅ | ✅ deterministic per-profile noise | schema only | ✅ (asserts APPLIED + determinism, cross-profile difference) | seeded noise on `toDataURL()`/`getImageData()`, injected via CDP main-world script — see §Canvas (implemented) | **B** |
 | AudioContext | ✅ (`audioMode`, default `noise`) | ✅ | not read back numerically by diagnostics (override presence checked instead) | schema only | ✅ (asserts APPLIED — override installed) | seeded noise on `AudioBuffer.prototype.getChannelData`, same injection mechanism — see §Audio (implemented) | **B** |
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
@@ -186,6 +217,52 @@ as follows:
   rewriting Chromium's text-layout/shaping internals. The Fingerprint tab's
   hint text and this document both say so explicitly; the diagnostics page
   never claims more than "override installed", never "fonts fully hidden".
+### Fonts — re-investigated this stage, no clean fix exists, kept as-is
+
+Re-examined specifically to see whether the CSS-measurement gap above could
+be closed without a Chromium patch or a fragile hack. It cannot, and the
+reason is structural rather than a missing trick:
+
+CSS-measurement font detection works by rendering the same string in a
+candidate font (with a generic fallback appended, e.g. `"Candidate Font",
+monospace`) and in the fallback alone, then comparing the two renders'
+metrics — width via `CanvasRenderingContext2D.measureText()`, or
+width/height via `element.getBoundingClientRect()` / `offsetWidth` /
+`offsetHeight` / `getComputedStyle()`. If the candidate font is installed,
+the metrics differ from the fallback-only render; if not, they're identical.
+Blocking this detection technique means one of:
+
+1. **Intercept every layout-measurement API** (`measureText`,
+   `getBoundingClientRect`, `offsetWidth/Height`, `getClientRects`, computed
+   style reads, and more) and lie about the numbers whenever a non-allow-
+   listed font was requested. These are not niche APIs — they are used
+   continuously by ordinary, legitimate page code (menus, tooltips,
+   autosizing text, canvas-based UI, virtualized lists, editors) for reasons
+   that have nothing to do with fingerprinting. Patching them to return
+   fabricated values for arbitrary CSS `font-family` values would corrupt
+   real page layout on a huge fraction of the sites this browser needs to
+   work on — exactly the "fragile hack that breaks compatibility" this
+   stage was told to avoid.
+2. **Never let the requested font actually render**, i.e. force every
+   `font-family` to resolve to one of a small allow-list at the
+   text-shaping/rendering-engine level, regardless of what CSS asked for.
+   This is what Tor Browser actually does — but it does it by *bundling* a
+   fixed, cross-platform font set and configuring Chromium/Firefox's font
+   matching to only ever resolve to that set, which is a build-time/
+   engine-level decision, not something reachable from an
+   injected page-world script. Doing the equivalent here would mean either
+   patching Chromium itself (explicitly out of scope) or standing up a
+   real per-profile isolated font directory at the OS level (a genuinely
+   different, much larger feature, not a fix to the existing mechanism).
+
+Neither option fits "clean fix, no Chromium modification, no fragile
+hacks." **Decision: keep the current implementation as-is.** `fontsMode:
+'restricted'` continues to block `document.fonts.check()` and the
+Local Font Access API only, `fontsMode: 'system'` remains the default, and
+both this document and the Fingerprint tab's own UI hint continue to state
+the CSS-measurement gap explicitly rather than implying broader coverage
+than actually exists.
+
 - **Media devices** — overrides `navigator.mediaDevices.enumerateDevices()`
   to return a precomputed, seeded synthetic device list
   (`buildFakeMediaDevices()`, reusing the project's existing
