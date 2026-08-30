@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ProxiesPage } from './pages/ProxiesPage';
+import { DownloadsPage } from './pages/DownloadsPage';
 import { LogsPage } from './pages/LogsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { I18nProvider, useTranslation, DEFAULT_LOCALE, type Locale } from './i18n';
@@ -8,7 +9,7 @@ import { callApi } from './services/api';
 import type { Settings } from '@shared/schemas/settings';
 import goblinLogo from './assets/goblin-logo.png';
 
-type Page = 'profiles' | 'proxies' | 'logs' | 'settings';
+type Page = 'profiles' | 'proxies' | 'downloads' | 'logs' | 'settings';
 
 /** Loads the persisted language before rendering the real app, so the UI
  * never flashes in the wrong language and the choice survives a restart. */
@@ -50,6 +51,9 @@ function AppShell(): JSX.Element {
         <div className={`sidebar-item ${page === 'proxies' ? 'active' : ''}`} onClick={() => setPage('proxies')}>
           {t('app.sidebar.proxies')}
         </div>
+        <div className={`sidebar-item ${page === 'downloads' ? 'active' : ''}`} onClick={() => setPage('downloads')}>
+          {t('app.sidebar.downloads')}
+        </div>
         <div className={`sidebar-item ${page === 'logs' ? 'active' : ''}`} onClick={() => setPage('logs')}>
           {t('app.sidebar.logs')}
         </div>
@@ -60,6 +64,7 @@ function AppShell(): JSX.Element {
       <div className="main">
         {page === 'profiles' && <ProfilesPage />}
         {page === 'proxies' && <ProxiesPage />}
+        {page === 'downloads' && <DownloadsPage />}
         {page === 'logs' && <LogsPage />}
         {page === 'settings' && <SettingsPage />}
       </div>

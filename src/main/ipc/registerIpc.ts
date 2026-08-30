@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
+import fs from 'node:fs';
 import { log } from '../logger';
 import { IpcRequestSchemas, type IpcChannel } from '../../shared/ipc/contracts';
 import type { ProfileManager } from '../profiles/profileManager';
@@ -9,7 +10,9 @@ import type { ActivityLogRepository } from '../database/activityLogRepository';
 import type { TemplateRepository } from '../database/templateRepository';
 import type { SettingsRepository } from '../database/settingsRepository';
 import type { GroupRepository } from '../database/groupRepository';
+import type { DownloadRepository } from '../database/downloadRepository';
 import type { ImportExportService } from '../profiles/importExport';
+import type { DownloadWithStatus } from '../../shared/schemas/download';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
 import { testProxyConnection } from '../proxy/proxyTester';
@@ -24,6 +27,7 @@ export interface IpcDependencies {
   importExport: ImportExportService;
   settings: SettingsRepository;
   groups: GroupRepository;
+  downloads: DownloadRepository;
 }
 
 /** Registers every IPC handler with Zod validation on the incoming payload —
@@ -117,4 +121,33 @@ export function registerIpc(deps: IpcDependencies): void {
 
   handle('settings:get', () => deps.settings.getAll());
   handle('settings:update', (p) => deps.settings.update(p));
+
+  // `missing`/`profileName` are computed here rather than stored, so a
+  // profile rename is always reflected and a file deleted outside the app
+  // is detected on the very next list() call, never a stale cached flag.
+  handle('downloads:list', (p) =>
+    deps.downloads.list(p).map(
+      (d): DownloadWithStatus => ({
+        ...d,
+        missing: d.state === 'completed' && !fs.existsSync(d.savePath),
+        profileName: deps.profiles.getById(d.profileId)?.name ?? '(deleted profile)',
+      }),
+    ),
+  );
+  handle('downloads:delete', (p) => deps.downloads.delete(p.id));
+  handle('downloads:open', (p) => {
+    const record = deps.downloads.getById(p.id);
+    if (!record) throw new Error('Download not found');
+    void shell.openPath(record.savePath);
+  });
+  handle('downloads:showInFolder', (p) => {
+    const record = deps.downloads.getById(p.id);
+    if (!record) throw new Error('Download not found');
+    shell.showItemInFolder(record.savePath);
+  });
+  handle('downloads:redownload', (p) => {
+    const record = deps.downloads.getById(p.id);
+    if (!record) throw new Error('Download not found');
+    return deps.profileManager.start(record.profileId, { initialUrl: record.url });
+  });
 }

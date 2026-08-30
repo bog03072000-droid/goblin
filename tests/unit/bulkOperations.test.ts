@@ -28,7 +28,7 @@ describe('ProfileManager bulk operations', () => {
     fingerprints = new FingerprintRepository(db);
     const proxies = new ProxyRepository(db);
     const logs = new ActivityLogRepository(db);
-    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs);
+    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
 
     ids = ['a', 'b', 'c'].map((seed) => {
       const fp = fingerprints.create(generateFingerprint({ seed: `bulk-${seed}` }));

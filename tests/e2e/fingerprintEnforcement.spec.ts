@@ -37,19 +37,32 @@ test.afterAll(async () => {
   fs.rmSync(userDataDir, { recursive: true, force: true });
 });
 
-function readSnapshot(): {
+// `fs.readdirSync(...)[0]` is NOT guaranteed to be "the first profile
+// created" — directory listing order is filesystem-dependent, and once a
+// second profile exists (added below for the cross-profile noise test) an
+// index-based lookup becomes ambiguous. Each test that creates a profile
+// pins down its own directory explicitly instead of guessing from the list.
+function readSnapshotFrom(profileDir: string): {
   configured: Record<string, unknown>;
   observed: Record<string, unknown>;
   statusByField: Record<string, string>;
 } {
-  const profileDirs = fs.readdirSync(path.join(userDataDir, 'profiles'));
-  expect(profileDirs.length).toBeGreaterThan(0);
-  const snapshotPath = path.join(userDataDir, 'profiles', profileDirs[0]!, 'fingerprint-snapshot.json');
+  const snapshotPath = path.join(userDataDir, 'profiles', profileDir, 'fingerprint-snapshot.json');
   const raw = fs.readFileSync(snapshotPath, 'utf-8');
-  return JSON.parse(raw) as ReturnType<typeof readSnapshot>;
+  return JSON.parse(raw) as ReturnType<typeof readSnapshotFrom>;
 }
 
+function readSnapshot(): ReturnType<typeof readSnapshotFrom> {
+  return readSnapshotFrom(firstProfileDir);
+}
+
+let firstProfileDir: string;
+
 test('starting a profile with auto-diagnostics writes a real observed-vs-configured snapshot', async () => {
+  const profilesRoot = path.join(userDataDir, 'profiles');
+  fs.mkdirSync(profilesRoot, { recursive: true });
+  const dirsBefore = new Set(fs.readdirSync(profilesRoot));
+
   await window.getByPlaceholder('New profile name').fill('E2E Fingerprint Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Fingerprint Profile' }) });
@@ -58,11 +71,12 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   await row.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
-  const snapshotPath = () => {
-    const profileDirs = fs.readdirSync(path.join(userDataDir, 'profiles'));
-    return path.join(userDataDir, 'profiles', profileDirs[0]!, 'fingerprint-snapshot.json');
-  };
-  await expect.poll(() => fs.existsSync(snapshotPath()), { timeout: 30_000 }).toBe(true);
+  const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
+  await expect.poll(() => newDirs().length, { timeout: 30_000 }).toBeGreaterThan(0);
+  firstProfileDir = newDirs()[0]!;
+
+  const snapshotPath = path.join(profilesRoot, firstProfileDir, 'fingerprint-snapshot.json');
+  await expect.poll(() => fs.existsSync(snapshotPath), { timeout: 30_000 }).toBe(true);
 
   const snapshot = readSnapshot();
 
@@ -122,6 +136,9 @@ test('honestly unenforced-by-default properties are reported NOT_IMPLEMENTED, ne
 });
 
 test('canvas noise is profile-specific: two profiles reading identical content get different results', async () => {
+  const profilesRoot = path.join(userDataDir, 'profiles');
+  const dirsBefore = new Set(fs.readdirSync(profilesRoot));
+
   await window.getByPlaceholder('New profile name').fill('E2E Fingerprint Profile 2');
   await window.getByRole('button', { name: 'New Profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Fingerprint Profile 2' }) });
@@ -130,15 +147,12 @@ test('canvas noise is profile-specific: two profiles reading identical content g
   await row.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
-  const newestSnapshotPath = () => {
-    const dirs = fs
-      .readdirSync(path.join(userDataDir, 'profiles'))
-      .map((d) => path.join(userDataDir, 'profiles', d))
-      .sort((a, b) => fs.statSync(b).birthtimeMs - fs.statSync(a).birthtimeMs);
-    return path.join(dirs[0]!, 'fingerprint-snapshot.json');
-  };
-  await expect.poll(() => fs.existsSync(newestSnapshotPath()), { timeout: 30_000 }).toBe(true);
-  const secondSnapshot = JSON.parse(fs.readFileSync(newestSnapshotPath(), 'utf-8')) as ReturnType<typeof readSnapshot>;
+  const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
+  await expect.poll(() => newDirs().length, { timeout: 30_000 }).toBeGreaterThan(0);
+  const secondProfileDir = newDirs()[0]!;
+  const secondSnapshotPath = path.join(profilesRoot, secondProfileDir, 'fingerprint-snapshot.json');
+  await expect.poll(() => fs.existsSync(secondSnapshotPath), { timeout: 30_000 }).toBe(true);
+  const secondSnapshot = readSnapshotFrom(secondProfileDir);
   const firstSnapshot = readSnapshot();
 
   expect(firstSnapshot.configured['seed']).not.toBe(secondSnapshot.configured['seed']);

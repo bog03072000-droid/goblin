@@ -6,6 +6,8 @@ import { enforceFingerprint, applyWebrtcPolicy, injectSpoofingScript } from './f
 import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
 import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
 import type { DownloadEvent } from './browserShellPreload';
+import { getDb } from '../database/db';
+import { DownloadRepository } from '../database/downloadRepository';
 
 const BROWSER_START_URL = 'https://www.google.com';
 
@@ -134,6 +136,28 @@ export function runProfileWindowProcess(): void {
       return candidate;
     }
 
+    // Recording is best-effort and lazily-connected: the manager app's own DB
+    // migrations already ran by the time any profile is ever started (the
+    // manager opens it at app startup, before its window/IPC even exist), so
+    // this call only ever *reuses* an already-migrated file — it never races
+    // schema creation. See docs — same WAL-mode file, second OS process.
+    function recordDownload(
+      profileId: string,
+      filename: string,
+      savePath: string,
+      url: string,
+      totalBytes: number,
+      state: 'completed' | 'cancelled' | 'failed',
+    ): void {
+      if (!args.dbPath) return;
+      try {
+        const db = getDb(args.dbPath, migrationsDir());
+        new DownloadRepository(db).create({ profileId, filename, savePath, url, totalBytes, state });
+      } catch (err) {
+        console.error('[ProfileForge] failed to record download history:', err);
+      }
+    }
+
     ses.on('will-download', (_event, item) => {
       const id = String(nextDownloadId++);
       const savePath = uniqueSavePath(downloadsDir, item.getFilename());
@@ -156,7 +180,9 @@ export function runProfileWindowProcess(): void {
         send(state === 'interrupted' ? 'failed' : 'progressing');
       });
       item.once('done', (_e, state) => {
-        send(state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'failed');
+        const finalState = state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'failed';
+        send(finalState);
+        recordDownload(args.profileId, path.basename(savePath), savePath, item.getURL(), item.getTotalBytes(), finalState);
       });
     });
 
@@ -191,7 +217,7 @@ export function runProfileWindowProcess(): void {
     const autoNavigateTarget =
       process.env['PF_E2E_AUTO_DIAGNOSTICS'] === '1'
         ? diagnosticsUrl
-        : (process.env['PF_E2E_PROXY_TEST_URL'] ?? BROWSER_START_URL);
+        : (process.env['PF_E2E_PROXY_TEST_URL'] ?? args.navigateTo ?? BROWSER_START_URL);
 
     // The webview starts at about:blank (see browser-shell.html); once Electron
     // attaches its guest WebContents here, the CDP fingerprint overrides are
@@ -273,6 +299,22 @@ interface ProfileWindowArgs {
   proxyUsername: string | null;
   proxyPassword: string | null;
   fingerprintConfig: Record<string, unknown>;
+  dbPath: string | null;
+  navigateTo: string | null;
+}
+
+/** Same logic main.ts uses for the manager process — recomputed here rather
+ * than passed as a CLI arg because it depends only on `app.isPackaged`/
+ * `process.resourcesPath`, which are identical for this child process (same
+ * Electron binary and app bundle, just a different --profile-window flag).
+ * NOTE: one `..` deeper than main.ts's version — this file compiles to
+ * dist-electron/main/browser/profileWindowEntry.js, one directory below
+ * main.ts's dist-electron/main/main.js, so it needs an extra step up to
+ * reach the repo root in dev mode. */
+function migrationsDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'database', 'migrations')
+    : path.join(__dirname, '..', '..', '..', 'database', 'migrations');
 }
 
 function parseArgs(argv: string[]): ProfileWindowArgs {
@@ -310,5 +352,7 @@ function parseArgs(argv: string[]): ProfileWindowArgs {
     proxyUsername: process.env['PF_PROXY_USERNAME'] ?? null,
     proxyPassword: process.env['PF_PROXY_PASSWORD'] ?? null,
     fingerprintConfig,
+    dbPath: get('db-path'),
+    navigateTo: get('navigate-to'),
   };
 }

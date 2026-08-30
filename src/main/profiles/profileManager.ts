@@ -37,6 +37,7 @@ export class ProfileManager {
     private readonly fingerprints: FingerprintRepository,
     private readonly proxies: ProxyRepository,
     private readonly logs: ActivityLogRepository,
+    private readonly dbPath: string,
   ) {}
 
   create(input: ProfileCreateInput, fingerprintId: string): Profile {
@@ -61,7 +62,13 @@ export class ProfileManager {
     return this.running.has(id);
   }
 
-  start(id: string): Profile {
+  /** `initialUrl` is used by the Downloads page's "Re-download" action: it
+   * launches the profile navigating straight at the original download URL
+   * instead of the normal start page, so Electron's `will-download` fires
+   * again naturally when that URL serves a file. Only usable when the
+   * profile isn't already running — there is no back-channel into an
+   * already-running profile's separate OS process to redirect it. */
+  start(id: string, opts?: { initialUrl?: string }): Profile {
     const profile = this.mustGet(id);
     if (profile.status === 'RUNNING' || this.running.has(id)) {
       throw new Error('Profile is already running');
@@ -94,6 +101,8 @@ export class ProfileManager {
         fingerprint,
         proxy,
         proxyPassword,
+        dbPath: this.dbPath,
+        initialUrl: opts?.initialUrl,
       });
     } catch (err) {
       this.profiles.updateStatus(id, 'ERROR');

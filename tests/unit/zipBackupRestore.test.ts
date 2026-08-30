@@ -30,7 +30,7 @@ describe('ZIP export/import round-trip', () => {
     fingerprints = new FingerprintRepository(db);
     proxies = new ProxyRepository(db);
     const logs = new ActivityLogRepository(db);
-    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs);
+    manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
     importExport = new ImportExportService(profiles, fingerprints, proxies, logs, manager);
   });
 
@@ -91,7 +91,7 @@ describe('ZIP export/import round-trip', () => {
     const fingerprints2 = new FingerprintRepository(db2);
     const proxies2 = new ProxyRepository(db2);
     const logs2 = new ActivityLogRepository(db2);
-    const manager2 = new ProfileManager(root2, profiles2, fingerprints2, proxies2, logs2);
+    const manager2 = new ProfileManager(root2, profiles2, fingerprints2, proxies2, logs2, ':memory:');
     const importExport2 = new ImportExportService(profiles2, fingerprints2, proxies2, logs2, manager2);
 
     const result = await importExport2.importFromPaths([zipPath]);

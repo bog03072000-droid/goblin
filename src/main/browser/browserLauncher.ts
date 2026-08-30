@@ -11,6 +11,13 @@ export interface LaunchParams {
   fingerprint: Fingerprint;
   proxy: ProxyRecord | null;
   proxyPassword: string | null;
+  /** Path to the shared manager SQLite database, so this profile's own child
+   * process can record completed downloads into the same `downloads` table
+   * the manager UI reads — see profileWindowEntry.ts's `recordDownload()`. */
+  dbPath: string;
+  /** Used by the Downloads page's "Re-download" action to navigate straight
+   * at a specific URL instead of the normal start page. */
+  initialUrl?: string;
 }
 
 /**
@@ -57,7 +64,12 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
     `--user-agent=${params.fingerprint.userAgent}`,
     `--locale=${params.fingerprint.locale}`,
     `--fingerprint-config=${fingerprintConfigB64}`,
+    `--db-path=${params.dbPath}`,
   ];
+
+  if (params.initialUrl) {
+    args.push(`--navigate-to=${params.initialUrl}`);
+  }
 
   if (params.proxy) {
     // Chromium's --proxy-server/session.setProxy syntax treats a

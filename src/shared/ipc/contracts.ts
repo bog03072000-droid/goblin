@@ -75,6 +75,17 @@ export const IpcRequestSchemas = {
 
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,
+
+  'downloads:list': z.object({
+    profileId: z.string().uuid().optional(),
+    search: z.string().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+  }),
+  'downloads:delete': z.object({ id: z.string().uuid() }),
+  'downloads:open': z.object({ id: z.string().uuid() }),
+  'downloads:showInFolder': z.object({ id: z.string().uuid() }),
+  'downloads:redownload': z.object({ id: z.string().uuid() }),
 } as const;
 
 export type IpcChannel = keyof typeof IpcRequestSchemas;

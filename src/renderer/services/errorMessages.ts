@@ -21,6 +21,7 @@ const PATTERNS: Array<[RegExp, TranslationKey]> = [
   [/Source fingerprint missing/, 'errors.fingerprintMissing'],
   [/Profile not found/, 'errors.profileNotFound'],
   [/Proxy not found/, 'errors.proxyNotFound'],
+  [/Download not found/, 'errors.downloadNotFound'],
   [/"code":\s*"/, 'errors.invalidInput'],
 ];
 

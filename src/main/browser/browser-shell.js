@@ -144,6 +144,11 @@ document.getElementById('devtools').addEventListener('click', () => {
 // its own profile's session), so the panel just re-renders from the latest
 // snapshot per id rather than tracking deltas itself.
 const downloadsById = new Map();
+// Speed/ETA aren't part of the main process's event payload (it only reports
+// a byte-count snapshot per event, not a rate) — tracked client-side instead,
+// keyed by download id, from the delta between consecutive 'progressing'
+// events. Cleared once a download leaves the active state.
+const speedSamples = new Map();
 const downloadsToggle = document.getElementById('downloads-toggle');
 const downloadsBadge = document.getElementById('downloads-badge');
 const downloadsPanel = document.getElementById('downloads-panel');
@@ -166,6 +171,30 @@ function formatBytes(n) {
   return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+function formatEta(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}m ${s}s`;
+}
+
+/** Called once per 'progressing' event, before the map is updated with the
+ * new snapshot — needs the *previous* sample to compute a delta. Returns
+ * null until a second sample exists (no rate can be known from one point). */
+function sampleSpeed(id, receivedBytes, totalBytes) {
+  const now = Date.now();
+  const prev = speedSamples.get(id);
+  speedSamples.set(id, { time: now, bytes: receivedBytes });
+  if (!prev) return null;
+  const dt = (now - prev.time) / 1000;
+  if (dt <= 0) return null;
+  const bytesPerSec = (receivedBytes - prev.bytes) / dt;
+  if (bytesPerSec <= 0) return { bytesPerSec: 0, eta: null };
+  const remaining = totalBytes > 0 ? totalBytes - receivedBytes : 0;
+  return { bytesPerSec, eta: totalBytes > 0 ? remaining / bytesPerSec : null };
+}
+
 function renderDownloads() {
   const entries = Array.from(downloadsById.values()).reverse();
   const activeCount = entries.filter((d) => d.state === 'started' || d.state === 'progressing').length;
@@ -183,12 +212,17 @@ function renderDownloads() {
     const item = document.createElement('div');
     item.className = 'download-item';
     const active = d.state === 'started' || d.state === 'progressing';
+    if (!active) speedSamples.delete(d.id);
+    const speed = active ? sampleSpeed(d.id, d.receivedBytes, d.totalBytes) : null;
     const safeName = escapeHtml(d.filename);
+    const sizeText = active && d.totalBytes > 0 ? `${formatBytes(d.receivedBytes)}/${formatBytes(d.totalBytes)}` : '';
+    const speedText = speed ? ` · ${formatBytes(speed.bytesPerSec)}/s` : '';
+    const etaText = speed && speed.eta !== null ? ` · ETA ${formatEta(speed.eta)}` : '';
     item.innerHTML = `
       <div class="download-name" title="${safeName}">${safeName}</div>
       ${active ? `<div class="download-progress"><div class="download-progress-fill" style="width:${pct}%"></div></div>` : ''}
       <div class="download-row">
-        <span class="download-status">${d.state}${active && d.totalBytes > 0 ? ` — ${formatBytes(d.receivedBytes)}/${formatBytes(d.totalBytes)}` : ''}</span>
+        <span class="download-status">${d.state}${active ? ` — ${pct}%${sizeText ? ' · ' + sizeText : ''}${speedText}${etaText}` : ''}</span>
         <span class="download-actions"></span>
       </div>
     `;

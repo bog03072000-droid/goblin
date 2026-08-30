@@ -9,6 +9,7 @@ import { ActivityLogRepository } from './database/activityLogRepository';
 import { TemplateRepository } from './database/templateRepository';
 import { SettingsRepository } from './database/settingsRepository';
 import { GroupRepository } from './database/groupRepository';
+import { DownloadRepository } from './database/downloadRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { registerIpc } from './ipc/registerIpc';
@@ -75,11 +76,23 @@ function runManagerProcess(): void {
     const logs = new ActivityLogRepository(db);
     const templates = new TemplateRepository(db);
     templates.seedBuiltins();
-    const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs);
+    const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs, dbPath);
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
     const groups = new GroupRepository(db);
+    const downloads = new DownloadRepository(db);
 
-    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport, settings, groups });
+    registerIpc({
+      profileManager,
+      profiles,
+      fingerprints,
+      proxies,
+      logs,
+      templates,
+      importExport,
+      settings,
+      groups,
+      downloads,
+    });
 
     mainWindow = new BrowserWindow({
       width: 1400,

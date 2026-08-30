@@ -44,7 +44,7 @@ describe('Bulk import (multi-file, error isolation, name collisions)', () => {
     const fingerprints = new FingerprintRepository(db);
     const proxies = new ProxyRepository(db);
     const logs = new ActivityLogRepository(db);
-    const manager = new ProfileManager(root, profiles, fingerprints, proxies, logs);
+    const manager = new ProfileManager(root, profiles, fingerprints, proxies, logs, ':memory:');
     importExport = new ImportExportService(profiles, fingerprints, proxies, logs, manager);
   });
 
