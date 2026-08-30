@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { describeError } from '../services/errorMessages';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
 
 export function ProxiesPage(): JSX.Element {
   const { t } = useTranslation();
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, ProxyTestResult>>({});
   const [form, setForm] = useState({ name: '', protocol: 'http' as ProxyProtocol, host: '', port: 8080, username: '', password: '' });
   const [confirmDeleteProxy, setConfirmDeleteProxy] = useState<ProxyRecord | null>(null);
+  const { error, run } = useAsyncAction();
 
   async function refresh(): Promise<void> {
-    try {
+    await run(async () => {
       const list = await callApi<'proxy:list', ProxyRecord[]>('proxy:list', {});
       setProxies(list);
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   useEffect(() => {
@@ -28,7 +26,7 @@ export function ProxiesPage(): JSX.Element {
 
   async function createProxy(): Promise<void> {
     if (!form.name.trim() || !form.host.trim()) return;
-    try {
+    await run(async () => {
       await callApi('proxy:create', {
         name: form.name.trim(),
         protocol: form.protocol,
@@ -39,27 +37,21 @@ export function ProxiesPage(): JSX.Element {
       });
       setForm({ name: '', protocol: 'http', host: '', port: 8080, username: '', password: '' });
       await refresh();
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   async function test(id: string): Promise<void> {
-    try {
+    await run(async () => {
       const result = await callApi<'proxy:test', ProxyTestResult>('proxy:test', { id });
       setResults((prev) => ({ ...prev, [id]: result }));
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   async function remove(id: string): Promise<void> {
-    try {
+    await run(async () => {
       await callApi('proxy:delete', { id });
       await refresh();
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   return (

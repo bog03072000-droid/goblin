@@ -4,47 +4,15 @@ import type { Fingerprint, FingerprintInput, FingerprintValidationResult } from 
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
-import { describeError } from '../services/errorMessages';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, type TranslationKey } from '../i18n';
+import { GeneralTab } from './profileEditor/GeneralTab';
+import { FingerprintTab, type FingerprintDraft } from './profileEditor/FingerprintTab';
+import { ProxyTab } from './profileEditor/ProxyTab';
+import { StorageTab } from './profileEditor/StorageTab';
+import { AdvancedTab } from './profileEditor/AdvancedTab';
 
 type Tab = 'general' | 'fingerprint' | 'proxy' | 'storage' | 'advanced';
-
-const FIELD_ROW_KEYS: Array<[TranslationKey, keyof Fingerprint]> = [
-  ['editor.fingerprint.row.os', 'os'],
-  ['editor.fingerprint.row.osVersion', 'osVersion'],
-  ['editor.fingerprint.row.browserVersion', 'browserVersion'],
-  ['editor.fingerprint.field.platform', 'platform'],
-  ['editor.fingerprint.field.userAgent', 'userAgent'],
-  ['editor.fingerprint.field.locale', 'locale'],
-  ['editor.fingerprint.field.languages', 'languages'],
-  ['editor.fingerprint.field.timezone', 'timezone'],
-  ['editor.fingerprint.field.screenWidth', 'screenWidth'],
-  ['editor.fingerprint.field.deviceScaleFactor', 'deviceScaleFactor'],
-  ['editor.fingerprint.field.hardwareConcurrency', 'hardwareConcurrency'],
-  ['editor.fingerprint.row.deviceMemory', 'deviceMemory'],
-  ['editor.fingerprint.row.webglVendor', 'webglVendor'],
-  ['editor.fingerprint.row.webglRenderer', 'webglRenderer'],
-  ['editor.fingerprint.row.canvasMode', 'canvasMode'],
-  ['editor.fingerprint.row.audioMode', 'audioMode'],
-  ['editor.fingerprint.field.webrtcMode', 'webrtcMode'],
-  ['editor.fingerprint.row.fontsMode', 'fontsMode'],
-  ['editor.fingerprint.row.mediaDevicesMode', 'mediaDevicesMode'],
-  ['editor.fingerprint.row.seed', 'seed'],
-];
-
-const MANUAL_FIELD_KEYS: Array<
-  [TranslationKey, 'userAgent' | 'platform' | 'locale' | 'languages' | 'timezone' | 'screenWidth' | 'screenHeight' | 'deviceScaleFactor' | 'hardwareConcurrency']
-> = [
-  ['editor.fingerprint.field.userAgent', 'userAgent'],
-  ['editor.fingerprint.field.platform', 'platform'],
-  ['editor.fingerprint.field.locale', 'locale'],
-  ['editor.fingerprint.field.languages', 'languages'],
-  ['editor.fingerprint.field.timezone', 'timezone'],
-  ['editor.fingerprint.field.screenWidth', 'screenWidth'],
-  ['editor.fingerprint.field.screenHeight', 'screenHeight'],
-  ['editor.fingerprint.field.deviceScaleFactor', 'deviceScaleFactor'],
-  ['editor.fingerprint.field.hardwareConcurrency', 'hardwareConcurrency'],
-];
 
 export function ProfileEditorModal({
   profileId,
@@ -67,24 +35,16 @@ export function ProfileEditorModal({
   const [groupId, setGroupId] = useState('');
   const [proxyId, setProxyId] = useState('');
   const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [manualMode, setManualMode] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<{
-    userAgent: string;
-    platform: string;
-    locale: string;
-    languages: string;
-    timezone: string;
-    screenWidth: string;
-    screenHeight: string;
-    deviceScaleFactor: string;
-    hardwareConcurrency: string;
-    webrtcMode: string;
-  } | null>(null);
+  const [draft, setDraft] = useState<FingerprintDraft | null>(null);
+
+  const loadAction = useAsyncAction();
+  const saveAction = useAsyncAction();
+  const miscAction = useAsyncAction();
+  const error = loadAction.error ?? saveAction.error ?? miscAction.error;
 
   async function load(): Promise<void> {
-    try {
+    await loadAction.run(async () => {
       const p = await callApi<'profiles:get', Profile | null>('profiles:get', { id: profileId });
       if (!p) throw new Error('Profile not found');
       setProfile(p);
@@ -100,9 +60,7 @@ export function ProfileEditorModal({
       setProxies(proxyList);
       const groupList = await callApi<'groups:list', Group[]>('groups:list', {});
       setGroups(groupList);
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   useEffect(() => {
@@ -111,8 +69,7 @@ export function ProfileEditorModal({
   }, [profileId]);
 
   async function saveGeneral(): Promise<void> {
-    setSaving(true);
-    try {
+    await saveAction.run(async () => {
       await callApi('profiles:update', {
         id: profileId,
         name,
@@ -124,24 +81,15 @@ export function ProfileEditorModal({
           .filter(Boolean),
       });
       onSaved();
-    } catch (err) {
-      setError(describeError(err, t));
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   async function saveProxy(): Promise<void> {
-    setSaving(true);
-    try {
+    await saveAction.run(async () => {
       await callApi('profiles:update', { id: profileId, proxyId: proxyId || null });
       onSaved();
       await load();
-    } catch (err) {
-      setError(describeError(err, t));
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   function resetDraft(fp: Fingerprint): void {
@@ -164,8 +112,7 @@ export function ProfileEditorModal({
    * isn't actually applied would be a fake control. */
   async function saveManualFingerprint(): Promise<void> {
     if (!fingerprint || !draft) return;
-    setSaving(true);
-    try {
+    await saveAction.run(async () => {
       const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
         id: fingerprint.id,
         userAgent: draft.userAgent,
@@ -184,20 +131,15 @@ export function ProfileEditorModal({
       });
       setFingerprint(updated);
       resetDraft(updated);
-      setError(null);
       await runValidate(updated);
-    } catch (err) {
-      setError(describeError(err, t));
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
   /** AUTO mode: regenerates a fresh coherent bundle from a new random seed and
    * applies it to this profile's existing fingerprint row (same id). */
   async function regenerateAuto(): Promise<void> {
     if (!fingerprint) return;
-    try {
+    await miscAction.run(async () => {
       const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
         seed: `${profileId}-${Date.now()}`,
       });
@@ -207,17 +149,14 @@ export function ProfileEditorModal({
       });
       setFingerprint(updated);
       resetDraft(updated);
-      setError(null);
       await runValidate(updated);
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   async function runValidate(fpArg?: Fingerprint): Promise<void> {
     const source = fpArg ?? fingerprint;
     if (!source) return;
-    try {
+    await miscAction.run(async () => {
       const result = await callApi<'fingerprint:validate', FingerprintValidationResult>('fingerprint:validate', {
         name: source.name,
         os: source.os,
@@ -243,18 +182,13 @@ export function ProfileEditorModal({
         seed: source.seed,
       });
       setValidation(result);
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   async function clearCache(): Promise<void> {
-    try {
+    await miscAction.run(async () => {
       await callApi('profiles:clearCache', { id: profileId });
-      setError(null);
-    } catch (err) {
-      setError(describeError(err, t));
-    }
+    });
   }
 
   const TAB_LABEL_KEYS: Record<Tab, TranslationKey> = {
@@ -298,189 +232,45 @@ export function ProfileEditorModal({
           {!profile && <p>{t('common.loading')}</p>}
 
           {profile && tab === 'general' && (
-            <div>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                {t('editor.general.name')}
-                <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
-              </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                {t('editor.general.description')}
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 60 }}
-                />
-              </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                {t('editor.general.tags')}
-                <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
-              </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                {t('editor.general.group')}
-                <select value={groupId} onChange={(e) => setGroupId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
-                  <option value="">{t('profiles.group.none')}</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="btn btn-primary" disabled={saving} onClick={() => void saveGeneral()}>
-                {saving && <span className="spinner" />}
-                {t('common.save')}
-              </button>
-            </div>
+            <GeneralTab
+              name={name}
+              onNameChange={setName}
+              description={description}
+              onDescriptionChange={setDescription}
+              tagsText={tagsText}
+              onTagsTextChange={setTagsText}
+              groupId={groupId}
+              onGroupIdChange={setGroupId}
+              groups={groups}
+              saving={saveAction.pending}
+              onSave={() => void saveGeneral()}
+            />
           )}
 
           {profile && tab === 'fingerprint' && fingerprint && draft && (
-            <div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                <button className={`btn btn-sm ${!manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setManualMode(false)}>
-                  {t('editor.fingerprint.auto')}
-                </button>
-                <button className={`btn btn-sm ${manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setManualMode(true)}>
-                  {t('editor.fingerprint.manual')}
-                </button>
-                {!manualMode && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => void regenerateAuto()}>
-                    {t('editor.fingerprint.regenerate')}
-                  </button>
-                )}
-                <div style={{ flex: 1 }} />
-                <button className="btn btn-ghost btn-sm" onClick={() => void runValidate()}>
-                  {t('editor.fingerprint.validate')}
-                </button>
-              </div>
-
-              {!manualMode && (
-                <table>
-                  <tbody>
-                    {FIELD_ROW_KEYS.map(([labelKey, key]) => (
-                      <tr key={key}>
-                        <th style={{ width: 180 }}>{t(labelKey)}</th>
-                        <td className="mono">
-                          {key === 'languages'
-                            ? fingerprint.languages.join(', ')
-                            : key === 'screenWidth'
-                              ? `${fingerprint.screenWidth} x ${fingerprint.screenHeight}`
-                              : String(fingerprint[key])}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {manualMode && (
-                <div>
-                  <p style={{ color: 'var(--ash-dim)', fontSize: 12, marginTop: 0 }}>{t('editor.fingerprint.manualHint')}</p>
-                  {MANUAL_FIELD_KEYS.map(([labelKey, key]) => (
-                    <label key={key} style={{ display: 'block', marginBottom: 8 }}>
-                      {t(labelKey)}
-                      <input
-                        className="mono"
-                        value={draft[key]}
-                        onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                        style={{ display: 'block', width: '100%', marginTop: 4 }}
-                      />
-                    </label>
-                  ))}
-                  <label style={{ display: 'block', marginBottom: 8 }}>
-                    {t('editor.fingerprint.field.webrtcMode')}
-                    <select
-                      value={draft.webrtcMode}
-                      onChange={(e) => setDraft({ ...draft, webrtcMode: e.target.value })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
-                    >
-                      <option value="default">{t('editor.fingerprint.webrtc.default')}</option>
-                      <option value="proxy-only">{t('editor.fingerprint.webrtc.proxyOnly')}</option>
-                      <option value="disabled">{t('editor.fingerprint.webrtc.disabled')}</option>
-                    </select>
-                  </label>
-                  <button className="btn btn-primary" disabled={saving} onClick={() => void saveManualFingerprint()}>
-                    {saving && <span className="spinner" />}
-                    {t('common.save')}
-                  </button>
-                </div>
-              )}
-
-              {validation && (
-                <div style={{ marginTop: 10, fontSize: 12 }}>
-                  <p style={{ color: validation.valid ? 'var(--lime)' : 'var(--danger)' }}>
-                    {validation.valid ? t('editor.fingerprint.valid') : t('editor.fingerprint.invalid')}
-                  </p>
-                  {validation.errors.map((e) => (
-                    <p key={e} style={{ color: 'var(--danger)' }}>
-                      ERROR: {e}
-                    </p>
-                  ))}
-                  {validation.warnings.map((w) => (
-                    <p key={w} style={{ color: 'var(--warn)' }}>
-                      WARNING: {w}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
+            <FingerprintTab
+              fingerprint={fingerprint}
+              draft={draft}
+              onDraftChange={setDraft}
+              manualMode={manualMode}
+              onManualModeChange={setManualMode}
+              validation={validation}
+              saving={saveAction.pending}
+              onRegenerate={() => void regenerateAuto()}
+              onValidate={() => void runValidate()}
+              onSaveManual={() => void saveManualFingerprint()}
+            />
           )}
 
           {profile && tab === 'proxy' && (
-            <div>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                {t('editor.proxy.assigned')}
-                <select value={proxyId} onChange={(e) => setProxyId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
-                  <option value="">{t('common.none')}</option>
-                  {proxies.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.protocol}://{p.host}:{p.port})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="btn btn-primary" disabled={saving} onClick={() => void saveProxy()}>
-                {saving && <span className="spinner" />}
-                {t('common.save')}
-              </button>
-            </div>
+            <ProxyTab proxyId={proxyId} onProxyIdChange={setProxyId} proxies={proxies} saving={saveAction.pending} onSave={() => void saveProxy()} />
           )}
 
           {profile && tab === 'storage' && (
-            <div>
-              <p>
-                <strong>{t('editor.storage.path')}</strong> <span className="mono">{profile.profilePath}</span>
-              </p>
-              <p style={{ color: 'var(--ash-dim)', fontSize: 12 }}>{t('editor.storage.hint')}</p>
-              <button className="btn btn-ghost btn-sm" onClick={() => void clearCache()}>{t('editor.storage.clearCache')}</button>
-            </div>
+            <StorageTab profilePath={profile.profilePath} onClearCache={() => void clearCache()} />
           )}
 
-          {profile && tab === 'advanced' && (
-            <table>
-              <tbody>
-                <tr>
-                  <th style={{ width: 180 }}>{t('editor.advanced.id')}</th>
-                  <td className="mono">{profile.id}</td>
-                </tr>
-                <tr>
-                  <th>{t('editor.advanced.created')}</th>
-                  <td className="mono">{profile.createdAt}</td>
-                </tr>
-                <tr>
-                  <th>{t('editor.advanced.updated')}</th>
-                  <td className="mono">{profile.updatedAt}</td>
-                </tr>
-                <tr>
-                  <th>{t('editor.advanced.lastStarted')}</th>
-                  <td className="mono">{profile.lastStartedAt ?? '—'}</td>
-                </tr>
-                <tr>
-                  <th>{t('editor.advanced.lastStopped')}</th>
-                  <td className="mono">{profile.lastStoppedAt ?? '—'}</td>
-                </tr>
-              </tbody>
-            </table>
-          )}
+          {profile && tab === 'advanced' && <AdvancedTab profile={profile} />}
         </div>
       </div>
     </div>

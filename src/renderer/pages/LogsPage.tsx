@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import type { ActivityLogEntry } from '@shared/schemas/activityLog';
 import { callApi } from '../services/api';
-import { describeError } from '../services/errorMessages';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
 
 export function LogsPage(): JSX.Element {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { error, run } = useAsyncAction();
 
   useEffect(() => {
-    callApi<'logs:list', ActivityLogEntry[]>('logs:list', { limit: 200 })
-      .then(setEntries)
-      .catch((err: unknown) => setError(describeError(err, t)));
+    void run(async () => {
+      const list = await callApi<'logs:list', ActivityLogEntry[]>('logs:list', { limit: 200 });
+      setEntries(list);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

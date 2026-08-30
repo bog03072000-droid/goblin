@@ -1,22 +1,30 @@
 import { useEffect, useState } from 'react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, LOCALES, type Locale } from '../i18n';
 
 export function SettingsPage(): JSX.Element {
   const { t, locale, setLocale } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
+  const { error, run } = useAsyncAction();
 
   useEffect(() => {
-    void callApi<'settings:get', Settings>('settings:get', {}).then(setSettings);
+    void run(async () => {
+      const s = await callApi<'settings:get', Settings>('settings:get', {});
+      setSettings(s);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save(patch: Partial<Settings>): Promise<void> {
-    const updated = await callApi<'settings:update', Settings>('settings:update', patch);
-    setSettings(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    await run(async () => {
+      const updated = await callApi<'settings:update', Settings>('settings:update', patch);
+      setSettings(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    });
   }
 
   function changeLanguage(next: Locale): void {
@@ -28,6 +36,7 @@ export function SettingsPage(): JSX.Element {
 
   return (
     <div className="content" style={{ maxWidth: 560 }}>
+      {error && <div className="banner banner-error">{error}</div>}
       {saved && <div className="banner banner-success">{t('settings.saved')}</div>}
 
       <div className="panel">
