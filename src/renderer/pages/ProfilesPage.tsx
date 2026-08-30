@@ -6,10 +6,10 @@ import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { GroupsModal } from '../components/GroupsModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
-import { ProfilesToolbar, type StatusFilter, type SortKey } from './profiles/ProfilesToolbar';
-import { GroupsBar } from './profiles/GroupsBar';
+import { ProfilesToolbar, UNGROUPED_FILTER, type StatusFilter, type SortKey } from './profiles/ProfilesToolbar';
 import { BulkToolbar } from './profiles/BulkToolbar';
 import { ProfilesTable } from './profiles/ProfilesTable';
 
@@ -37,6 +37,7 @@ export function ProfilesPage(): JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<ProfileListItem | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
 
   const generalAction = useAsyncAction();
   const rowAction = useAsyncAction();
@@ -48,7 +49,7 @@ export function ProfilesPage(): JSX.Element {
       const list = await callApi<'profiles:list', ProfileListItem[]>('profiles:list', {
         search: search || undefined,
         tag: tagFilter || undefined,
-        groupId: groupFilter || undefined,
+        groupId: groupFilter && groupFilter !== UNGROUPED_FILTER ? groupFilter : undefined,
       });
       setProfiles(list);
     });
@@ -82,7 +83,11 @@ export function ProfilesPage(): JSX.Element {
   const allTags = useMemo(() => Array.from(new Set(profiles.flatMap((p) => p.tags))).sort(), [profiles]);
 
   const visibleProfiles = useMemo(() => {
-    const filtered = statusFilter === 'ALL' ? profiles : profiles.filter((p) => p.status === statusFilter);
+    let filtered = statusFilter === 'ALL' ? profiles : profiles.filter((p) => p.status === statusFilter);
+    // The backend has no "ungrouped" filter concept (groupId is either a
+    // real id or "match anything") — cheap enough to filter client-side
+    // rather than teach the IPC contract a special sentinel value.
+    if (groupFilter === UNGROUPED_FILTER) filtered = filtered.filter((p) => p.groupId === null);
     const sorted = [...filtered];
     sorted.sort((a, b) => {
       if (sortKey === 'name') return a.name.localeCompare(b.name);
@@ -90,7 +95,7 @@ export function ProfilesPage(): JSX.Element {
       return (b.lastStartedAt ?? '').localeCompare(a.lastStartedAt ?? '');
     });
     return sorted;
-  }, [profiles, statusFilter, sortKey]);
+  }, [profiles, statusFilter, sortKey, groupFilter]);
 
   const selectedVisible = visibleProfiles.filter((p) => selected.has(p.id));
   const allVisibleSelected = visibleProfiles.length > 0 && selectedVisible.length === visibleProfiles.length;
@@ -249,26 +254,21 @@ export function ProfilesPage(): JSX.Element {
     });
   }
 
-  async function createGroup(): Promise<void> {
-    const name = window.prompt(t('profiles.group.create'));
-    if (!name || !name.trim()) return;
+  async function createGroup(name: string): Promise<void> {
     await generalAction.run(async () => {
-      await callApi('groups:create', { name: name.trim() });
+      await callApi('groups:create', { name });
       await refreshGroups();
     });
   }
 
-  async function renameGroup(group: Group): Promise<void> {
-    const name = window.prompt(t('profiles.group.rename', { name: group.name }), group.name);
-    if (!name || !name.trim() || name.trim() === group.name) return;
+  async function renameGroup(group: Group, name: string): Promise<void> {
     await generalAction.run(async () => {
-      await callApi('groups:rename', { id: group.id, name: name.trim() });
+      await callApi('groups:rename', { id: group.id, name });
       await refreshGroups();
     });
   }
 
   async function deleteGroup(group: Group): Promise<void> {
-    if (!window.confirm(t('profiles.group.confirmDelete', { name: group.name }))) return;
     await generalAction.run(async () => {
       await callApi('groups:delete', { id: group.id });
       if (groupFilter === group.id) setGroupFilter('');
@@ -290,7 +290,7 @@ export function ProfilesPage(): JSX.Element {
         groupFilter={groupFilter}
         onGroupFilterChange={setGroupFilter}
         groups={groups}
-        onManageGroups={() => void createGroup()}
+        onManageGroups={() => setShowGroupsModal(true)}
         sortKey={sortKey}
         onSortKeyChange={setSortKey}
         templateId={templateId}
@@ -303,8 +303,6 @@ export function ProfilesPage(): JSX.Element {
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}
       />
-
-      <GroupsBar groups={groups} onRename={(g) => void renameGroup(g)} onDelete={(g) => void deleteGroup(g)} />
 
       {selected.size > 0 && (
         <BulkToolbar
@@ -351,7 +349,14 @@ export function ProfilesPage(): JSX.Element {
         <ProfileEditorModal
           profileId={editingId}
           onClose={() => setEditingId(null)}
-          onSaved={() => void refresh()}
+          onSaved={() => {
+            void refresh();
+            // The editor can change a profile's group assignment, which
+            // changes group profile counts — without this, they'd stay
+            // stale (showing the count from whenever groups were last
+            // fetched) until an unrelated filter change refetched them.
+            void refreshGroups();
+          }}
         />
       )}
       {confirmDeleteProfile && (
@@ -375,6 +380,15 @@ export function ProfilesPage(): JSX.Element {
             setConfirmBulkDelete(false);
             void bulk('profiles:bulkDelete');
           }}
+        />
+      )}
+      {showGroupsModal && (
+        <GroupsModal
+          groups={groups}
+          onCreate={(name) => void createGroup(name)}
+          onRename={(g, name) => void renameGroup(g, name)}
+          onDelete={(g) => void deleteGroup(g)}
+          onClose={() => setShowGroupsModal(false)}
         />
       )}
     </>

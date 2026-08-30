@@ -5,6 +5,7 @@ import { useTranslation, type TranslationKey } from '../../i18n';
 
 export type StatusFilter = 'ALL' | ProfileStatus;
 export type SortKey = 'name' | 'status' | 'lastUsed';
+export const UNGROUPED_FILTER = '__ungrouped__';
 
 export const STATUS_LABEL_KEYS: Record<ProfileStatus, TranslationKey> = {
   RUNNING: 'profiles.status.running',
@@ -85,6 +86,7 @@ export function ProfilesToolbar({
       </select>
       <select value={groupFilter} onChange={(e) => onGroupFilterChange(e.target.value)}>
         <option value="">{t('profiles.group.all')}</option>
+        <option value={UNGROUPED_FILTER}>{t('profiles.group.ungrouped')}</option>
         {groups.map((g) => (
           <option key={g.id} value={g.id}>
             {g.name} ({g.profileCount})

@@ -58,10 +58,20 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   ];
 
   if (params.proxy) {
+    // Chromium's --proxy-server/session.setProxy syntax treats a
+    // "<scheme>=host:port" rule as applying ONLY to requests of that
+    // destination scheme — an "http=" rule silently leaves all https://
+    // traffic unproxied (falls through to a direct connection instead).
+    // A bare "host:port" with no scheme prefix is the one that covers every
+    // destination scheme uniformly, which is what a configured "http" or
+    // "https" proxy record is actually expected to do (handle both http and
+    // https browsing, same as every mainstream browser's proxy setting).
+    // Only socks5 needs its own scheme prefix, since it's a distinct proxy
+    // protocol rather than a destination-scheme filter.
     const rules =
       params.proxy.protocol === 'socks5'
         ? `socks5://${params.proxy.host}:${params.proxy.port}`
-        : `${params.proxy.protocol}=${params.proxy.host}:${params.proxy.port}`;
+        : `${params.proxy.host}:${params.proxy.port}`;
     args.push(`--proxy-rules=${rules}`);
   }
 

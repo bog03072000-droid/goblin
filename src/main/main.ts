@@ -84,7 +84,7 @@ function runManagerProcess(): void {
     mainWindow = new BrowserWindow({
       width: 1400,
       height: 900,
-      title: 'ProfileForge',
+      title: 'Goblin',
       icon: path.join(__dirname, '..', 'icon.png'),
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),

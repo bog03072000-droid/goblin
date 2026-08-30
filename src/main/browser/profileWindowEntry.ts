@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, screen, session, shell } from 'electron';
+import type { DownloadItem } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
 import type { WebrtcMode } from '../../shared/schemas/fingerprint';
+import type { DownloadEvent } from './browserShellPreload';
 
 const BROWSER_START_URL = 'https://www.google.com';
 
@@ -28,6 +30,16 @@ export function runProfileWindowProcess(): void {
   app.commandLine.appendSwitch('lang', args.locale);
   if (args.proxyRules) {
     app.commandLine.appendSwitch('proxy-server', args.proxyRules);
+  }
+
+  // Testing-only mechanism (see docs/FINGERPRINT_AUDIT.md's PF_E2E_* convention):
+  // the profile window is a separate OS process Playwright's electron.launch()
+  // has no handle on, so an E2E test that needs to drive its actual tab bar
+  // opts into a CDP port here and connects via chromium.connectOverCDP().
+  // Never set in a normal launch.
+  const e2eDebugPort = process.env['PF_E2E_REMOTE_DEBUG_PORT'];
+  if (e2eDebugPort) {
+    app.commandLine.appendSwitch('remote-debugging-port', e2eDebugPort);
   }
 
   app.on('login', (event, _webContents, _details, authInfo, callback) => {
@@ -85,9 +97,10 @@ export function runProfileWindowProcess(): void {
     const win = new BrowserWindow({
       width,
       height,
-      title: `ProfileForge — ${args.profileName}`,
+      title: `Goblin — ${args.profileName}`,
       icon: path.join(__dirname, '..', '..', 'icon.png'),
       webPreferences: {
+        preload: path.join(__dirname, 'browserShellPreload.js'),
         webviewTag: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -96,6 +109,68 @@ export function runProfileWindowProcess(): void {
       },
     });
     win.maximize();
+
+    // Downloads are saved under this profile's own storage directory and
+    // driven entirely by this profile's own session (`ses`) — since every
+    // profile is a fully separate OS process with its own userDataDir and
+    // session partition (see the module doc comment above), there is no
+    // code path by which one profile's download could land in, or even see,
+    // another profile's directory.
+    const downloadsDir = path.join(args.userDataDir, 'downloads');
+    const downloads = new Map<string, DownloadItem>();
+    let nextDownloadId = 1;
+
+    function uniqueSavePath(dir: string, filename: string): string {
+      fs.mkdirSync(dir, { recursive: true });
+      const ext = path.extname(filename);
+      const base = path.basename(filename, ext);
+      let candidate = path.join(dir, filename);
+      let n = 1;
+      while (fs.existsSync(candidate)) {
+        candidate = path.join(dir, `${base} (${n})${ext}`);
+        n++;
+      }
+      return candidate;
+    }
+
+    ses.on('will-download', (_event, item) => {
+      const id = String(nextDownloadId++);
+      const savePath = uniqueSavePath(downloadsDir, item.getFilename());
+      item.setSavePath(savePath);
+      downloads.set(id, item);
+
+      const send = (state: DownloadEvent['state']): void => {
+        win.webContents.send('pf:download-event', {
+          id,
+          filename: path.basename(savePath),
+          savePath,
+          state,
+          receivedBytes: item.getReceivedBytes(),
+          totalBytes: item.getTotalBytes(),
+        } satisfies DownloadEvent);
+      };
+      send('started');
+
+      item.on('updated', (_e, state) => {
+        send(state === 'interrupted' ? 'failed' : 'progressing');
+      });
+      item.once('done', (_e, state) => {
+        send(state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'failed');
+      });
+    });
+
+    ipcMain.on('pf:download-open', (_e, id: string) => {
+      const item = downloads.get(id);
+      if (item) void shell.openPath(item.getSavePath());
+    });
+    ipcMain.on('pf:download-show', (_e, id: string) => {
+      const item = downloads.get(id);
+      if (item) shell.showItemInFolder(item.getSavePath());
+    });
+    ipcMain.on('pf:download-cancel', (_e, id: string) => {
+      const item = downloads.get(id);
+      if (item && item.getState() === 'progressing') item.cancel();
+    });
 
     // Forced here (main process) rather than left to the <webview> tag's own
     // `preload` attribute, so a compromised/malicious page loaded inside the

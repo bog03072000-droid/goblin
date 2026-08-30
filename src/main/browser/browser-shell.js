@@ -33,6 +33,7 @@ function createTab(options) {
 
   const tabEl = document.createElement('div');
   tabEl.className = 'tab';
+  tabEl.dataset.tabId = String(id);
   tabEl.innerHTML = '<span class="tab-title">New Tab</span><span class="tab-close">&times;</span>';
   tabbarEl.insertBefore(tabEl, newTabBtn);
 
@@ -136,6 +137,99 @@ document.getElementById('devtools').addEventListener('click', () => {
   if (tab.webview.isDevToolsOpened()) tab.webview.closeDevTools();
   else tab.webview.openDevTools();
 });
+
+// --- Downloads --------------------------------------------------------
+// Each event carries the full current state of one download (main process
+// is the source of truth — profileWindowEntry.ts owns the DownloadItem and
+// its own profile's session), so the panel just re-renders from the latest
+// snapshot per id rather than tracking deltas itself.
+const downloadsById = new Map();
+const downloadsToggle = document.getElementById('downloads-toggle');
+const downloadsBadge = document.getElementById('downloads-badge');
+const downloadsPanel = document.getElementById('downloads-panel');
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function formatBytes(n) {
+  if (!n || n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function renderDownloads() {
+  const entries = Array.from(downloadsById.values()).reverse();
+  const activeCount = entries.filter((d) => d.state === 'started' || d.state === 'progressing').length;
+  downloadsBadge.hidden = activeCount === 0;
+  downloadsBadge.textContent = String(activeCount);
+
+  if (entries.length === 0) {
+    downloadsPanel.innerHTML = '<div class="downloads-empty">No downloads yet</div>';
+    return;
+  }
+
+  downloadsPanel.innerHTML = '';
+  for (const d of entries) {
+    const pct = d.totalBytes > 0 ? Math.min(100, Math.round((d.receivedBytes / d.totalBytes) * 100)) : 0;
+    const item = document.createElement('div');
+    item.className = 'download-item';
+    const active = d.state === 'started' || d.state === 'progressing';
+    const safeName = escapeHtml(d.filename);
+    item.innerHTML = `
+      <div class="download-name" title="${safeName}">${safeName}</div>
+      ${active ? `<div class="download-progress"><div class="download-progress-fill" style="width:${pct}%"></div></div>` : ''}
+      <div class="download-row">
+        <span class="download-status">${d.state}${active && d.totalBytes > 0 ? ` — ${formatBytes(d.receivedBytes)}/${formatBytes(d.totalBytes)}` : ''}</span>
+        <span class="download-actions"></span>
+      </div>
+    `;
+    const actions = item.querySelector('.download-actions');
+    if (active) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-sm';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => window.pfDownloads.cancel(d.id));
+      actions.appendChild(cancelBtn);
+    } else if (d.state === 'completed') {
+      const openBtn = document.createElement('button');
+      openBtn.className = 'btn btn-sm';
+      openBtn.textContent = 'Open';
+      openBtn.addEventListener('click', () => window.pfDownloads.open(d.id));
+      const showBtn = document.createElement('button');
+      showBtn.className = 'btn btn-sm';
+      showBtn.textContent = 'Show in folder';
+      showBtn.addEventListener('click', () => window.pfDownloads.showInFolder(d.id));
+      actions.appendChild(openBtn);
+      actions.appendChild(showBtn);
+    }
+    downloadsPanel.appendChild(item);
+  }
+}
+
+window.pfDownloads.onEvent((event) => {
+  downloadsById.set(event.id, event);
+  renderDownloads();
+});
+
+downloadsToggle.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  downloadsPanel.hidden = !downloadsPanel.hidden;
+});
+document.addEventListener('click', (ev) => {
+  if (!downloadsPanel.hidden && !downloadsPanel.contains(ev.target) && ev.target !== downloadsToggle) {
+    downloadsPanel.hidden = true;
+  }
+});
+renderDownloads();
 
 // First tab: left at about:blank (see attribute above) — the main
 // process applies CDP Emulation overrides (platform, languages, hardware

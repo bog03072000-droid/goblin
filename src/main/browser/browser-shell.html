@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com" />
-<title>ProfileForge Browser</title>
+<title>Goblin Browser</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
   :root {
@@ -108,6 +108,30 @@
 
   #label { color: var(--ash-dim); font-size: 11px; align-self: center; padding-left: 8px; white-space: nowrap; }
 
+  .downloads-wrap { position: relative; flex: 0 0 auto; }
+  .downloads-badge {
+    position: absolute; top: 1px; right: 1px; background: var(--lime); color: var(--ink);
+    font-size: 9px; font-weight: 700; border-radius: 999px; min-width: 14px; height: 14px;
+    line-height: 14px; text-align: center; padding: 0 2px;
+  }
+  .downloads-panel {
+    position: absolute; top: 36px; right: 0; width: 320px; max-height: 380px; overflow: auto;
+    background: var(--char-raised); border: 1px solid var(--stroke); border-radius: 12px;
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6); z-index: 50; padding: 8px;
+  }
+  .download-item { padding: 8px; border-radius: 8px; margin-bottom: 6px; background: var(--char); }
+  .download-item:last-child { margin-bottom: 0; }
+  .download-name {
+    font-size: 12px; color: var(--paper); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; margin-bottom: 4px;
+  }
+  .download-progress { height: 4px; border-radius: 999px; background: var(--stroke); overflow: hidden; margin-bottom: 6px; }
+  .download-progress-fill { height: 100%; background: var(--lime); transition: width var(--ease); }
+  .download-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .download-status { font-size: 10px; color: var(--ash-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+  .download-actions { display: flex; gap: 6px; }
+  .downloads-empty { font-size: 12px; color: var(--ash-dim); padding: 12px; text-align: center; }
+
   #webviews { position: relative; flex: 1 1 auto; min-height: 0; }
   /* Every tab's <webview> stays laid out at full size at all times — only
      z-index/visibility switch between tabs. Toggling display:none/block
@@ -132,6 +156,10 @@
     <button id="duplicate" class="btn">Duplicate Tab</button>
     <button id="devtools" class="btn">DevTools</button>
     <button id="diagnostics" class="btn">Diagnostics</button>
+    <div class="downloads-wrap">
+      <button id="downloads-toggle" class="icon-btn" title="Downloads">&#8681;<span id="downloads-badge" class="downloads-badge" hidden>0</span></button>
+      <div id="downloads-panel" class="downloads-panel" hidden></div>
+    </div>
     <span id="label"></span>
   </div>
   <div id="webviews"></div>
