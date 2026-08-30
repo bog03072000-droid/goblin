@@ -7,6 +7,7 @@ import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
 import type { TemplateRepository } from '../database/templateRepository';
 import type { SettingsRepository } from '../database/settingsRepository';
+import type { GroupRepository } from '../database/groupRepository';
 import type { ImportExportService } from '../profiles/importExport';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
@@ -21,6 +22,7 @@ export interface IpcDependencies {
   templates: TemplateRepository;
   importExport: ImportExportService;
   settings: SettingsRepository;
+  groups: GroupRepository;
 }
 
 /** Registers every IPC handler with Zod validation on the incoming payload —
@@ -95,6 +97,12 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:bulkClone', (p) => deps.profileManager.bulkClone(p.ids));
   handle('profiles:bulkAssignProxy', (p) => deps.profileManager.bulkAssignProxy(p.ids, p.proxyId));
   handle('profiles:bulkAddTags', (p) => deps.profileManager.bulkAddTags(p.ids, p.tags));
+  handle('profiles:bulkAssignGroup', (p) => deps.profileManager.bulkAssignGroup(p.ids, p.groupId));
+
+  handle('groups:list', () => deps.groups.list());
+  handle('groups:create', (p) => deps.groups.create(p.name));
+  handle('groups:rename', (p) => deps.groups.rename(p.id, p.name));
+  handle('groups:delete', (p) => deps.groups.delete(p.id));
 
   handle('settings:get', () => deps.settings.getAll());
   handle('settings:update', (p) => deps.settings.update(p));

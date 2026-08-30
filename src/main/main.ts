@@ -7,6 +7,7 @@ import { ProxyRepository } from './database/proxyRepository';
 import { ActivityLogRepository } from './database/activityLogRepository';
 import { TemplateRepository } from './database/templateRepository';
 import { SettingsRepository } from './database/settingsRepository';
+import { GroupRepository } from './database/groupRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { registerIpc } from './ipc/registerIpc';
@@ -38,6 +39,15 @@ function runManagerProcess(): void {
     app.disableHardwareAcceleration();
   }
 
+  // Testing-only mechanism (see docs/FINGERPRINT_AUDIT.md for the established
+  // PF_E2E_* convention): forces a specific UI language for a fresh test
+  // profile so English-text-based E2E selectors keep working regardless of
+  // the app's real default locale (Ukrainian). Never set in a normal launch.
+  const forcedLocale = process.env['PF_E2E_LOCALE'];
+  if (forcedLocale === 'uk' || forcedLocale === 'en') {
+    settings.update({ language: forcedLocale });
+  }
+
   let mainWindow: BrowserWindow | null = null;
 
   app.whenReady().then(() => {
@@ -49,8 +59,9 @@ function runManagerProcess(): void {
     templates.seedBuiltins();
     const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs);
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
+    const groups = new GroupRepository(db);
 
-    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport, settings });
+    registerIpc({ profileManager, profiles, fingerprints, proxies, logs, templates, importExport, settings, groups });
 
     mainWindow = new BrowserWindow({
       width: 1400,

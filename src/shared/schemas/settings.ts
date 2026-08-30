@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
 export const StartupBehaviorSchema = z.enum(['blank', 'lastSession', 'showProfileList']);
+export const LanguageSchema = z.enum(['uk', 'en']);
 
 export const SettingsSchema = z.object({
+  language: LanguageSchema.default('uk'),
   hardwareAcceleration: z.boolean().default(true),
   autoCacheCleanup: z.boolean().default(false),
   cacheLimitMb: z.number().int().min(50).max(20000).default(2000),

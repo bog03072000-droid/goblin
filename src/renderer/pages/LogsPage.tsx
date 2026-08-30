@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ActivityLogEntry } from '@shared/schemas/activityLog';
 import { callApi } from '../services/api';
+import { useTranslation } from '../i18n';
 
 export function LogsPage(): JSX.Element {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
 
   useEffect(() => {
@@ -14,10 +16,10 @@ export function LogsPage(): JSX.Element {
       <table>
         <thead>
           <tr>
-            <th>Time</th>
-            <th>Event</th>
-            <th>Profile</th>
-            <th>Message</th>
+            <th>{t('logs.table.time')}</th>
+            <th>{t('logs.table.event')}</th>
+            <th>{t('logs.table.profile')}</th>
+            <th>{t('logs.table.message')}</th>
           </tr>
         </thead>
         <tbody>

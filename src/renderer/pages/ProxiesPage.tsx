@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
+import { useTranslation } from '../i18n';
 
 export function ProxiesPage(): JSX.Element {
+  const { t } = useTranslation();
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, ProxyTestResult>>({});
@@ -56,18 +58,29 @@ export function ProxiesPage(): JSX.Element {
   return (
     <>
       <div className="toolbar">
-        <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input placeholder={t('proxy.namePlaceholder')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <select value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value as ProxyProtocol })}>
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
           <option value="socks5">SOCKS5</option>
         </select>
-        <input placeholder="Host" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
-        <input placeholder="Port" type="number" value={form.port} onChange={(e) => setForm({ ...form, port: Number(e.target.value) })} style={{ width: 80 }} />
-        <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-        <input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <input placeholder={t('proxy.hostPlaceholder')} value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+        <input
+          placeholder={t('proxy.portPlaceholder')}
+          type="number"
+          value={form.port}
+          onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
+          style={{ width: 80 }}
+        />
+        <input placeholder={t('proxy.usernamePlaceholder')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        <input
+          placeholder={t('proxy.passwordPlaceholder')}
+          type="password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+        />
         <button className="primary" onClick={() => void createProxy()}>
-          Add Proxy
+          {t('proxy.create')}
         </button>
       </div>
       <div className="content">
@@ -75,13 +88,13 @@ export function ProxiesPage(): JSX.Element {
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Protocol</th>
-              <th>Host</th>
-              <th>Port</th>
-              <th>Username</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>{t('proxy.table.name')}</th>
+              <th>{t('proxy.table.protocol')}</th>
+              <th>{t('proxy.table.host')}</th>
+              <th>{t('proxy.table.port')}</th>
+              <th>{t('proxy.table.username')}</th>
+              <th>{t('proxy.table.status')}</th>
+              <th>{t('proxy.table.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -95,13 +108,13 @@ export function ProxiesPage(): JSX.Element {
                 <td>
                   {results[p.id]
                     ? results[p.id]!.success
-                      ? `OK (${results[p.id]!.latencyMs}ms)`
-                      : `Failed: ${results[p.id]!.error}`
+                      ? t('proxy.status.ok', { ms: results[p.id]!.latencyMs ?? 0 })
+                      : t('proxy.status.failed', { error: results[p.id]!.error ?? '' })
                     : '—'}
                 </td>
                 <td>
-                  <button onClick={() => void test(p.id)}>Test</button>
-                  <button onClick={() => void remove(p.id)}>Delete</button>
+                  <button onClick={() => void test(p.id)}>{t('proxy.test')}</button>
+                  <button onClick={() => void remove(p.id)}>{t('proxy.delete')}</button>
                 </td>
               </tr>
             ))}

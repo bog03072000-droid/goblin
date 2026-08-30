@@ -9,6 +9,7 @@ interface ProfileRow {
   profile_path: string;
   fingerprint_id: string;
   proxy_id: string | null;
+  group_id: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -55,6 +56,7 @@ export class ProfileRepository {
       profilePath: row.profile_path,
       fingerprintId: row.fingerprint_id,
       proxyId: row.proxy_id,
+      groupId: row.group_id,
       status: row.status as ProfileStatus,
       tags: this.getTags(row.id),
       createdAt: row.created_at,
@@ -70,6 +72,7 @@ export class ProfileRepository {
     profilePath: string;
     fingerprintId: string;
     proxyId: string | null;
+    groupId?: string | null;
     tags?: string[];
   }): Profile {
     const id = randomUUID();
@@ -77,8 +80,8 @@ export class ProfileRepository {
     const create = this.db.transaction(() => {
       this.db
         .prepare(
-          `INSERT INTO profiles (id, name, description, profile_path, fingerprint_id, proxy_id, status, created_at, updated_at, last_started_at, last_stopped_at)
-           VALUES (@id, @name, @description, @profilePath, @fingerprintId, @proxyId, 'STOPPED', @now, @now, NULL, NULL)`,
+          `INSERT INTO profiles (id, name, description, profile_path, fingerprint_id, proxy_id, group_id, status, created_at, updated_at, last_started_at, last_stopped_at)
+           VALUES (@id, @name, @description, @profilePath, @fingerprintId, @proxyId, @groupId, 'STOPPED', @now, @now, NULL, NULL)`,
         )
         .run({
           id,
@@ -87,6 +90,7 @@ export class ProfileRepository {
           profilePath: params.profilePath,
           fingerprintId: params.fingerprintId,
           proxyId: params.proxyId,
+          groupId: params.groupId ?? null,
           now,
         });
       if (params.tags?.length) this.setTags(id, params.tags);
@@ -103,54 +107,60 @@ export class ProfileRepository {
   /** Includes OS/browser version via a single SQL join — not a per-profile
    * fingerprint lookup — so this stays fast at 200 stored profiles (see
    * tests/performance/profileScale.test.ts). */
-  list(filter?: { search?: string; tag?: string }): ProfileListItem[] {
-    let rows: ProfileListRow[];
+  list(filter?: { search?: string; tag?: string; groupId?: string }): ProfileListItem[] {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    let joins = 'JOIN fingerprints f ON f.id = p.fingerprint_id';
+
     if (filter?.tag) {
-      rows = this.db
-        .prepare(
-          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
-           JOIN fingerprints f ON f.id = p.fingerprint_id
-           JOIN profile_tags pt ON pt.profile_id = p.id
-           JOIN tags t ON t.id = pt.tag_id
-           WHERE t.name = ? ORDER BY p.updated_at DESC`,
-        )
-        .all(filter.tag) as ProfileListRow[];
-    } else if (filter?.search) {
-      rows = this.db
-        .prepare(
-          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
-           JOIN fingerprints f ON f.id = p.fingerprint_id
-           WHERE p.name LIKE ? ORDER BY p.updated_at DESC`,
-        )
-        .all(`%${filter.search}%`) as ProfileListRow[];
-    } else {
-      rows = this.db
-        .prepare(
-          `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
-           JOIN fingerprints f ON f.id = p.fingerprint_id
-           ORDER BY p.updated_at DESC`,
-        )
-        .all() as ProfileListRow[];
+      joins += ' JOIN profile_tags pt ON pt.profile_id = p.id JOIN tags t ON t.id = pt.tag_id';
+      conditions.push('t.name = ?');
+      params.push(filter.tag);
     }
+    if (filter?.search) {
+      conditions.push('p.name LIKE ?');
+      params.push(`%${filter.search}%`);
+    }
+    if (filter?.groupId) {
+      conditions.push('p.group_id = ?');
+      params.push(filter.groupId);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db
+      .prepare(
+        `SELECT p.*, f.os AS os, f.browser_version AS browser_version FROM profiles p
+         ${joins}
+         ${where}
+         ORDER BY p.updated_at DESC`,
+      )
+      .all(...params) as ProfileListRow[];
     return rows.map((r) => ({ ...this.rowToProfile(r), os: r.os, browserVersion: r.browser_version }));
   }
 
   update(
     id: string,
-    patch: Partial<{ name: string; description: string; proxyId: string | null; tags: string[] }>,
+    patch: Partial<{
+      name: string;
+      description: string;
+      proxyId: string | null;
+      groupId: string | null;
+      tags: string[];
+    }>,
   ): Profile {
     const existing = this.getById(id);
     if (!existing) throw new Error(`Profile not found: ${id}`);
     const update = this.db.transaction(() => {
       this.db
         .prepare(
-          `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, updated_at=@updatedAt WHERE id=@id`,
+          `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, group_id=@groupId, updated_at=@updatedAt WHERE id=@id`,
         )
         .run({
           id,
           name: patch.name ?? existing.name,
           description: patch.description ?? existing.description,
           proxyId: patch.proxyId !== undefined ? patch.proxyId : existing.proxyId,
+          groupId: patch.groupId !== undefined ? patch.groupId : existing.groupId,
           updatedAt: new Date().toISOString(),
         });
       if (patch.tags) this.setTags(id, patch.tags);

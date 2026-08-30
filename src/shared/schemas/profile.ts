@@ -25,6 +25,7 @@ export const ProfileSchema = z.object({
   profilePath: z.string().min(1),
   fingerprintId: z.string().uuid(),
   proxyId: z.string().uuid().nullable(),
+  groupId: z.string().uuid().nullable(),
   status: ProfileStatusSchema,
   tags: z.array(z.string().min(1).max(60)).default([]),
   createdAt: z.string(),
@@ -46,6 +47,7 @@ export const ProfileCreateInputSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
   proxyId: z.string().uuid().nullable().optional(),
+  groupId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().min(1).max(60)).optional(),
   templateId: z.string().optional(),
 });
@@ -56,6 +58,7 @@ export const ProfileUpdateInputSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
   proxyId: z.string().uuid().nullable().optional(),
+  groupId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().min(1).max(60)).optional(),
 });
 export type ProfileUpdateInput = z.infer<typeof ProfileUpdateInputSchema>;

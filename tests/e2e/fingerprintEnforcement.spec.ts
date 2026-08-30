@@ -26,7 +26,7 @@ test.beforeAll(async () => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-fp-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
-    env: { ...process.env, PF_E2E_AUTO_DIAGNOSTICS: '1' },
+    env: { ...process.env, PF_E2E_AUTO_DIAGNOSTICS: '1', PF_E2E_LOCALE: 'en' },
   });
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
@@ -56,7 +56,7 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   await expect(row).toBeVisible({ timeout: 15_000 });
 
   await row.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(row).toContainText('RUNNING', { timeout: 30_000 });
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
   const snapshotPath = () => {
     const profileDirs = fs.readdirSync(path.join(userDataDir, 'profiles'));
@@ -90,7 +90,7 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(Number(snapshot.observed['hardwareConcurrency'])).toBe(Number(snapshot.configured['hardwareConcurrency']));
 
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
-  await expect(row).toContainText('STOPPED', { timeout: 30_000 });
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
 test('honestly unenforced properties are reported NOT_IMPLEMENTED, never a false PASS', async () => {

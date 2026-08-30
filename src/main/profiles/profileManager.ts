@@ -47,6 +47,7 @@ export class ProfileManager {
       profilePath: '__pending__',
       fingerprintId,
       proxyId: input.proxyId ?? null,
+      groupId: input.groupId ?? null,
       tags: input.tags,
     });
     const dir = createProfileStorage(this.profilesRoot, tempProfile.id);
@@ -168,7 +169,13 @@ export class ProfileManager {
     });
 
     const created = this.create(
-      { name: newName, description: source.description, proxyId: source.proxyId, tags: source.tags },
+      {
+        name: newName,
+        description: source.description,
+        proxyId: source.proxyId,
+        groupId: source.groupId,
+        tags: source.tags,
+      },
       clonedFingerprint.id,
     );
 
@@ -233,6 +240,13 @@ export class ProfileManager {
     return this.bulkRun(ids, (id) => {
       this.mustGet(id);
       this.profiles.update(id, { proxyId });
+    });
+  }
+
+  bulkAssignGroup(ids: string[], groupId: string | null): BulkResult {
+    return this.bulkRun(ids, (id) => {
+      this.mustGet(id);
+      this.profiles.update(id, { groupId });
     });
   }
 

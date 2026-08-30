@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Profile, ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import type { ProxyRecord } from '@shared/schemas/proxy';
+import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
+import { useTranslation, type TranslationKey } from '../i18n';
 
 type StatusFilter = 'ALL' | ProfileStatus;
 type SortKey = 'name' | 'status' | 'lastUsed';
@@ -13,12 +15,25 @@ interface BulkResult {
   failed: Array<{ id: string; message: string }>;
 }
 
+const STATUS_LABEL_KEYS: Record<ProfileStatus, TranslationKey> = {
+  RUNNING: 'profiles.status.running',
+  STOPPED: 'profiles.status.stopped',
+  STARTING: 'profiles.status.starting',
+  STOPPING: 'profiles.status.stopping',
+  CRASHED: 'profiles.status.crashed',
+  ERROR: 'profiles.status.error',
+  LOCKED: 'profiles.status.locked',
+};
+
 export function ProfilesPage(): JSX.Element {
+  const { t } = useTranslation();
   const [profiles, setProfiles] = useState<ProfileListItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [newName, setNewName] = useState('');
@@ -35,6 +50,7 @@ export function ProfilesPage(): JSX.Element {
       const list = await callApi<'profiles:list', ProfileListItem[]>('profiles:list', {
         search: search || undefined,
         tag: tagFilter || undefined,
+        groupId: groupFilter || undefined,
       });
       setProfiles(list);
       setError(null);
@@ -43,12 +59,18 @@ export function ProfilesPage(): JSX.Element {
     }
   }
 
+  async function refreshGroups(): Promise<void> {
+    const list = await callApi<'groups:list', Group[]>('groups:list', {});
+    setGroups(list);
+  }
+
   useEffect(() => {
     void refresh();
     void callApi<'templates:list', Template[]>('templates:list', {}).then(setTemplates);
     void callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}).then(setProxies);
+    void refreshGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tagFilter]);
+  }, [search, tagFilter, groupFilter]);
 
   // Start/Stop resolve to a terminal RUNNING/STOPPED/CRASHED status asynchronously
   // (the browser process's own 'exit' event), not synchronously when the IPC call
@@ -136,7 +158,7 @@ export function ProfilesPage(): JSX.Element {
   async function exportConfig(id: string): Promise<void> {
     try {
       const savedPath = await callApi<'profiles:exportConfig', string | null>('profiles:exportConfig', { id });
-      if (savedPath) setInfo(`Exported configuration to ${savedPath}`);
+      if (savedPath) setInfo(t('profiles.msg.exportedConfig', { path: savedPath }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -145,7 +167,7 @@ export function ProfilesPage(): JSX.Element {
   async function backupOne(id: string): Promise<void> {
     try {
       const savedPath = await callApi<'profiles:backup', string>('profiles:backup', { id });
-      setInfo(`Backed up to ${savedPath}`);
+      setInfo(t('profiles.msg.backedUp', { path: savedPath }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -155,7 +177,7 @@ export function ProfilesPage(): JSX.Element {
     try {
       const restored = await callApi<'profiles:restore', Profile | null>('profiles:restore', {});
       if (restored) {
-        setInfo(`Restored "${restored.name}"`);
+        setInfo(t('profiles.msg.restored', { name: restored.name }));
         await refresh();
       }
     } catch (err) {
@@ -171,8 +193,8 @@ export function ProfilesPage(): JSX.Element {
       );
       if (result.created.length > 0) {
         setInfo(
-          `Imported ${result.created.length} profile(s)` +
-            (result.errors.length > 0 ? `; ${result.errors.length} failed` : ''),
+          t('profiles.msg.imported', { count: result.created.length }) +
+            (result.errors.length > 0 ? t('profiles.msg.importedWithFailures', { count: result.errors.length }) : ''),
         );
         await refresh();
       } else if (result.errors.length > 0) {
@@ -188,7 +210,7 @@ export function ProfilesPage(): JSX.Element {
       const dir = await callApi<'profiles:exportSelected', string | null>('profiles:exportSelected', {
         ids: Array.from(selected),
       });
-      if (dir) setInfo(`Exported ${selected.size} profile(s) to ${dir}`);
+      if (dir) setInfo(t('profiles.msg.exportedSelected', { count: selected.size, path: dir }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -197,7 +219,7 @@ export function ProfilesPage(): JSX.Element {
   async function exportAll(): Promise<void> {
     try {
       const dir = await callApi<'profiles:exportAll', string | null>('profiles:exportAll', {});
-      if (dir) setInfo(`Exported all profiles to ${dir}`);
+      if (dir) setInfo(t('profiles.msg.exportedAll', { path: dir }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -210,7 +232,7 @@ export function ProfilesPage(): JSX.Element {
     setBulkBusy(true);
     try {
       const result = await callApi<typeof action, BulkResult>(action, { ids: Array.from(selected) });
-      setInfo(`${result.succeeded.length} succeeded, ${result.failed.length} failed`);
+      setInfo(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }));
       setSelected(new Set());
       await refresh();
     } catch (err) {
@@ -228,8 +250,26 @@ export function ProfilesPage(): JSX.Element {
         ids: Array.from(selected),
         proxyId: proxyId || null,
       });
-      setInfo(`Proxy assigned to ${result.succeeded.length} profile(s)`);
+      setInfo(t('profiles.msg.proxyAssigned', { count: result.succeeded.length }));
       await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function bulkAssignGroup(groupIdValue: string): Promise<void> {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const result = await callApi<'profiles:bulkAssignGroup', BulkResult>('profiles:bulkAssignGroup', {
+        ids: Array.from(selected),
+        groupId: groupIdValue || null,
+      });
+      setInfo(t('profiles.msg.groupAssigned', { count: result.succeeded.length }));
+      await refresh();
+      await refreshGroups();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -245,7 +285,7 @@ export function ProfilesPage(): JSX.Element {
         ids: Array.from(selected),
         tags: [tag.trim()],
       });
-      setInfo(`Tag added to ${result.succeeded.length} profile(s)`);
+      setInfo(t('profiles.msg.tagAdded', { count: result.succeeded.length }));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -254,66 +294,125 @@ export function ProfilesPage(): JSX.Element {
     }
   }
 
+  async function createGroup(): Promise<void> {
+    const name = window.prompt(t('profiles.group.create'));
+    if (!name || !name.trim()) return;
+    try {
+      await callApi('groups:create', { name: name.trim() });
+      await refreshGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function renameGroup(group: Group): Promise<void> {
+    const name = window.prompt(t('profiles.group.rename', { name: group.name }), group.name);
+    if (!name || !name.trim() || name.trim() === group.name) return;
+    try {
+      await callApi('groups:rename', { id: group.id, name: name.trim() });
+      await refreshGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function deleteGroup(group: Group): Promise<void> {
+    if (!window.confirm(t('profiles.group.confirmDelete', { name: group.name }))) return;
+    try {
+      await callApi('groups:delete', { id: group.id });
+      if (groupFilter === group.id) setGroupFilter('');
+      await refreshGroups();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   return (
     <>
       <div className="toolbar">
-        <input placeholder="Search profiles..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input placeholder={t('profiles.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}>
-          <option value="ALL">All statuses</option>
-          <option value="RUNNING">Running</option>
-          <option value="STOPPED">Stopped</option>
-          <option value="CRASHED">Crashed</option>
-          <option value="ERROR">Error</option>
-          <option value="LOCKED">Locked</option>
-        </select>
-        <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
-          <option value="">All tags</option>
-          {allTags.map((t) => (
-            <option key={t} value={t}>
-              {t}
+          <option value="ALL">{t('profiles.status.all')}</option>
+          {(Object.keys(STATUS_LABEL_KEYS) as ProfileStatus[]).map((s) => (
+            <option key={s} value={s}>
+              {t(STATUS_LABEL_KEYS[s])}
             </option>
           ))}
         </select>
+        <select value={tagFilter} onChange={(e) => setTagFilter(e.target.value)}>
+          <option value="">{t('profiles.tag.all')}</option>
+          {allTags.map((tg) => (
+            <option key={tg} value={tg}>
+              {tg}
+            </option>
+          ))}
+        </select>
+        <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+          <option value="">{t('profiles.group.all')}</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name} ({g.profileCount})
+            </option>
+          ))}
+        </select>
+        <button onClick={() => void createGroup()}>+ {t('profiles.group.manage')}</button>
         <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
-          <option value="name">Sort: Name</option>
-          <option value="status">Sort: Status</option>
-          <option value="lastUsed">Sort: Last Used</option>
+          <option value="name">{t('profiles.sort.name')}</option>
+          <option value="status">{t('profiles.sort.status')}</option>
+          <option value="lastUsed">{t('profiles.sort.lastUsed')}</option>
         </select>
         <div style={{ flex: 1 }} />
         <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-          <option value="">Automatic (mixed)</option>
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
+          <option value="">{t('profiles.template.auto')}</option>
+          {templates.map((tmpl) => (
+            <option key={tmpl.id} value={tmpl.id}>
+              {tmpl.name}
             </option>
           ))}
         </select>
-        <input placeholder="New profile name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+        <input placeholder={t('profiles.newNamePlaceholder')} value={newName} onChange={(e) => setNewName(e.target.value)} />
         <button className="primary" onClick={() => void createProfile()}>
-          New Profile
+          {t('profiles.create')}
         </button>
-        <button onClick={() => void importProfiles()}>Import</button>
-        <button onClick={() => void restoreProfile()}>Restore</button>
-        <button onClick={() => void exportAll()}>Export All</button>
+        <button onClick={() => void importProfiles()}>{t('profiles.import')}</button>
+        <button onClick={() => void restoreProfile()}>{t('profiles.restore')}</button>
+        <button onClick={() => void exportAll()}>{t('profiles.exportAll')}</button>
       </div>
+
+      {groups.length > 0 && (
+        <div className="toolbar" style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+          {groups.map((g) => (
+            <span key={g.id} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginRight: 10 }}>
+              {g.name} ({g.profileCount})
+              <button style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => void renameGroup(g)}>
+                ✎
+              </button>
+              <button style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => void deleteGroup(g)}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {selected.size > 0 && (
         <div className="toolbar bulk-toolbar" style={{ background: 'var(--bg-hover)' }}>
-          <strong style={{ fontSize: 12 }}>{selected.size} selected</strong>
+          <strong style={{ fontSize: 12 }}>{t('profiles.selectedCount', { count: selected.size })}</strong>
           <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStart')}>
-            Start
+            {t('profiles.bulk.start')}
           </button>
           <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkStop')}>
-            Stop
+            {t('profiles.bulk.stop')}
           </button>
           <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkClone')}>
-            Clone
+            {t('profiles.bulk.clone')}
           </button>
           <button disabled={bulkBusy} onClick={() => void bulk('profiles:bulkDelete')}>
-            Delete
+            {t('profiles.bulk.delete')}
           </button>
           <button disabled={bulkBusy} onClick={() => void exportSelected()}>
-            Export Selected
+            {t('profiles.bulk.exportSelected')}
           </button>
           <select
             disabled={bulkBusy}
@@ -324,17 +423,35 @@ export function ProfilesPage(): JSX.Element {
             }}
           >
             <option value="" disabled>
-              Assign proxy…
+              {t('profiles.bulk.assignProxy')}
             </option>
-            <option value="">None (remove proxy)</option>
+            <option value="">{t('profiles.bulk.removeProxy')}</option>
             {proxies.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
           </select>
+          <select
+            disabled={bulkBusy}
+            defaultValue=""
+            onChange={(e) => {
+              void bulkAssignGroup(e.target.value);
+              e.target.value = '';
+            }}
+          >
+            <option value="" disabled>
+              {t('profiles.group.assign')}
+            </option>
+            <option value="">{t('profiles.group.none')}</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
           <input
-            placeholder="Add tag + Enter"
+            placeholder={t('profiles.bulk.addTagPlaceholder')}
             style={{ width: 140 }}
             disabled={bulkBusy}
             onKeyDown={(e) => {
@@ -345,7 +462,7 @@ export function ProfilesPage(): JSX.Element {
             }}
           />
           <button disabled={bulkBusy} onClick={() => setSelected(new Set())}>
-            Clear selection
+            {t('profiles.bulk.clearSelection')}
           </button>
         </div>
       )}
@@ -363,34 +480,36 @@ export function ProfilesPage(): JSX.Element {
               <th style={{ width: 24 }}>
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAll} />
               </th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>OS</th>
-              <th>Browser</th>
-              <th>Proxy</th>
-              <th>Tags</th>
-              <th>Last Used</th>
-              <th>Actions</th>
+              <th>{t('profiles.table.name')}</th>
+              <th>{t('profiles.table.status')}</th>
+              <th>{t('profiles.table.os')}</th>
+              <th>{t('profiles.table.browser')}</th>
+              <th>{t('profiles.table.proxy')}</th>
+              <th>{t('profiles.table.group')}</th>
+              <th>{t('profiles.table.tags')}</th>
+              <th>{t('profiles.table.lastUsed')}</th>
+              <th>{t('profiles.table.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {visibleProfiles.map((p) => (
-              <tr key={p.id}>
+              <tr key={p.id} data-status={p.status}>
                 <td>
                   <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} />
                 </td>
                 <td>{p.name}</td>
                 <td>
                   <span className={`status-dot status-${p.status}`} />
-                  {p.status}
+                  {t(STATUS_LABEL_KEYS[p.status])}
                 </td>
                 <td style={{ textTransform: 'capitalize' }}>{p.os}</td>
                 <td>Chrome {p.browserVersion.split('.')[0]}</td>
                 <td>{proxies.find((pr) => pr.id === p.proxyId)?.name ?? '—'}</td>
+                <td>{groups.find((g) => g.id === p.groupId)?.name ?? '—'}</td>
                 <td>
-                  {p.tags.map((t) => (
-                    <span className="tag" key={t}>
-                      {t}
+                  {p.tags.map((tg) => (
+                    <span className="tag" key={tg}>
+                      {tg}
                     </span>
                   ))}
                 </td>
@@ -398,38 +517,38 @@ export function ProfilesPage(): JSX.Element {
                 <td>
                   {p.status === 'RUNNING' ? (
                     <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:stop')}>
-                      Stop
+                      {t('profiles.action.stop')}
                     </button>
                   ) : (
                     <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:start')}>
-                      Start
+                      {t('profiles.action.start')}
                     </button>
                   )}
                   <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:restart')}>
-                    Restart
+                    {t('profiles.action.restart')}
                   </button>
                   <button disabled={busyId === p.id} onClick={() => setEditingId(p.id)}>
-                    Edit
+                    {t('profiles.action.edit')}
                   </button>
                   <button disabled={busyId === p.id} onClick={() => void cloneOne(p)}>
-                    Clone
+                    {t('profiles.action.clone')}
                   </button>
                   <button disabled={busyId === p.id} onClick={() => void exportConfig(p.id)}>
-                    Export
+                    {t('profiles.action.export')}
                   </button>
                   <button disabled={busyId === p.id} onClick={() => void backupOne(p.id)}>
-                    Backup
+                    {t('profiles.action.backup')}
                   </button>
                   <button disabled={busyId === p.id} onClick={() => void runAction(p.id, 'profiles:delete')}>
-                    Delete
+                    {t('profiles.action.delete')}
                   </button>
                 </td>
               </tr>
             ))}
             {visibleProfiles.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ color: 'var(--text-dim)' }}>
-                  {profiles.length === 0 ? 'No profiles yet. Create one above.' : 'No profiles match the current filters.'}
+                <td colSpan={10} style={{ color: 'var(--text-dim)' }}>
+                  {profiles.length === 0 ? t('profiles.empty.none') : t('profiles.empty.noMatch')}
                 </td>
               </tr>
             )}

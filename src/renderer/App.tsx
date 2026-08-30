@@ -1,28 +1,55 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ProxiesPage } from './pages/ProxiesPage';
 import { LogsPage } from './pages/LogsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { I18nProvider, useTranslation, DEFAULT_LOCALE, type Locale } from './i18n';
+import { callApi } from './services/api';
+import type { Settings } from '@shared/schemas/settings';
 
 type Page = 'profiles' | 'proxies' | 'logs' | 'settings';
 
-export function App(): JSX.Element {
+/** Loads the persisted language before rendering the real app, so the UI
+ * never flashes in the wrong language and the choice survives a restart. */
+export function App(): JSX.Element | null {
+  const [locale, setLocale] = useState<Locale | null>(null);
+
+  useEffect(() => {
+    void callApi<'settings:get', Settings>('settings:get', {}).then((s) => setLocale(s.language));
+  }, []);
+
+  if (locale === null) return null;
+
+  const handleLocaleChange = (next: Locale): void => {
+    setLocale(next);
+    void callApi('settings:update', { language: next });
+  };
+
+  return (
+    <I18nProvider initialLocale={locale ?? DEFAULT_LOCALE} onLocaleChange={handleLocaleChange}>
+      <AppShell />
+    </I18nProvider>
+  );
+}
+
+function AppShell(): JSX.Element {
   const [page, setPage] = useState<Page>('profiles');
+  const { t } = useTranslation();
 
   return (
     <>
       <div className="sidebar">
         <div className={`sidebar-item ${page === 'profiles' ? 'active' : ''}`} onClick={() => setPage('profiles')}>
-          Profiles
+          {t('app.sidebar.profiles')}
         </div>
         <div className={`sidebar-item ${page === 'proxies' ? 'active' : ''}`} onClick={() => setPage('proxies')}>
-          Proxies
+          {t('app.sidebar.proxies')}
         </div>
         <div className={`sidebar-item ${page === 'logs' ? 'active' : ''}`} onClick={() => setPage('logs')}>
-          Logs
+          {t('app.sidebar.logs')}
         </div>
         <div className={`sidebar-item ${page === 'settings' ? 'active' : ''}`} onClick={() => setPage('settings')}>
-          Settings
+          {t('app.sidebar.settings')}
         </div>
       </div>
       <div className="main">

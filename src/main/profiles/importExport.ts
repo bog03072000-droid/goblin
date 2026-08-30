@@ -1,5 +1,7 @@
 import { app, dialog } from 'electron';
+import AdmZip from 'adm-zip';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
@@ -23,6 +25,9 @@ export interface ImportResult {
  * Export/import always goes through a native OS dialog for the destination —
  * the renderer never supplies a raw filesystem path here, only a profile id.
  * The user's own dialog selection is the trust boundary, same as any desktop app.
+ *
+ * Backups/full exports are real compressed .zip archives (via adm-zip, a pure
+ * JS zip implementation — no native rebuild step, unlike better-sqlite3).
  */
 export class ImportExportService {
   constructor(
@@ -33,7 +38,9 @@ export class ImportExportService {
     private readonly profileManager: ProfileManager,
   ) {}
 
-  private buildManifest(profile: Profile, mode: 'config' | 'full'): ProfileExport {
+  /** Not private: exercised directly by tests (see importFromPaths' comment
+   * for the same rationale — avoids mocking the native file dialog). */
+  buildManifest(profile: Profile, mode: 'config' | 'full'): ProfileExport {
     const fingerprint = this.fingerprints.getById(profile.fingerprintId);
     if (!fingerprint) throw new Error('Profile fingerprint missing');
     const proxy = profile.proxyId ? this.proxies.getById(profile.proxyId) : null;
@@ -67,7 +74,8 @@ export class ImportExportService {
         mediaDevicesMode: fingerprint.mediaDevicesMode,
         seed: fingerprint.seed,
       },
-      // Password is never included in an export, by design (see SECURITY.md).
+      // Password is never included in an export, by design (see SECURITY.md) —
+      // only non-secret proxy fields are serialized here.
       proxy: proxy
         ? { name: proxy.name, protocol: proxy.protocol, host: proxy.host, port: proxy.port, username: proxy.username }
         : null,
@@ -92,60 +100,77 @@ export class ImportExportService {
     return result.filePath;
   }
 
-  /** Writes manifest.json + a copy of browser-data into a user-chosen folder.
-   * Not a single portable archive file — see docs/DEVELOPMENT.md for why (no
-   * zip/tar dependency was added speculatively; documented rather than faked). */
+  /** Real compressed .zip containing manifest.json (config + fingerprint +
+   * proxy-without-password) plus the full browser-data directory tree. */
   async exportFull(profileId: string): Promise<string | null> {
     const profile = this.mustGet(profileId);
     const manifest = this.buildManifest(profile, 'full');
 
-    const result = await dialog.showOpenDialog({
-      title: 'Choose destination folder for full profile export',
-      properties: ['openDirectory', 'createDirectory'],
+    const result = await dialog.showSaveDialog({
+      title: 'Export Full Profile',
+      defaultPath: `${profile.name}.zip`,
+      filters: [{ name: 'ProfileForge Backup', extensions: ['zip'] }],
     });
-    if (result.canceled || result.filePaths.length === 0) return null;
+    if (result.canceled || !result.filePath) return null;
 
-    const destRoot = this.writeFullExport(profile, manifest, result.filePaths[0]!);
-    this.logs.record('PROFILE_EXPORTED', profileId, `Exported full profile "${profile.name}" to ${destRoot}`);
-    return destRoot;
+    this.writeFullExportZip(profile, manifest, result.filePath);
+    this.logs.record('PROFILE_EXPORTED', profileId, `Exported full profile "${profile.name}" to ${result.filePath}`);
+    return result.filePath;
   }
 
-  private writeFullExport(profile: Profile, manifest: ProfileExport, destParent: string): string {
-    const destRoot = path.join(destParent, `${profile.name}-export-${Date.now()}`);
-    fs.mkdirSync(destRoot, { recursive: true });
-    fs.writeFileSync(path.join(destRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
-    fs.cpSync(path.join(profile.profilePath, 'browser-data'), path.join(destRoot, 'browser-data'), {
-      recursive: true,
-    });
-    return destRoot;
+  writeFullExportZip(profile: Profile, manifest: ProfileExport, destZipPath: string): void {
+    fs.mkdirSync(path.dirname(destZipPath), { recursive: true });
+    const zip = new AdmZip();
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8'));
+    const browserDataDir = path.join(profile.profilePath, 'browser-data');
+    if (fs.existsSync(browserDataDir)) {
+      zip.addLocalFolder(browserDataDir, 'browser-data');
+    }
+    zip.writeZip(destZipPath);
   }
 
-  /** Bulk config export: one JSON file per selected profile into one chosen folder. */
+  /** Bulk config export (no browser-data — these are meant to be quick and
+   * small): one .zip containing one subfolder with manifest.json per profile. */
   async exportSelected(profileIds: string[]): Promise<string | null> {
     if (profileIds.length === 0) return null;
-    const result = await dialog.showOpenDialog({
-      title: `Choose destination folder for ${profileIds.length} profile(s)`,
-      properties: ['openDirectory', 'createDirectory'],
+    const result = await dialog.showSaveDialog({
+      title: `Export ${profileIds.length} profile(s)`,
+      defaultPath: `profileforge-export-${profileIds.length}-profiles.zip`,
+      filters: [{ name: 'ProfileForge Bulk Export', extensions: ['zip'] }],
     });
-    if (result.canceled || result.filePaths.length === 0) return null;
+    if (result.canceled || !result.filePath) return null;
 
-    const destDir = result.filePaths[0]!;
+    this.writeSelectedExportZip(profileIds, result.filePath);
+    return result.filePath;
+  }
+
+  /** Not private: exercised directly by tests (see importFromPaths' comment). */
+  writeSelectedExportZip(profileIds: string[], destZipPath: string): void {
+    const zip = new AdmZip();
+    const usedNames = new Set<string>();
     for (const id of profileIds) {
       const profile = this.profiles.getById(id);
       if (!profile) continue;
       const manifest = this.buildManifest(profile, 'config');
-      const safeName = profile.name.replace(/[\\/:*?"<>|]/g, '_');
-      fs.writeFileSync(path.join(destDir, `${safeName}-config.json`), JSON.stringify(manifest, null, 2), 'utf-8');
+      let safeName = profile.name.replace(/[\\/:*?"<>|]/g, '_');
+      let n = 2;
+      while (usedNames.has(safeName)) {
+        safeName = `${profile.name.replace(/[\\/:*?"<>|]/g, '_')}-${n}`;
+        n += 1;
+      }
+      usedNames.add(safeName);
+      zip.addFile(`${safeName}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2), 'utf-8'));
       this.logs.record('PROFILE_EXPORTED', id, `Exported config for "${profile.name}" (bulk)`);
     }
-    return destDir;
+    fs.mkdirSync(path.dirname(destZipPath), { recursive: true });
+    zip.writeZip(destZipPath);
   }
 
   async exportAll(): Promise<string | null> {
     return this.exportSelected(this.profiles.list().map((p) => p.id));
   }
 
-  /** One-click backup: full export (config + browser-data) written automatically
+  /** One-click backup: full .zip (config + browser-data) written automatically
    * under the app's own userData/backups directory — no dialog, no manual
    * destination choice, so it's fast enough to use routinely. */
   async backupProfile(profileId: string): Promise<string> {
@@ -153,12 +178,14 @@ export class ImportExportService {
     const manifest = this.buildManifest(profile, 'full');
     const backupsRoot = path.join(app.getPath('userData'), 'backups');
     fs.mkdirSync(backupsRoot, { recursive: true });
-    const destRoot = this.writeFullExport(profile, manifest, backupsRoot);
-    this.logs.record('PROFILE_BACKUP', profileId, `Backed up "${profile.name}" to ${destRoot}`);
-    return destRoot;
+    const safeName = profile.name.replace(/[\\/:*?"<>|]/g, '_');
+    const destZip = path.join(backupsRoot, `${safeName}-${Date.now()}.zip`);
+    this.writeFullExportZip(profile, manifest, destZip);
+    this.logs.record('PROFILE_BACKUP', profileId, `Backed up "${profile.name}" to ${destZip}`);
+    return destZip;
   }
 
-  /** Restore = import from a backup folder. Per project rule, this never
+  /** Restore = import from a backup .zip. Per project rule, this never
    * overwrites the original profile — it always creates a new, independent
    * one, defaulting the picker to this app's own backups directory. */
   async restoreProfile(): Promise<Profile | null> {
@@ -167,7 +194,8 @@ export class ImportExportService {
     const result = await dialog.showOpenDialog({
       title: 'Restore Profile From Backup',
       defaultPath: backupsRoot,
-      properties: ['openDirectory'],
+      properties: ['openFile'],
+      filters: [{ name: 'ProfileForge Backup', extensions: ['zip'] }],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
 
@@ -182,18 +210,21 @@ export class ImportExportService {
     return restored ?? null;
   }
 
-  /** Opens a native picker (files and/or folders, multi-select) and creates a
-   * brand-new profile per valid entry. Each entry is handled independently —
-   * one invalid/corrupt file does not abort the rest of the batch. Imported
-   * data is validated with Zod before anything is written, and always lands
-   * in a freshly generated profile id/directory — it never overwrites an
-   * existing profile, and a name collision gets a numbered suffix rather than
-   * silently colliding. */
+  /** Opens a native picker (json/zip files and/or folders, multi-select) and
+   * creates a brand-new profile per valid entry. Each entry is handled
+   * independently — one invalid/corrupt file does not abort the rest of the
+   * batch. Imported data is validated with Zod before anything is written,
+   * and always lands in a freshly generated profile id/directory — it never
+   * overwrites an existing profile, and a name collision gets a numbered
+   * suffix rather than silently colliding. */
   async importProfiles(): Promise<ImportResult> {
     const result = await dialog.showOpenDialog({
       title: 'Import Profile(s)',
       properties: ['openFile', 'openDirectory', 'multiSelections'],
-      filters: [{ name: 'ProfileForge Export', extensions: ['json'] }],
+      filters: [
+        { name: 'ProfileForge Export', extensions: ['json', 'zip'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
     });
     if (result.canceled || result.filePaths.length === 0) return { created: [], errors: [] };
     return this.importFromPaths(result.filePaths);
@@ -207,12 +238,46 @@ export class ImportExportService {
 
     for (const selected of paths) {
       try {
-        created.push(this.importOne(selected));
+        if (selected.toLowerCase().endsWith('.zip')) {
+          const expanded = this.expandZip(selected);
+          for (const entry of expanded) {
+            try {
+              created.push(this.importOne(entry));
+            } catch (err) {
+              errors.push({ path: `${selected} (${path.basename(entry)})`, message: err instanceof Error ? err.message : String(err) });
+            }
+          }
+        } else {
+          created.push(this.importOne(selected));
+        }
       } catch (err) {
         errors.push({ path: selected, message: err instanceof Error ? err.message : String(err) });
       }
     }
     return { created, errors };
+  }
+
+  /** Extracts a .zip to a fresh temp directory and returns the path(s) that
+   * should each be treated as one profile to import: a single path if the
+   * zip is one full/config export (manifest.json at its root), or one path
+   * per subfolder if it's a bulk export (exportSelected/exportAll). */
+  private expandZip(zipPath: string): string[] {
+    const zip = new AdmZip(zipPath);
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'profileforge-import-'));
+    zip.extractAllTo(tempDir, true);
+
+    if (fs.existsSync(path.join(tempDir, 'manifest.json'))) {
+      return [tempDir];
+    }
+    const subEntries = fs
+      .readdirSync(tempDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(tempDir, e.name))
+      .filter((dir) => fs.existsSync(path.join(dir, 'manifest.json')));
+    if (subEntries.length === 0) {
+      throw new Error('Zip does not contain a recognizable ProfileForge export');
+    }
+    return subEntries;
   }
 
   private importOne(selected: string): Profile {

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
+import { useTranslation, LOCALES, type Locale } from '../i18n';
 
 export function SettingsPage(): JSX.Element {
+  const { t, locale, setLocale } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -17,24 +19,45 @@ export function SettingsPage(): JSX.Element {
     setTimeout(() => setSaved(false), 1500);
   }
 
-  if (!settings) return <div className="content">Loading…</div>;
+  function changeLanguage(next: Locale): void {
+    setLocale(next);
+    void save({ language: next });
+  }
+
+  if (!settings) return <div className="content">{t('common.loading')}</div>;
 
   return (
     <div className="content" style={{ maxWidth: 560 }}>
       {saved && (
         <div className="error-banner" style={{ borderColor: 'var(--green)', color: '#a6f0b4' }}>
-          Saved. Some settings (hardware acceleration) take effect on next launch.
+          {t('settings.saved')}
         </div>
       )}
 
-      <h3>Performance</h3>
+      <h3>{t('settings.title.language')}</h3>
+      <label style={{ display: 'block', marginBottom: 8 }}>
+        {t('settings.language.label')}
+        <select
+          value={locale}
+          onChange={(e) => changeLanguage(e.target.value as Locale)}
+          style={{ display: 'block', width: 220, marginTop: 4 }}
+        >
+          {LOCALES.map((l) => (
+            <option key={l} value={l}>
+              {t(`settings.language.${l}` as 'settings.language.uk' | 'settings.language.en')}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <h3>{t('settings.title.performance')}</h3>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <input
           type="checkbox"
           checked={settings.hardwareAcceleration}
           onChange={(e) => void save({ hardwareAcceleration: e.target.checked })}
         />
-        Hardware acceleration (restart required)
+        {t('settings.hardwareAcceleration')}
       </label>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <input
@@ -42,10 +65,10 @@ export function SettingsPage(): JSX.Element {
           checked={settings.autoCacheCleanup}
           onChange={(e) => void save({ autoCacheCleanup: e.target.checked })}
         />
-        Automatic cache cleanup
+        {t('settings.autoCacheCleanup')}
       </label>
       <label style={{ display: 'block', marginBottom: 8 }}>
-        Max simultaneous profile launches (bulk start)
+        {t('settings.maxConcurrentLaunches')}
         <input
           type="number"
           min={1}
@@ -56,9 +79,9 @@ export function SettingsPage(): JSX.Element {
         />
       </label>
 
-      <h3>Storage</h3>
+      <h3>{t('settings.title.storage')}</h3>
       <label style={{ display: 'block', marginBottom: 8 }}>
-        Cache limit per profile (MB)
+        {t('settings.cacheLimitMb')}
         <input
           type="number"
           value={settings.cacheLimitMb}
@@ -67,23 +90,23 @@ export function SettingsPage(): JSX.Element {
         />
       </label>
 
-      <h3>General</h3>
+      <h3>{t('settings.title.general')}</h3>
       <label style={{ display: 'block', marginBottom: 8 }}>
-        Startup behavior
+        {t('settings.startupBehavior')}
         <select
           value={settings.startupBehavior}
           onChange={(e) => void save({ startupBehavior: e.target.value as Settings['startupBehavior'] })}
           style={{ display: 'block', width: 220, marginTop: 4 }}
         >
-          <option value="showProfileList">Show profile list</option>
-          <option value="blank">Blank</option>
-          <option value="lastSession">Restore last session</option>
+          <option value="showProfileList">{t('settings.startupBehavior.showProfileList')}</option>
+          <option value="blank">{t('settings.startupBehavior.blank')}</option>
+          <option value="lastSession">{t('settings.startupBehavior.lastSession')}</option>
         </select>
       </label>
 
-      <h3>Logging</h3>
+      <h3>{t('settings.title.logging')}</h3>
       <label style={{ display: 'block', marginBottom: 8 }}>
-        Activity log retention (days)
+        {t('settings.logRetentionDays')}
         <input
           type="number"
           value={settings.logRetentionDays}

@@ -20,6 +20,7 @@ test.beforeAll(async () => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-browser-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
+    env: { ...process.env, PF_E2E_LOCALE: 'en' },
   });
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
@@ -39,7 +40,7 @@ test('starting a profile launches a real per-profile browser process and stoppin
   await row.getByRole('button', { name: 'Start', exact: true }).click();
 
   // Starting spawns a real second Electron/Chromium OS process — give it real time.
-  await expect(row).toContainText('RUNNING', { timeout: 30_000 });
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
   const profileDataDir = fs.readdirSync(userDataDir).find((f) => f === 'profiles');
   expect(profileDataDir).toBeTruthy();
@@ -53,5 +54,5 @@ test('starting a profile launches a real per-profile browser process and stoppin
     .toBe(true);
 
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
-  await expect(row).toContainText('STOPPED', { timeout: 30_000 });
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });

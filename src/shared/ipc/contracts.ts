@@ -7,6 +7,7 @@ import {
 import { FingerprintInputSchema } from '../schemas/fingerprint';
 import { ProxyInputSchema } from '../schemas/proxy';
 import { SettingsUpdateSchema } from '../schemas/settings';
+import { GroupCreateInputSchema, GroupRenameInputSchema, GroupDeleteInputSchema } from '../schemas/group';
 
 /**
  * Central IPC contract registry. Every channel's request/response shape is
@@ -14,7 +15,11 @@ import { SettingsUpdateSchema } from '../schemas/settings';
  * arriving from the renderer before acting on it (renderer input is never trusted).
  */
 export const IpcRequestSchemas = {
-  'profiles:list': z.object({ search: z.string().optional(), tag: z.string().optional() }),
+  'profiles:list': z.object({
+    search: z.string().optional(),
+    tag: z.string().optional(),
+    groupId: z.string().uuid().optional(),
+  }),
   'profiles:get': z.object({ id: ProfileIdSchema }),
   'profiles:create': ProfileCreateInputSchema,
   'profiles:update': ProfileUpdateInputSchema,
@@ -61,6 +66,12 @@ export const IpcRequestSchemas = {
   'profiles:bulkClone': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:bulkAssignProxy': z.object({ ids: z.array(ProfileIdSchema).min(1), proxyId: z.string().uuid().nullable() }),
   'profiles:bulkAddTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
+  'profiles:bulkAssignGroup': z.object({ ids: z.array(ProfileIdSchema).min(1), groupId: z.string().uuid().nullable() }),
+
+  'groups:list': z.object({}),
+  'groups:create': GroupCreateInputSchema,
+  'groups:rename': GroupRenameInputSchema,
+  'groups:delete': GroupDeleteInputSchema,
 
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,

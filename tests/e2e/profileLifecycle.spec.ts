@@ -25,6 +25,7 @@ test.beforeAll(async () => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
+    env: { ...process.env, PF_E2E_LOCALE: 'en' },
   });
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
@@ -43,7 +44,8 @@ test('creating a profile adds it to the list with STOPPED status', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile One');
   await window.getByRole('button', { name: 'New Profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible({ timeout: 15_000 });
-  await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile One' }) })).toContainText(
+  await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile One' }) })).toHaveAttribute(
+    'data-status',
     'STOPPED',
   );
 });

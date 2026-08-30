@@ -23,6 +23,7 @@
     "rebuild:node": "npm rebuild better-sqlite3"
   },
   "dependencies": {
+    "adm-zip": "^0.6.0",
     "better-sqlite3": "^11.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.5.0",
     "@types/react": "^18.3.5",

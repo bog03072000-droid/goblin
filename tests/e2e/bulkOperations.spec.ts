@@ -17,6 +17,7 @@ test.beforeAll(async () => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-bulk-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
+    env: { ...process.env, PF_E2E_LOCALE: 'en' },
   });
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
