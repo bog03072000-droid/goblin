@@ -105,3 +105,66 @@ test('a profile assigned to an unreachable proxy still starts and stops cleanly 
   // The manager window itself never went down — still fully interactive.
   await expect(window.getByRole('button', { name: 'New Profile' })).toBeEnabled();
 });
+
+/** Calls a manager IPC channel directly from the renderer's own exposed
+ * bridge (the same `window.profileforge.invoke` the real UI uses under the
+ * hood) — used below for the two scenarios normal UI interaction can't
+ * reach at all (the Start/Stop buttons are swapped based on status, so a
+ * real user can never click "Start" on an already-running row through the
+ * UI, and likewise for "Stop" on an already-stopped one). This proves the
+ * backend guard itself is correct, independent of any UI affordance. */
+function invokeIpc(win: Page, channel: string, payload: unknown): Promise<unknown> {
+  return win.evaluate(
+    ([c, p]) => (window as unknown as { profileforge: { invoke: (c: string, p: unknown) => Promise<unknown> } }).profileforge.invoke(c, p),
+    [channel, payload] as const,
+  );
+}
+
+test('starting an already-running profile is rejected with a specific error, not silently double-started', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Start Twice');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Start Twice' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  const profileId = await row.getAttribute('data-profile-id');
+  await expect(invokeIpc(window, 'profiles:start', { id: profileId })).rejects.toThrow(/already running/i);
+  // Still exactly one running instance — a second start() call must not
+  // have spawned a duplicate process for the same profile.
+  await expect(row).toHaveAttribute('data-status', 'RUNNING');
+
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});
+
+test('stopping an already-stopped profile resolves gracefully instead of throwing', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Stop Twice');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Stop Twice' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await expect(row).toHaveAttribute('data-status', 'STOPPED');
+
+  const profileId = await row.getAttribute('data-profile-id');
+  const result = (await invokeIpc(window, 'profiles:stop', { id: profileId })) as { status: string };
+  expect(result.status).toBe('STOPPED');
+});
+
+test('starting a profile whose storage folder was deleted outside the app shows a clear error, not a crash', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Deleted Storage');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Deleted Storage' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  const profileDirs = fs.readdirSync(path.join(userDataDir, 'profiles'));
+  const newestDir = profileDirs
+    .map((d) => path.join(userDataDir, 'profiles', d))
+    .sort((a, b) => fs.statSync(b).birthtimeMs - fs.statSync(a).birthtimeMs)[0]!;
+  fs.rmSync(newestDir, { recursive: true, force: true });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(window.locator('.banner-error')).toContainText('storage folder is missing', { timeout: 10_000 });
+  // The app itself is still fully usable afterwards — not a crash.
+  await expect(window.getByRole('button', { name: 'New Profile' })).toBeEnabled();
+});

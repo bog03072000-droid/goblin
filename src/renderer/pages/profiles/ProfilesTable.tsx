@@ -73,7 +73,7 @@ export function ProfilesTable({
         </thead>
         <tbody>
           {profiles.map((p) => (
-            <tr key={p.id} data-status={p.status}>
+            <tr key={p.id} data-status={p.status} data-profile-id={p.id}>
               <td>
                 <input type="checkbox" checked={selected.has(p.id)} onChange={() => onToggleSelect(p.id)} />
               </td>

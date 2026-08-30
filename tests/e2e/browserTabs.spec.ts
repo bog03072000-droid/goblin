@@ -146,3 +146,85 @@ test('real multi-tab browser window: new/close/switch/duplicate tabs, navigation
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
+
+/** Sets a cookie via the active `<webview>`'s own `.executeJavaScript()` —
+ * a real Electron webview API called from the shell's own JS context, not a
+ * CDP hack — then reads `document.cookie` straight back. */
+/** `executeJavaScript` on a `<webview>` can transiently fail with
+ * GUEST_VIEW_MANAGER_CALL if the guest frame isn't fully ready yet — the
+ * shell's own 'did-navigate' event (which the address bar updates from)
+ * fires on commit, not on the guest's dom-ready/finish-load, so there's a
+ * real window where the address bar already shows the new URL but the
+ * frame can't yet run injected script. Retrying past that transient window
+ * is more robust than guessing a fixed delay long enough for every page. */
+async function execInWebview(webview: ReturnType<Page['locator']>, script: string): Promise<unknown> {
+  let lastErr: unknown;
+  for (let i = 0; i < 10; i++) {
+    try {
+      return await webview.evaluate(
+        (el, s) => (el as unknown as { executeJavaScript: (s: string) => Promise<unknown> }).executeJavaScript(s),
+        script,
+      );
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  throw lastErr;
+}
+
+async function setAndReadCookie(shell: Page, value: string | null): Promise<string> {
+  // Playwright's own locator waits for the element to actually attach before
+  // handing it to evaluate() — plain document.querySelector() inside a bare
+  // evaluate() call raced the webview's creation and intermittently saw null.
+  const webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
+  if (value !== null) {
+    await execInWebview(webview, `document.cookie = "e2e_isolation_test=${value}; path=/"`);
+  }
+  const result = await execInWebview(webview, 'document.cookie');
+  return String(result);
+}
+
+test('two profiles never share cookies — each gets its own real, isolated session partition', async () => {
+  // Profile A: start, navigate, set a cookie.
+  await window.getByPlaceholder('New profile name').fill('E2E Isolation Profile A');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const rowA = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Isolation Profile A' }) });
+  await expect(rowA).toBeVisible({ timeout: 15_000 });
+  await rowA.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(rowA).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  let shell = await connectToShell();
+  const addressA = shell.locator('#address');
+  await addressA.fill('https://example.com');
+  await addressA.press('Enter');
+  await expect(addressA).toHaveValue(/example\.com/, { timeout: 15_000 });
+  const cookieA = await setAndReadCookie(shell, 'profileA');
+  expect(cookieA).toContain('e2e_isolation_test=profileA');
+
+  await rowA.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(rowA).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+  await cdp?.close();
+  cdp = undefined;
+
+  // Profile B: a completely different profile — same origin, fresh session
+  // partition. If it can see Profile A's cookie, session isolation is broken.
+  await window.getByPlaceholder('New profile name').fill('E2E Isolation Profile B');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const rowB = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Isolation Profile B' }) });
+  await expect(rowB).toBeVisible({ timeout: 15_000 });
+  await rowB.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(rowB).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  shell = await connectToShell();
+  const addressB = shell.locator('#address');
+  await addressB.fill('https://example.com');
+  await addressB.press('Enter');
+  await expect(addressB).toHaveValue(/example\.com/, { timeout: 15_000 });
+  const cookieB = await setAndReadCookie(shell, null);
+  expect(cookieB).not.toContain('e2e_isolation_test');
+
+  await rowB.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(rowB).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});

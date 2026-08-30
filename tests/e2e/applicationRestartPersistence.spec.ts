@@ -28,12 +28,35 @@ test('a profile, its configuration, and its storage all survive closing and reop
     const row = () => window.locator('tr', { has: window.locator('td', { hasText: 'Persistent Profile' }) });
     await expect(row()).toBeVisible({ timeout: 15_000 });
 
-    // Configure it: rename via the editor, add a tag, so there's real
-    // configuration state to verify survives, not just the row's existence.
+    // A proxy to assign, so proxy configuration is also real state to verify
+    // survives restart — not just the profile row and its description/tags.
+    await window.getByText('Proxies', { exact: true }).click();
+    await window.getByPlaceholder('Name', { exact: true }).fill('Persistent Proxy');
+    await window.getByPlaceholder('Host').fill('127.0.0.1');
+    await window.getByPlaceholder('Port').fill('8080');
+    await window.getByRole('button', { name: 'Add Proxy' }).click();
+    await expect(window.locator('td', { hasText: 'Persistent Proxy' })).toBeVisible({ timeout: 10_000 });
+    await window.getByText('Profiles', { exact: true }).click();
+
+    // Configure it: rename via the editor, add a tag, assign the proxy, and
+    // read the auto-generated User-Agent — real configuration state to
+    // verify survives, not just the row's existence.
     await row().getByRole('button', { name: 'Edit' }).click();
     await window.getByLabel('Description').fill('Configured before restart');
     await window.getByLabel('Tags (comma-separated)').fill('survives-restart');
     await window.getByRole('button', { name: 'Save' }).click();
+
+    await window.getByText('proxy', { exact: true }).click();
+    await window.getByLabel('Assigned proxy').selectOption({ label: 'Persistent Proxy (http://127.0.0.1:8080)' });
+    await window.getByRole('button', { name: 'Save' }).click();
+
+    await window.getByText('fingerprint', { exact: true }).click();
+    const userAgentBefore = await window
+      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('td')
+      .textContent();
+    expect(userAgentBefore).toBeTruthy();
+
     await window.getByRole('button', { name: 'Close' }).click();
 
     const profileDirsBefore = fs.readdirSync(path.join(userDataDir, 'profiles'));
@@ -58,6 +81,20 @@ test('a profile, its configuration, and its storage all survive closing and reop
     // Configuration (description) round-tripped through the real SQLite file.
     await row().getByRole('button', { name: 'Edit' }).click();
     await expect(window.getByLabel('Description')).toHaveValue('Configured before restart');
+
+    // Proxy assignment survived the restart too.
+    await window.getByText('proxy', { exact: true }).click();
+    await expect(window.getByLabel('Assigned proxy')).toHaveValue(/.+/);
+    await expect(window.getByLabel('Assigned proxy')).not.toHaveValue('');
+
+    // The exact same fingerprint (not a freshly regenerated one) is still there.
+    await window.getByText('fingerprint', { exact: true }).click();
+    const userAgentAfter = await window
+      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('td')
+      .textContent();
+    expect(userAgentAfter).toBe(userAgentBefore);
+
     await window.getByRole('button', { name: 'Close' }).click();
 
     // On-disk storage directory is still exactly where it was.

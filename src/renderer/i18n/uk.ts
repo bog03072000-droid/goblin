@@ -29,6 +29,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'errors.proxyNotFound': 'Цього проксі вже не існує — можливо, його видалили деінде.',
   'errors.invalidInput': 'Деякі введені значення некоректні. Перевірте форму і спробуйте ще раз.',
   'errors.downloadNotFound': 'Цього запису про завантаження вже не існує.',
+  'errors.profileStorageMissing': 'Папку сховища цього профілю не знайдено — можливо, її перемістили або видалили поза застосунком.',
+  'errors.corruptedProfileData': 'Дані відбитку цього профілю пошкоджені, їх не вдалося прочитати.',
+  'errors.launchFailed': 'Не вдалося запустити процес браузера для цього профілю.',
 
   'profiles.searchPlaceholder': 'Пошук профілів...',
   'profiles.status.all': 'Усі статуси',

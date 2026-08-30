@@ -97,7 +97,12 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   const child = spawn(electronBinary, args, {
     cwd: path.dirname(entryScript),
     env,
-    stdio: 'ignore',
+    // The 'ipc' channel (fd 3) is what lets ProfileManager.stop() ask this
+    // process to shut down gracefully (app.quit(), which flushes Chromium's
+    // cookie/localStorage stores) instead of only ever having a hard kill()
+    // available — see profileManager.ts's stop() for why that distinction
+    // turned out to matter for real. stdout/stderr stay ignored, same as before.
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     detached: false,
   });
 

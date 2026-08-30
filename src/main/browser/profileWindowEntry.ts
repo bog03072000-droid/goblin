@@ -29,6 +29,14 @@ protocol.registerSchemesAsPrivileged([
 export function runProfileWindowProcess(): void {
   const args = parseArgs(process.argv);
 
+  // Requested by ProfileManager.stop() (see its comment for why): app.quit()
+  // runs Electron/Chromium's normal shutdown sequence, which flushes the
+  // cookie/localStorage backing stores to disk before the process actually
+  // exits — a hard kill() from the parent can't guarantee that.
+  process.on('message', (msg) => {
+    if (msg === 'graceful-quit') app.quit();
+  });
+
   app.setPath('userData', args.userDataDir);
   app.commandLine.appendSwitch('lang', args.locale);
   if (args.proxyRules) {

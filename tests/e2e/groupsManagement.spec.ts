@@ -76,3 +76,41 @@ test('groups can be created, a profile moved into one, renamed, filtered, and de
   await window.locator('.modal-panel').last().getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(window.locator('td', { hasText: 'E2E Group Profile' })).toHaveCount(0, { timeout: 15_000 });
 });
+
+test('multiple selected profiles can be bulk-assigned to a group at once', async () => {
+  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  const modal = window.locator('.modal-panel');
+  await expect(modal).toBeVisible();
+  await modal.getByPlaceholder('New group name').fill('E2E Bulk Group');
+  await modal.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(modal.locator('text=E2E Bulk Group')).toBeVisible({ timeout: 10_000 });
+  await window.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(modal).toBeHidden();
+
+  await window.getByPlaceholder('New profile name').fill('E2E Bulk Group Profile A');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByPlaceholder('New profile name').fill('E2E Bulk Group Profile B');
+  await window.getByRole('button', { name: 'New Profile' }).click();
+  const rowA = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Bulk Group Profile A' }) });
+  const rowB = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Bulk Group Profile B' }) });
+  await expect(rowA).toBeVisible({ timeout: 15_000 });
+  await expect(rowB).toBeVisible({ timeout: 15_000 });
+
+  await rowA.locator('input[type="checkbox"]').check();
+  await rowB.locator('input[type="checkbox"]').check();
+
+  await window.locator('select').filter({ hasText: 'Move to group…' }).selectOption({ label: 'E2E Bulk Group' });
+
+  // Exact match: "E2E Bulk Group" is also a substring of the profile's own
+  // name cell ("E2E Bulk Group Profile A"), which a plain substring hasText
+  // filter would match too, tripping Playwright's strict mode.
+  await expect(rowA.locator('td', { hasText: /^E2E Bulk Group$/ })).toBeVisible({ timeout: 10_000 });
+  await expect(rowB.locator('td', { hasText: /^E2E Bulk Group$/ })).toBeVisible({ timeout: 10_000 });
+
+  // Group filter now shows both, proving the bulk assignment actually
+  // persisted server-side rather than just updating local row state.
+  await window.locator('select').filter({ hasText: 'All groups' }).selectOption({ label: 'E2E Bulk Group (2)' });
+  await expect(window.locator('td', { hasText: 'E2E Bulk Group Profile A' })).toBeVisible();
+  await expect(window.locator('td', { hasText: 'E2E Bulk Group Profile B' })).toBeVisible();
+  await window.locator('select').filter({ hasText: 'All groups' }).selectOption({ label: 'All groups' });
+});

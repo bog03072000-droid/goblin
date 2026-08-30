@@ -22,6 +22,9 @@ const PATTERNS: Array<[RegExp, TranslationKey]> = [
   [/Profile not found/, 'errors.profileNotFound'],
   [/Proxy not found/, 'errors.proxyNotFound'],
   [/Download not found/, 'errors.downloadNotFound'],
+  [/Profile storage directory is missing/, 'errors.profileStorageMissing'],
+  [/Corrupted fingerprint data/, 'errors.corruptedProfileData'],
+  [/ENOENT|Failed to launch|spawn .* ENOENT/, 'errors.launchFailed'],
   [/"code":\s*"/, 'errors.invalidInput'],
 ];
 

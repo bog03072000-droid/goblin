@@ -27,6 +27,9 @@ const en = {
   'errors.proxyNotFound': 'This proxy no longer exists — it may have been deleted elsewhere.',
   'errors.invalidInput': 'Some of the entered values are invalid. Please check the form and try again.',
   'errors.downloadNotFound': 'This download record no longer exists.',
+  'errors.profileStorageMissing': "This profile's storage folder is missing or was moved/deleted outside the app.",
+  'errors.corruptedProfileData': "This profile's fingerprint data is corrupted and could not be read.",
+  'errors.launchFailed': 'Failed to launch the browser process for this profile.',
 
   'profiles.searchPlaceholder': 'Search profiles...',
   'profiles.status.all': 'All statuses',

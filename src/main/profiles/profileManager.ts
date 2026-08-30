@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
@@ -73,6 +74,15 @@ export class ProfileManager {
     if (profile.status === 'RUNNING' || this.running.has(id)) {
       throw new Error('Profile is already running');
     }
+    // The directory can go missing if it was moved/deleted outside the app
+    // (e.g. by hand, an antivirus quarantine, or a failed backup restore).
+    // Without this check, Chromium would silently create a brand-new empty
+    // one under the same path — a surprising, silent data-loss path — so
+    // this surfaces it as a clear error instead.
+    if (!fs.existsSync(profile.profilePath)) {
+      this.profiles.updateStatus(id, 'ERROR');
+      throw new Error('Profile storage directory is missing');
+    }
     const browserDataDir = path.join(profile.profilePath, 'browser-data');
     if (this.lockManager.isLocked(profile.profilePath)) {
       throw new Error('Profile is locked by another running instance');
@@ -116,6 +126,19 @@ export class ProfileManager {
     this.logs.record('PROFILE_STARTED', id, `Profile "${profile.name}" started (pid ${child.pid})`);
     log.info(`[profile:start] "${profile.name}" (${id}) started, pid ${child.pid}`);
 
+    // A bad spawn (e.g. a missing/relocated Electron binary) usually fails
+    // ASYNCHRONOUSLY via this event, not by throwing out of spawn() itself —
+    // the try/catch above only catches the rarer synchronous failure case
+    // (e.g. invalid arguments). Without this handler such a failure would
+    // silently leave the profile stuck in STARTING forever.
+    child.on('error', (err) => {
+      this.running.delete(id);
+      this.lockManager.release(profile.profilePath);
+      this.profiles.updateStatus(id, 'ERROR');
+      this.logs.record('PROFILE_CRASHED', id, `Failed to launch process for "${profile.name}": ${err.message}`);
+      log.error(`[profile:start] child process error for profile ${id}`, err);
+    });
+
     child.on('exit', (code) => {
       this.running.delete(id);
       this.lockManager.release(profile.profilePath);
@@ -150,7 +173,24 @@ export class ProfileManager {
     if (child) {
       await new Promise<void>((resolve) => {
         child.once('exit', () => resolve());
-        child.kill();
+        // A graceful `app.quit()` request first: on Windows, child.kill()
+        // maps directly to TerminateProcess, which cuts the process off
+        // mid-flight — Chromium's cookie/localStorage backing stores commit
+        // to disk on a periodic/batched schedule, not synchronously on every
+        // write, so a hard kill can silently lose whatever hadn't been
+        // flushed yet (found via a real cross-restart cookie-persistence
+        // test, not a hypothetical). `app.quit()` runs Electron/Chromium's
+        // normal shutdown path, which flushes those stores first. Only if
+        // the process doesn't exit on its own in time does this fall back
+        // to the hard kill, so a genuinely hung process still gets torn down.
+        if (child.channel) {
+          child.send('graceful-quit');
+          setTimeout(() => {
+            if (this.running.get(id) === child) child.kill();
+          }, 3_000).unref();
+        } else {
+          child.kill();
+        }
       });
     } else {
       // No tracked process (e.g. app restarted) — just clear stale DB/lock state.

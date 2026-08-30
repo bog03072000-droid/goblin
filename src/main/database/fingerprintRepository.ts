@@ -32,6 +32,15 @@ interface FingerprintRow {
 }
 
 function rowToFingerprint(row: FingerprintRow): Fingerprint {
+  let languages: string[];
+  try {
+    languages = JSON.parse(row.languages) as string[];
+  } catch {
+    // A malformed `languages` column (hand-edited DB, disk corruption, a
+    // partial write) must never crash the whole app on read — surfaced as
+    // a specific, translatable error instead of an unhandled JSON.parse throw.
+    throw new Error('Corrupted fingerprint data');
+  }
   return {
     id: row.id,
     name: row.name,
@@ -41,7 +50,7 @@ function rowToFingerprint(row: FingerprintRow): Fingerprint {
     userAgent: row.user_agent,
     platform: row.platform,
     locale: row.locale,
-    languages: JSON.parse(row.languages) as string[],
+    languages,
     timezone: row.timezone,
     screenWidth: row.screen_width,
     screenHeight: row.screen_height,
