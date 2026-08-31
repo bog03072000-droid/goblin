@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Profile, ProfileListItem } from '@shared/schemas/profile';
+import type { FingerprintInput } from '@shared/schemas/fingerprint';
 import type { Template } from '@shared/schemas/template';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
@@ -182,6 +183,35 @@ export function ProfilesPage(): JSX.Element {
     setNewTags('');
     void refresh();
     void refreshGroups();
+  }
+
+  /** The one-click path the full config modal (openCreateModal) replaced:
+   * generates a fingerprint the same way the modal's own preview does
+   * (fingerprint:generate, honoring whatever template is selected in the
+   * toolbar) and creates the profile immediately with it — no modal, no
+   * extra confirmation step. Whatever's already typed into the toolbar's
+   * quick fields (name/group/proxy/tags) is used exactly as-is; an empty
+   * name falls back to a timestamp-based one since profiles:create requires
+   * a non-empty name. */
+  async function quickCreateProfile(): Promise<void> {
+    await generalAction.run(async () => {
+      const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
+        seed: `quick-${Date.now()}`,
+        templateId: templateId || undefined,
+      });
+      const name = newName.trim() || `Profile ${new Date().toLocaleString()}`;
+      await callApi('profiles:create', {
+        name,
+        groupId: newGroupId || undefined,
+        proxyId: newProxyId || undefined,
+        tags: newTags
+          .split(',')
+          .map((tg) => tg.trim())
+          .filter(Boolean),
+        fingerprint: generated,
+      });
+      onProfileCreated();
+    });
   }
 
   async function runAction(
@@ -439,6 +469,8 @@ export function ProfilesPage(): JSX.Element {
         newTags={newTags}
         onNewTagsChange={setNewTags}
         onCreate={openCreateModal}
+        onQuickCreate={() => void quickCreateProfile()}
+        quickCreatePending={generalAction.pending}
         onImport={() => void importProfiles()}
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}

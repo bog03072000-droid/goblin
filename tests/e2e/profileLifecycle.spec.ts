@@ -51,6 +51,26 @@ test('creating a profile adds it to the list with STOPPED status', async () => {
   );
 });
 
+test('Quick create adds a profile immediately, with no modal', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Quick Profile');
+  await window.getByRole('button', { name: 'Quick create' }).click();
+  await expect(window.locator('td', { hasText: 'E2E Quick Profile' })).toBeVisible({ timeout: 15_000 });
+  await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Quick Profile' }) })).toHaveAttribute(
+    'data-status',
+    'STOPPED',
+  );
+  // No modal panel should have opened at any point during a quick create.
+  await expect(window.locator('.modal-panel')).toHaveCount(0);
+});
+
+test('Quick create with an empty name falls back to an auto-generated one', async () => {
+  await window.getByPlaceholder('New profile name').fill('');
+  const rowsBefore = await window.locator('tbody tr').count();
+  await window.getByRole('button', { name: 'Quick create' }).click();
+  await expect.poll(() => window.locator('tbody tr').count()).toBeGreaterThan(rowsBefore);
+  await expect(window.locator('.modal-panel')).toHaveCount(0);
+});
+
 test('search filters the profile list', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile Two');
   await window.getByRole('button', { name: 'New Profile' }).click();

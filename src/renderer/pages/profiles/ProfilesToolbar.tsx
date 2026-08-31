@@ -1,4 +1,4 @@
-import { ArrowUp, ArrowDown, FolderCog, ArrowLeftRight, UserPlus, Upload, ArchiveRestore, FileDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, FolderCog, ArrowLeftRight, UserPlus, Zap, Upload, ArchiveRestore, FileDown } from 'lucide-react';
 import type { ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import type { Group } from '@shared/schemas/group';
@@ -53,6 +53,8 @@ export function ProfilesToolbar({
   newTags,
   onNewTagsChange,
   onCreate,
+  onQuickCreate,
+  quickCreatePending,
   onImport,
   onRestore,
   onExportAll,
@@ -88,6 +90,8 @@ export function ProfilesToolbar({
   newTags: string;
   onNewTagsChange: (value: string) => void;
   onCreate: () => void;
+  onQuickCreate: () => void;
+  quickCreatePending: boolean;
   onImport: () => void;
   onRestore: () => void;
   onExportAll: () => void;
@@ -197,6 +201,15 @@ export function ProfilesToolbar({
         value={newTags}
         onChange={(e) => onNewTagsChange(e.target.value)}
       />
+      <button
+        className="btn btn-ghost"
+        onClick={onQuickCreate}
+        disabled={quickCreatePending}
+        title={t('profiles.quickCreate.hint')}
+      >
+        <Zap size={14} strokeWidth={2.25} />
+        {t('profiles.quickCreate')}
+      </button>
       <button className="btn btn-primary" onClick={onCreate}>
         <UserPlus size={14} strokeWidth={2.25} />
         {t('profiles.create')}

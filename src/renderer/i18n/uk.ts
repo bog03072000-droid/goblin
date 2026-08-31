@@ -67,6 +67,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.template.auto': 'Автоматично (змішано)',
   'profiles.newNamePlaceholder': 'Назва нового профілю',
   'profiles.newTagsPlaceholder': 'Теги (через кому)',
+  'profiles.quickCreate': 'Швидке створення',
+  'profiles.quickCreate.hint': 'Створити профіль миттєво з автоматично згенерованим fingerprint — без модального вікна',
   'profiles.create': 'Новий профіль',
   'profiles.import': 'Імпорт',
   'profiles.restore': 'Відновити',

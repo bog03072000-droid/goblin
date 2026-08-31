@@ -65,6 +65,8 @@ const en = {
   'profiles.template.auto': 'Automatic (mixed)',
   'profiles.newNamePlaceholder': 'New profile name',
   'profiles.newTagsPlaceholder': 'Tags (comma-separated)',
+  'profiles.quickCreate': 'Quick create',
+  'profiles.quickCreate.hint': 'Create a profile instantly with an auto-generated fingerprint — no modal',
   'profiles.create': 'New Profile',
   'profiles.import': 'Import',
   'profiles.restore': 'Restore',
