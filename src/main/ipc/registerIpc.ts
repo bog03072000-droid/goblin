@@ -58,13 +58,15 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:get', (p) => deps.profiles.getById(p.id));
   handle('profiles:create', (p) => {
     const template = p.templateId ? deps.templates.getById(p.templateId) : null;
-    const fingerprint = deps.fingerprints.create(
-      generateFingerprint({
-        seed: p.name + Date.now(),
-        os: template?.definition.os,
-        locale: template?.definition.locale,
-      }),
-    );
+    const generated = generateFingerprint({
+      seed: p.name + Date.now(),
+      os: template?.definition.os ?? p.fingerprint?.os,
+      locale: template?.definition.locale ?? p.fingerprint?.locale,
+    });
+    // User-supplied overrides from the creation modal (manual mode fields,
+    // spoofing toggles) win over the generated base — same merge shape
+    // fingerprint:update already uses for post-creation edits.
+    const fingerprint = deps.fingerprints.create({ ...generated, ...p.fingerprint });
     return deps.profileManager.create(p, fingerprint.id);
   });
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
@@ -76,7 +78,14 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:clearCache', (p) => deps.profileManager.clearCache(p.id));
 
   handle('fingerprint:get', (p) => deps.fingerprints.getById(p.id));
-  handle('fingerprint:generate', (p) => generateFingerprint({ seed: p.seed }));
+  handle('fingerprint:generate', (p) => {
+    const template = p.templateId ? deps.templates.getById(p.templateId) : null;
+    return generateFingerprint({
+      seed: p.seed,
+      os: template?.definition.os,
+      locale: template?.definition.locale,
+    });
+  });
   handle('fingerprint:validate', (p) => validateFingerprint(p));
   handle('fingerprint:update', (p) => deps.fingerprints.update(p.id, p));
 

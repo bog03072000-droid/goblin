@@ -80,6 +80,7 @@ async function execInWebview(webview: ReturnType<Page['locator']>, script: strin
 test('starting a profile launches a real per-profile browser process and stopping it tears it down', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Browser Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Browser Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -106,6 +107,7 @@ test('starting a profile launches a real per-profile browser process and stoppin
 test('restarting a profile tears down the old process, spawns a genuinely new one, and preserves storage', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Restart Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Restart Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -219,6 +221,7 @@ async function readAllStorage(webview: ReturnType<Page['locator']>): Promise<{ c
 test('a persistent cookie, localStorage, and IndexedDB value set before restart are all still there after restart', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Cookie Restart Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Cookie Restart Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 

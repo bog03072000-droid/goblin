@@ -117,6 +117,13 @@ const en = {
   'profiles.msg.exportedSelected': 'Exported {count} profile(s) to {path}',
   'profiles.msg.exportedAll': 'Exported all profiles to {path}',
 
+  'profileCreate.title': 'Create New Profile',
+  'profileCreate.createButton': 'Create profile',
+  'profileCreate.fingerprint.template': 'Template (OS / browser)',
+  'profileCreate.proxy.addNew': '+ Add new proxy',
+  'profileCreate.storage.hint': 'Available once the profile is created — there is no storage directory yet.',
+  'profileCreate.advanced.hint': 'Available once the profile is created — there is no id or history yet.',
+
   'editor.tab.general': 'general',
   'editor.tab.fingerprint': 'fingerprint',
   'editor.tab.proxy': 'proxy',

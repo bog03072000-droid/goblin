@@ -69,6 +69,7 @@ test.beforeAll(async () => {
   for (let i = 0; i < SCALE; i++) {
     await window.getByPlaceholder('New profile name').fill(`Isolation Profile ${i}`);
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   }
   await expect(window.locator('tr', { has: window.locator('td', { hasText: /^Isolation Profile/ }) })).toHaveCount(
     SCALE,

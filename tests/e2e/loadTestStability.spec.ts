@@ -83,6 +83,7 @@ test.beforeAll(async () => {
   for (const name of PROFILE_NAMES) {
     await window.getByPlaceholder('New profile name').fill(name);
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     await expect(window.locator('tr', { has: window.locator('td', { hasText: new RegExp(`^${name}$`) }) })).toBeVisible({
       timeout: 15_000,
     });

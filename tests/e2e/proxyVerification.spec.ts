@@ -68,6 +68,7 @@ test('a profile with an assigned proxy genuinely routes its browser traffic thro
     await window.getByText('Profiles', { exact: true }).click();
     await window.getByPlaceholder('New profile name').fill('E2E Proxy Profile');
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Proxy Profile' }) });
     await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -154,6 +155,7 @@ test('HTTPS traffic through an assigned proxy is routed via a real CONNECT tunne
     await window.getByText('Profiles', { exact: true }).click();
     await window.getByPlaceholder('New profile name').fill('E2E HTTPS Proxy Profile');
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E HTTPS Proxy Profile' }) });
     await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -254,6 +256,7 @@ test('SOCKS5 traffic through an assigned proxy is routed via a real SOCKS5 CONNE
     await window.getByText('Profiles', { exact: true }).click();
     await window.getByPlaceholder('New profile name').fill('E2E SOCKS5 Proxy Profile');
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E SOCKS5 Proxy Profile' }) });
     await expect(row).toBeVisible({ timeout: 15_000 });
 

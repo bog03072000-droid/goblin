@@ -119,6 +119,13 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.msg.exportedSelected': 'Експортовано профілів: {count} до {path}',
   'profiles.msg.exportedAll': 'Усі профілі експортовано до {path}',
 
+  'profileCreate.title': 'Створити новий профіль',
+  'profileCreate.createButton': 'Створити профіль',
+  'profileCreate.fingerprint.template': 'Шаблон (ОС / браузер)',
+  'profileCreate.proxy.addNew': '+ Додати новий проксі',
+  'profileCreate.storage.hint': 'Буде доступно після створення профілю — каталогу зберігання ще не існує.',
+  'profileCreate.advanced.hint': 'Буде доступно після створення профілю — ще немає id чи історії.',
+
   'editor.tab.general': 'загальне',
   'editor.tab.fingerprint': 'відбиток',
   'editor.tab.proxy': 'проксі',

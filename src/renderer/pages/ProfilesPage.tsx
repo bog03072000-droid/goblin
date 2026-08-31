@@ -5,6 +5,7 @@ import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
+import { ProfileCreateModal } from '../components/ProfileCreateModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { GroupsModal } from '../components/GroupsModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
@@ -62,6 +63,7 @@ export function ProfilesPage(): JSX.Element {
   const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<ProfileListItem | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const generalAction = useAsyncAction();
   const rowAction = useAsyncAction();
@@ -163,25 +165,23 @@ export function ProfilesPage(): JSX.Element {
     });
   }
 
-  async function createProfile(): Promise<void> {
-    if (!newName.trim()) return;
-    await generalAction.run(async () => {
-      await callApi('profiles:create', {
-        name: newName.trim(),
-        templateId: templateId || undefined,
-        groupId: newGroupId || undefined,
-        proxyId: newProxyId || undefined,
-        tags: newTags
-          .split(',')
-          .map((tg) => tg.trim())
-          .filter(Boolean),
-      });
-      setNewName('');
-      setNewGroupId('');
-      setNewProxyId('');
-      setNewTags('');
-      await refresh();
-    });
+  /** Opens the full profile-creation modal instead of creating a profile
+   * immediately — nothing is written to the database until the user
+   * explicitly confirms inside that modal. Whatever's already been typed
+   * into the toolbar's quick fields (name/group/proxy/tags/template) just
+   * seeds the modal's initial state, exactly as it used to seed the
+   * immediate create call. */
+  function openCreateModal(): void {
+    setShowCreateModal(true);
+  }
+
+  function onProfileCreated(): void {
+    setNewName('');
+    setNewGroupId('');
+    setNewProxyId('');
+    setNewTags('');
+    void refresh();
+    void refreshGroups();
   }
 
   async function runAction(
@@ -438,7 +438,7 @@ export function ProfilesPage(): JSX.Element {
         onNewProxyIdChange={setNewProxyId}
         newTags={newTags}
         onNewTagsChange={setNewTags}
-        onCreate={() => void createProfile()}
+        onCreate={openCreateModal}
         onImport={() => void importProfiles()}
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}
@@ -501,6 +501,17 @@ export function ProfilesPage(): JSX.Element {
           onDeleteRequest={setConfirmDeleteProfile}
         />
       </div>
+      {showCreateModal && (
+        <ProfileCreateModal
+          initialName={newName}
+          initialGroupId={newGroupId}
+          initialProxyId={newProxyId}
+          initialTags={newTags}
+          initialTemplateId={templateId}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={onProfileCreated}
+        />
+      )}
       {editingId && (
         <ProfileEditorModal
           profileId={editingId}

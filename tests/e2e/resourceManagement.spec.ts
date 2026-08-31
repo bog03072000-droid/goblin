@@ -61,6 +61,7 @@ test.afterAll(async () => {
 test(`${CYCLES} repeated start/stop cycles on one profile leave no orphan process, no locked directory, and a responsive UI`, async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Resource Cycle Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Resource Cycle Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 

@@ -32,6 +32,7 @@ test('multi-select and bulk tag + bulk delete work end to end', async () => {
   for (const name of ['Bulk E2E One', 'Bulk E2E Two']) {
     await window.getByPlaceholder('New profile name').fill(name);
     await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     await expect(window.locator('td', { hasText: name })).toBeVisible({ timeout: 15_000 });
   }
 

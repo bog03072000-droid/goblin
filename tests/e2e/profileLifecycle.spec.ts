@@ -43,6 +43,7 @@ test('manager window loads the Profiles page with an empty list', async () => {
 test('creating a profile adds it to the list with STOPPED status', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile One');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible({ timeout: 15_000 });
   await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile One' }) })).toHaveAttribute(
     'data-status',
@@ -53,6 +54,7 @@ test('creating a profile adds it to the list with STOPPED status', async () => {
 test('search filters the profile list', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile Two');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile Two' })).toBeVisible({ timeout: 15_000 });
 
   await window.getByPlaceholder('Search profiles...').fill('Profile One');

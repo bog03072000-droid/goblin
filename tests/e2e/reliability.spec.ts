@@ -32,6 +32,7 @@ test.afterAll(async () => {
 test('deleting a running profile is blocked with a clear message, not silently ignored or crashed', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Running Delete Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Running Delete Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -59,8 +60,10 @@ test('deleting a running profile is blocked with a clear message, not silently i
 test('duplicate profile names are accepted without corrupting the list (no uniqueness constraint on name)', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Duplicate Name');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await window.getByPlaceholder('New profile name').fill('E2E Duplicate Name');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
 
   await expect(window.locator('td', { hasText: 'E2E Duplicate Name' })).toHaveCount(2, { timeout: 15_000 });
 
@@ -87,6 +90,7 @@ test('a profile assigned to an unreachable proxy still starts and stops cleanly 
   await window.getByText('Profiles', { exact: true }).click();
   await window.getByPlaceholder('New profile name').fill('E2E Dead Proxy Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Dead Proxy Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -123,6 +127,7 @@ function invokeIpc(win: Page, channel: string, payload: unknown): Promise<unknow
 test('starting an already-running profile is rejected with a specific error, not silently double-started', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Start Twice');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Start Twice' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 
@@ -142,6 +147,7 @@ test('starting an already-running profile is rejected with a specific error, not
 test('stopping an already-stopped profile resolves gracefully instead of throwing', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Stop Twice');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Stop Twice' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
   await expect(row).toHaveAttribute('data-status', 'STOPPED');
@@ -154,6 +160,7 @@ test('stopping an already-stopped profile resolves gracefully instead of throwin
 test('starting a profile whose storage folder was deleted outside the app shows a clear error, not a crash', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Deleted Storage');
   await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Deleted Storage' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
 

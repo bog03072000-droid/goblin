@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FingerprintInputSchema } from './fingerprint';
 
 export const ProfileStatusSchema = z.enum([
   'STOPPED',
@@ -50,6 +51,11 @@ export const ProfileCreateInputSchema = z.object({
   groupId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().min(1).max(60)).optional(),
   templateId: z.string().optional(),
+  // Optional fingerprint field overrides collected up front in the creation
+  // modal (e.g. manual mode, spoofing toggles) — merged onto the
+  // auto-generated base fingerprint server-side, same generator every other
+  // creation path already uses. Omitted fields keep their generated value.
+  fingerprint: FingerprintInputSchema.partial().optional(),
 });
 export type ProfileCreateInput = z.infer<typeof ProfileCreateInputSchema>;
 
