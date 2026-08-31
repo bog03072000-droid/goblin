@@ -10,7 +10,11 @@ export const SettingsSchema = z.object({
   cacheLimitMb: z.number().int().min(50).max(20000).default(2000),
   startupBehavior: StartupBehaviorSchema.default('showProfileList'),
   logRetentionDays: z.number().int().min(1).max(365).default(30),
-  maxConcurrentLaunches: z.number().int().min(1).max(20).default(4),
+  // Conservative default: real-world load testing measured ~585MB and ~5 OS
+  // processes per simultaneously launching profile (main + GPU + renderer +
+  // utility/audio), so a high default here can spike RAM usage badly on
+  // typical machines. See docs/LOAD_TEST.md.
+  maxConcurrentLaunches: z.number().int().min(1).max(20).default(2),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

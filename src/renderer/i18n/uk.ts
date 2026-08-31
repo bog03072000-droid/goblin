@@ -220,7 +220,11 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'help.shortcut.openSelected': 'Запустити вибраний профіль',
   'settings.hardwareAcceleration': 'Апаратне прискорення (потрібен перезапуск)',
   'settings.autoCacheCleanup': 'Автоматичне очищення кешу',
-  'settings.maxConcurrentLaunches': 'Макс. одночасних запусків (масовий запуск)',
+  'settings.maxConcurrentLaunches': 'Паралельність запуску (масовий запуск)',
+  'settings.maxConcurrentLaunches.description':
+    'Скільки профілів дозволено ЗАПУСКАТИ ОДНОЧАСНО під час масового запуску. Це не обмежує загальну кількість запущених профілів — лише темп нових запусків.',
+  'settings.maxConcurrentLaunches.ramWarning':
+    'Кожен профіль, що одночасно запускається, використовує приблизно 500-600 МБ ОЗП. Велике значення може різко підвищити споживання пам\'яті, особливо на машинах з обмеженою вільною пам\'яттю.',
   'settings.cacheLimitMb': 'Ліміт кешу на профіль (МБ)',
   'settings.startupBehavior': 'Поведінка при запуску',
   'settings.startupBehavior.showProfileList': 'Показати список профілів',

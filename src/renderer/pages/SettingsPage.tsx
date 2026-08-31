@@ -75,7 +75,7 @@ export function SettingsPage(): JSX.Element {
           />
           {t('settings.autoCacheCleanup')}
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label style={{ display: 'block', marginBottom: 4 }}>
           {t('settings.maxConcurrentLaunches')}
           <input
             type="number"
@@ -86,6 +86,14 @@ export function SettingsPage(): JSX.Element {
             style={{ display: 'block', width: 160, marginTop: 4 }}
           />
         </label>
+        <div style={{ color: 'var(--ash-dim)', fontSize: 12, maxWidth: 440, marginBottom: 8 }}>
+          {t('settings.maxConcurrentLaunches.description')}
+        </div>
+        {settings.maxConcurrentLaunches > 4 && (
+          <div className="banner banner-warn" style={{ maxWidth: 440 }}>
+            {t('settings.maxConcurrentLaunches.ramWarning')}
+          </div>
+        )}
       </div>
 
       <div className="panel">

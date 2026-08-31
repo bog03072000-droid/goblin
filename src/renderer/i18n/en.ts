@@ -218,7 +218,11 @@ const en = {
   'help.shortcut.openSelected': 'Start the selected profile',
   'settings.hardwareAcceleration': 'Hardware acceleration (restart required)',
   'settings.autoCacheCleanup': 'Automatic cache cleanup',
-  'settings.maxConcurrentLaunches': 'Max simultaneous profile launches (bulk start)',
+  'settings.maxConcurrentLaunches': 'Launch concurrency (bulk start)',
+  'settings.maxConcurrentLaunches.description':
+    'How many profiles are allowed to START AT THE SAME TIME during a bulk start. This does not limit how many profiles can end up running in total — it only paces the burst of new launches.',
+  'settings.maxConcurrentLaunches.ramWarning':
+    'Each simultaneously launching profile uses roughly 500-600MB of RAM. A high value can spike memory usage sharply, especially on machines with limited free RAM.',
   'settings.cacheLimitMb': 'Cache limit per profile (MB)',
   'settings.startupBehavior': 'Startup behavior',
   'settings.startupBehavior.showProfileList': 'Show profile list',

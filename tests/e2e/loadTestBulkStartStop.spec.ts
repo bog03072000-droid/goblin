@@ -116,7 +116,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
     }
 
     await window.getByText('Settings', { exact: true }).click();
-    const concurrencyInput = window.getByLabel('Max simultaneous profile launches (bulk start)');
+    const concurrencyInput = window.getByLabel('Launch concurrency (bulk start)');
     await concurrencyInput.fill(String(concurrency));
     await concurrencyInput.blur();
     await expect(window.locator('.banner-success')).toBeVisible({ timeout: 20_000 });

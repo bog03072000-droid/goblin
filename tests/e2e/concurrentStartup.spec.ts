@@ -37,7 +37,7 @@ test.afterAll(async () => {
 
 test(`bulk-starting ${PROFILE_COUNT} profiles with maxConcurrentLaunches=${CONCURRENCY} launches all of them without freezing the UI, isolating any per-profile failure`, async () => {
   await window.getByText('Settings', { exact: true }).click();
-  const concurrencyInput = window.getByLabel('Max simultaneous profile launches (bulk start)');
+  const concurrencyInput = window.getByLabel('Launch concurrency (bulk start)');
   await concurrencyInput.fill(String(CONCURRENCY));
   await concurrencyInput.blur();
   await expect(window.locator('.banner-success')).toBeVisible({ timeout: 10_000 });
