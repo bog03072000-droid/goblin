@@ -150,9 +150,12 @@ data itself is never touched by this recovery path**, only the lock file.
   channel) — this is a property of the platform, not something this
   suite re-tests, since exercising it meaningfully requires a real
   Electron IPC round-trip (see the E2E gap below).
-- Proxy authentication credentials are currently passed to the per-profile
-  child process via environment variables rather than a more tightly scoped
-  IPC handshake. Environment variables are visible to other processes running
-  as the same OS user via standard process-inspection tools, which is a
-  narrower exposure than argv (visible more broadly) but still not perfect
-  isolation. This is called out here rather than left undocumented.
+- Proxy authentication credentials are passed to the per-profile child
+  process over its own `stdin`, written once by the parent immediately after
+  `spawn()` and followed by `stdin.end()` (`browserLauncher.ts`); the child
+  reads exactly that one line before registering its proxy-auth `'login'`
+  handler or configuring the session (`profileWindowEntry.ts`'s
+  `readStdinCredentials()`). This replaced an earlier environment-variable
+  handoff, which stayed readable by any other process running as the same OS
+  user via `/proc`/Task Manager for the child's entire lifetime — a stdin
+  write is consumed once and isn't retained anywhere after that.

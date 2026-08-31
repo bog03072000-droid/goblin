@@ -182,6 +182,103 @@ test('HTTPS traffic through an assigned proxy is routed via a real CONNECT tunne
 });
 
 /**
+ * Proxy authentication end to end: the credential now travels
+ * parent → child over stdin (browserLauncher.ts writes it once right after
+ * spawn(); profileWindowEntry.ts's readStdinCredentials() reads it before
+ * registering the 'login' handler — see SECURITY.md) instead of an
+ * environment variable. A fake proxy that challenges with 407 and only
+ * accepts one specific `Proxy-Authorization: Basic <user:pass>` header is
+ * the most direct real proof that the credential actually made the whole
+ * trip and reached Chromium's proxy-auth handshake correctly — a passing
+ * request through it cannot happen any other way.
+ */
+function startFakeAuthProxyServer(
+  expectedUser: string,
+  expectedPass: string,
+): Promise<{ server: http.Server; port: number; authorizedRequests: string[] }> {
+  const expected = 'Basic ' + Buffer.from(`${expectedUser}:${expectedPass}`).toString('base64');
+  const authorizedRequests: string[] = [];
+  const server = http.createServer((req, res) => {
+    if (req.headers['proxy-authorization'] !== expected) {
+      res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="e2e"' });
+      res.end();
+      return;
+    }
+    authorizedRequests.push(req.url ?? '');
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('ok');
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve({ server, port: (server.address() as AddressInfo).port, authorizedRequests });
+    });
+  });
+}
+
+test('a proxy with a username/password actually authenticates — the credential travels stdin parent-to-child, not an env var', async () => {
+  const proxyUser = 'e2e-user';
+  const proxyPass = 'e2e-pass-9f3a';
+  const { server, port, authorizedRequests } = await startFakeAuthProxyServer(proxyUser, proxyPass);
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-proxy-auth-'));
+
+  let app: ElectronApplication | undefined;
+  try {
+    app = await electron.launch({
+      args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
+      env: {
+        ...process.env,
+        PF_E2E_LOCALE: 'en',
+        PF_E2E_PROXY_TEST_URL: `http://${MARKER_HOST}${MARKER_PATH}`,
+      },
+    });
+    const window: Page = await app.firstWindow();
+    await window.waitForLoadState('domcontentloaded');
+
+    await window.getByText('Proxies', { exact: true }).click();
+    await window.getByPlaceholder('Name', { exact: true }).fill('E2E Auth Proxy');
+    await window.getByPlaceholder('Host').fill('127.0.0.1');
+    await window.getByPlaceholder('Port').fill(String(port));
+    await window.getByPlaceholder('Username').fill(proxyUser);
+    await window.getByPlaceholder('Password').fill(proxyPass);
+    await window.getByRole('button', { name: 'Add Proxy' }).click();
+    await expect(window.locator('td', { hasText: 'E2E Auth Proxy' })).toBeVisible({ timeout: 10_000 });
+
+    await window.getByText('Profiles', { exact: true }).click();
+    await window.getByPlaceholder('New profile name').fill('E2E Auth Proxy Profile');
+    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+    const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Auth Proxy Profile' }) });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await window.getByText('proxy', { exact: true }).click();
+    await window.getByLabel('Assigned proxy').selectOption({ label: `E2E Auth Proxy (http://127.0.0.1:${port})` });
+    await window.getByRole('button', { name: 'Save' }).click();
+    await window.getByRole('button', { name: 'Close' }).click();
+
+    await row.getByRole('button', { name: 'Start', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+    // Only reachable if Chromium answered the 407 challenge with exactly the
+    // credential this test configured — proving it made it from the DB,
+    // through ProfileManager, through browserLauncher's stdin write, through
+    // profileWindowEntry's readStdinCredentials(), into the 'login' handler.
+    await expect
+      .poll(() => authorizedRequests.some((u) => u.includes(MARKER_HOST) && u.includes(MARKER_PATH)), {
+        timeout: 20_000,
+      })
+      .toBe(true);
+
+    await row.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+  } finally {
+    await app?.close();
+    server.close();
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  }
+});
+
+/**
  * SOCKS5: a hand-rolled minimal server since there is no real SOCKS5 network
  * to reach — just enough of RFC 1928 to accept the no-auth handshake and
  * read the CONNECT request's target address/port, which is the only thing

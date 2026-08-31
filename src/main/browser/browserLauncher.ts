@@ -90,21 +90,39 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   }
 
   const env: NodeJS.ProcessEnv = { ...process.env };
-  if (params.proxy?.username) env['PF_PROXY_USERNAME'] = params.proxy.username;
-  if (params.proxyPassword) env['PF_PROXY_PASSWORD'] = params.proxyPassword;
   env['TZ'] = params.fingerprint.timezone;
 
   const child = spawn(electronBinary, args, {
     cwd: path.dirname(entryScript),
     env,
+    // stdin is piped (not 'ignore') specifically to hand the proxy
+    // credentials to the child process — see the write below. Passing them
+    // as env vars instead (the previous approach) would leave them readable
+    // by any other process running as the same OS user via /proc or Task
+    // Manager for the child's entire lifetime; a one-shot stdin write is
+    // only ever visible to the child itself and isn't retained anywhere
+    // after it's read (see profileWindowEntry.ts's readStdinCredentials()).
+    //
     // The 'ipc' channel (fd 3) is what lets ProfileManager.stop() ask this
     // process to shut down gracefully (app.quit(), which flushes Chromium's
     // cookie/localStorage stores) instead of only ever having a hard kill()
     // available — see profileManager.ts's stop() for why that distinction
     // turned out to matter for real. stdout/stderr stay ignored, same as before.
-    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    stdio: ['pipe', 'ignore', 'ignore', 'ipc'],
     detached: false,
   });
+
+  // Written once, immediately, then the stream is closed — the child reads
+  // exactly this one line before doing anything else (see
+  // readStdinCredentials() in profileWindowEntry.ts), so there's no window
+  // where the child is waiting on more input that never arrives.
+  child.stdin?.write(
+    JSON.stringify({
+      proxyUsername: params.proxy?.username ?? null,
+      proxyPassword: params.proxyPassword ?? null,
+    }) + '\n',
+  );
+  child.stdin?.end();
 
   return child;
 }

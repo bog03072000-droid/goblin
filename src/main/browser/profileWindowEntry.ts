@@ -28,6 +28,9 @@ protocol.registerSchemesAsPrivileged([
  */
 export function runProfileWindowProcess(): void {
   const args = parseArgs(process.argv);
+  const credentials = readStdinCredentials();
+  args.proxyUsername = credentials.proxyUsername;
+  args.proxyPassword = credentials.proxyPassword;
 
   // Requested by ProfileManager.stop() (see its comment for why): app.quit()
   // runs Electron/Chromium's normal shutdown sequence, which flushes the
@@ -379,10 +382,49 @@ function parseArgs(argv: string[]): ProfileWindowArgs {
     userAgent,
     locale: get('locale') ?? 'en-US',
     proxyRules: get('proxy-rules'),
-    proxyUsername: process.env['PF_PROXY_USERNAME'] ?? null,
-    proxyPassword: process.env['PF_PROXY_PASSWORD'] ?? null,
+    // Filled in by readStdinCredentials() right after this returns — never
+    // sourced from argv/env, since both are visible to other processes on
+    // this machine for the child's whole lifetime (argv via any process
+    // listing tool, env vars via /proc or Task Manager), unlike a one-shot
+    // stdin read.
+    proxyUsername: null,
+    proxyPassword: null,
     fingerprintConfig,
     dbPath: get('db-path'),
     navigateTo: get('navigate-to'),
   };
+}
+
+/** Reads the one newline-terminated JSON line browserLauncher.ts's spawn()
+ * call writes to this process's stdin, immediately followed by stdin.end().
+ * This is the replacement for passing proxy credentials as environment
+ * variables: an env var stays readable by any other process running as the
+ * same OS user for the whole lifetime of this child process (via /proc on
+ * Linux or Task Manager on Windows), while a stdin write is consumed once
+ * and never retained anywhere after.
+ *
+ * Deliberately synchronous (`fs.readFileSync(0, ...)`) rather than the
+ * async `process.stdin` stream API: the async 'data'/'end' event approach
+ * was tried first and, verified empirically against a real packaged
+ * profile-window child process, never fired a single 'data' event even
+ * though the parent's write() completed successfully (confirmed via its
+ * own completion callback) — 'end' fired immediately with an empty buffer,
+ * as if the child's `process.stdin` were a distinct stream from the pipe
+ * the parent actually wrote to. This is a known category of Electron/
+ * Windows main-process stdin quirk; reading fd 0 directly and synchronously
+ * sidesteps whatever stream-wiring issue causes it, and is the standard,
+ * well-tested pattern for reading all of a piped (non-TTY) stdin in Node.
+ * Only attempted when stdin isn't a TTY — an interactive `electron .
+ * --profile-window ...` run from a real terminal (dev debugging only; every
+ * real launch goes through browserLauncher.ts's piped spawn) would
+ * otherwise block here waiting for a human to type EOF. */
+function readStdinCredentials(): { proxyUsername: string | null; proxyPassword: string | null } {
+  if (process.stdin.isTTY) return { proxyUsername: null, proxyPassword: null };
+  try {
+    const raw = fs.readFileSync(0, 'utf-8').split('\n')[0] ?? '';
+    const parsed = JSON.parse(raw) as { proxyUsername?: string | null; proxyPassword?: string | null };
+    return { proxyUsername: parsed.proxyUsername ?? null, proxyPassword: parsed.proxyPassword ?? null };
+  } catch {
+    return { proxyUsername: null, proxyPassword: null };
+  }
 }
