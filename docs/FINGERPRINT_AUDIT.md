@@ -465,20 +465,75 @@ falling back to `SharedWorker` then a dedicated `Worker` if registration
 throws. A rerun of the live CreepJS scan after this stage's fix still shows
 the real host identity leaking specifically through that path — confirmed,
 not just predicted, by the unchanged CreepJS output alongside the
-independently-verified working dedicated-Worker diagnostic above. Root
-cause: Chromium rejects `blob:` URLs for `navigator.serviceWorker.register()`
-scripts (Service Worker registration requires a same-origin http(s) script
-URL), so this project's best-effort `register()` wrapper
-(`spoofingScript.ts`) silently falls back to registering the real,
-unpatched script whenever the `blob:` substitution is rejected — the same
-honest fallback-on-failure the Worker/SharedWorker wrapper uses, just for a
-restriction that Chromium enforces unconditionally rather than one this
-project chose. No clean fix exists without either a session-level
-network-response-rewriting layer (replacing Electron's default network
-handling for the whole profile session just to catch this one case — judged
-too invasive/risky to core browsing for the benefit, not attempted this
-stage) or a custom Chromium build. Left as a documented, verified gap rather
-than silently claimed as covered.
+independently-verified working dedicated-Worker diagnostic above.
+
+**Root cause — verified empirically this stage, not assumed.** A minimal,
+isolated diagnostic (`await navigator.serviceWorker.register(blobUrl)`
+against a real profile's webview) captures the exact Chromium error, thrown
+synchronously as a rejected promise, not a permissions/CSP failure:
+```
+TypeError: Failed to register a ServiceWorker: The URL protocol of the
+script ('blob:http://127.0.0.1:.../d84a9d21-...') is not supported.
+```
+The identical same-origin `http://` URL registered in the same test, same
+webview, same session, succeeds without incident (`OK: http://127.0.0.1:.../`)
+— ruling out this project's own `session`/CSP configuration as the cause.
+This is the Service Worker spec's own restriction (the registering script's
+URL must use an HTTP(S) scheme), enforced unconditionally by Chromium's own
+registration algorithm — not a policy this project set, and not one it can
+turn off via any `session`/`webContents` setting.
+
+**Three real alternatives investigated this stage, all rejected — not for
+lack of trying, but because each trades this one narrow gap for a worse or
+uncertain problem:**
+
+1. **Serve the patched script from this project's own `profileforge://`
+   protocol instead of a `blob:` URL.** Rejected immediately: `profileforge`
+   is a *custom* scheme, not `http`/`https` — Chromium's check above rejects
+   it exactly the same way it rejects `blob:`.
+2. **Session-level network interception** (`session.protocol.handle('http', …)`
+   / `handle('https', …)`, rewriting just the Service Worker script's
+   response body while passing every other request through unchanged).
+   Technically the correct shape of fix for *this specific* restriction (the
+   script's URL/origin/protocol never has to change, only its body) — but
+   `protocol.handle()` intercepts *every* request for that scheme in the
+   session, with no narrower "just this one URL" registration. A correct,
+   safe passthrough for everything else would mean this project re-implementing
+   streaming, redirects, POST bodies, cookies/credentials, and range requests
+   (video, large downloads) for *all* real browsing in every profile, just to
+   patch the rare site that fingerprints specifically via Service Worker.
+   Distinguishing "this request is fetching a Service Worker script" from an
+   ordinary script request also isn't available on the `protocol.handle()`
+   `Request` object itself — it would need a second, separate
+   `session.webRequest.onBeforeRequest` listener (where `resourceType`
+   *is* exposed) just to flag which URLs to treat differently. The risk this
+   adds to every profile's real browsing was judged clearly disproportionate
+   to closing one narrow, already-documented gap.
+3. **Electron's dedicated `session.serviceWorkers` API.** Checked directly
+   against this project's installed Electron type definitions
+   (`node_modules/electron/electron.d.ts`) rather than assumed from memory:
+   it exposes `getAllRunning()`/`getFromVersionID()` and two events
+   (`console-message`, `registration-completed`) — no method to run script
+   inside a Service Worker's own global scope, and `registration-completed`
+   fires only *after* registration has already resolved (i.e. after the
+   worker has already started), too late for the "before the worker's own
+   code runs" guarantee this project's other spoofing relies on. Not usable
+   for this at all, in this Electron version.
+
+A fourth option — CDP's `Target.setAutoAttach` at the *browser* level to
+catch Service Worker targets as they spawn, then `Runtime.evaluate` into
+them before resuming — is the closest real analogue to what already works
+for the main document, but it would need a browser-wide debugger session
+(Electron's `webContents.debugger` is scoped to one page's own WebContents,
+not the whole browser), which is *more* CDP surface, not less — directly
+counter to this stage's own "CDP footprint reduction" goal, for a narrow
+benefit. Not attempted.
+
+No clean fix exists within this project's current architecture. Left as a
+documented, verified gap — with the exact failure captured, the alternatives
+considered, and the reasoning for not pursuing each recorded here — rather
+than silently claimed as covered or force-fixed at the cost of core
+browsing reliability.
 
 **CreepJS raw numbers, before and after (see `docs/creepjs-results/` for the
 full unedited captures).** The `44% like headless` figure was unchanged
