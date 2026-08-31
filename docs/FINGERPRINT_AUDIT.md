@@ -45,7 +45,7 @@ never a mocked browser, never a hand-edited diagnostics page.
 | Device Memory | Yes | Yes, always | Yes | No CDP method exists for this (Finding 3) — a JS-level `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument`, applied unconditionally. |
 | Canvas | Yes | Yes, on by default (`canvasMode: 'noise'`) | Yes | Seeded per-profile noise (±1 on RGB channels) on `toDataURL()`/`getImageData()` — same-content-same-profile is byte-deterministic (tested), different profiles diverge on identical content (tested). |
 | Audio | Yes | Yes, on by default (`audioMode: 'noise'`) | Partial | Seeded per-profile noise on `AudioBuffer.getChannelData()` — override-installed is directly verified; the noise's numeric effect isn't independently re-derived by the test (would require re-implementing the seeded-PRNG math in the test itself, not currently done). |
-| WebGL (vendor/renderer) | Yes | **Opt-in, off by default** (`webglSpoofingMode: 'off'`) | Yes — **both states** | Off: honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On: `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content. |
+| WebGL (vendor/renderer) | Yes | **On by default since this audit stage** (`webglSpoofingMode: 'spoof'`), still a per-profile opt-out toggle | Yes — **both states** | Off (opted out): honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On (default): `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content. |
 | Media Devices | Yes | Opt-in, off by default (`mediaDevicesMode: 'real'`) | Yes | Off: real device enumeration (verified empirically: real inputs/outputs, not fabricated). On: `enumerateDevices()` returns a seeded synthetic list structurally distinguishable as fake by the diagnostics page's own check — not just trusting the mode flag. |
 | Fonts | Yes | Opt-in, off by default (`fontsMode: 'system'`); **partial even when on** | Yes | On: blocks `document.fonts.check()` and the Local Font Access API only. Does **not** block CSS-fallback-width-measurement font detection — re-investigated this stage (see §Fonts below), no clean fix exists without a Chromium patch or breaking real page layout; kept as-is and documented rather than silently claimed as full coverage. |
 
@@ -67,8 +67,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | devicePixelRatio | ✅ (`deviceScaleFactor`) | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setDeviceMetricsOverride({deviceScaleFactor})` | **A** |
 | hardwareConcurrency | ✅ | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setHardwareConcurrencyOverride` | **A** |
 | deviceMemory | ✅ | ✅ (unconditional) | ✅ configured value | ✅ (range only) | ✅ (asserts PASS) | `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument` — see Finding 6 | **A** |
-| WebGL vendor | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (plausibility only) | ✅ **both states** (off: asserts NOT_IMPLEMENTED; on: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — off by default, see §WebGL spoofing (opt-in) | **C** (→ **B**, verified, when the toggle is enabled) |
-| WebGL renderer | ✅ | opt-in (`webglSpoofingMode`, default `off`) | real GPU value unless opted in | ✅ (Apple-only-on-macOS check) | ✅ **both states** (same test as vendor) | same as WebGL vendor | **C** (→ **B**, verified, when the toggle is enabled) |
+| WebGL vendor | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value only if opted out | ✅ (plausibility only) | ✅ **both states** (off: asserts NOT_IMPLEMENTED; on/default: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — on by default, see §WebGL spoofing | **B** by default (→ **C** if a user opts out) |
+| WebGL renderer | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value only if opted out | ✅ (Apple-only-on-macOS check) | ✅ **both states** (same test as vendor) | same as WebGL vendor | **B** by default (→ **C** if a user opts out) |
 | Canvas | ✅ (`canvasMode`, default `noise`) | ✅ | ✅ deterministic per-profile noise | schema only | ✅ (asserts APPLIED + determinism, cross-profile difference) | seeded noise on `toDataURL()`/`getImageData()`, injected via CDP main-world script — see §Canvas (implemented) | **B** |
 | AudioContext | ✅ (`audioMode`, default `noise`) | ✅ | not read back numerically by diagnostics (override presence checked instead) | schema only | ✅ (asserts APPLIED — override installed) | seeded noise on `AudioBuffer.prototype.getChannelData`, same injection mechanism — see §Audio (implemented) | **B** |
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
@@ -278,7 +278,7 @@ than actually exists.
   fake list, which is what "hidden" as a per-profile identity property
   actually requires).
 
-## WebGL spoofing (opt-in, off by default)
+## WebGL spoofing (on by default since this audit stage, still an opt-out toggle)
 
 **This one is deliberately different from the other four.** `getParameter()`
 interception on `WebGL(2)RenderingContext.prototype` is architecturally the
@@ -297,21 +297,42 @@ compatibility risk that the other four overrides don't.
 
 Per the project's own stated resolution for exactly this situation, this is
 shipped as a separate schema field (`webglSpoofingMode: z.enum(['off',
-'spoof'])`, migration `003_webgl_spoofing_mode.sql`) **defaulting to `'off'`
-for every profile**, with its own UI toggle in the Fingerprint tab's Spoofing
-panel carrying an explicit warning banner
+'spoof'])`, migration `003_webgl_spoofing_mode.sql`), with its own UI toggle
+in the Fingerprint tab's Spoofing panel carrying an explicit warning banner
 (`editor.fingerprint.spoofing.webglWarning`: *"Experimental — overrides a
 real WebGL API used by some games, map renderers, and CAPTCHAs. May break
-page compatibility. Off by default; enable only if you understand the
-risk."*, shown in both English and Ukrainian). `webglVendor`/`webglRenderer`
-themselves are still generated and stored per-profile as before (unchanged,
-still class **C** on their own) — the new field controls only whether the
-JS-level override is actually installed. Turning it on is graded **B**, same
-category as Canvas/Audio, since the diagnostics page can only verify "the
-override is installed and returns the configured string", not that every
-possible WebGL-reading code path on every real site sees a fully consistent
-picture — the same category of partial-verifiability limitation as WebRTC's
-grade B.
+page compatibility."*, shown in both English and Ukrainian) whenever the
+toggle is on. `webglVendor`/`webglRenderer` themselves are still generated
+and stored per-profile as before (unchanged, still class **C** on their
+own) — the field controls only whether the JS-level override is actually
+installed. Turning it on is graded **B**, same category as Canvas/Audio,
+since the diagnostics page can only verify "the override is installed and
+returns the configured string", not that every possible WebGL-reading code
+path on every real site sees a fully consistent picture — the same category
+of partial-verifiability limitation as WebRTC's grade B.
+
+**Default changed from `'off'` to `'spoof'` for new profiles, this audit
+stage.** `generator.ts`'s `generateFingerprint()` now sets
+`webglSpoofingMode: 'spoof'` for every newly generated fingerprint — a
+critical-audit finding flagged this as "the single largest practical
+detection gap": with the old `'off'` default, every profile a user created
+without manually visiting the Fingerprint tab exposed the real host GPU
+renderer (e.g. a real `NVIDIA GeForce RTX 4060`) regardless of how carefully
+every other field was spoofed, which is exactly the kind of one-field leak
+CreepJS/FingerprintJS-style detectors correlate against the rest of the
+fingerprint to unmask a "too clean" browser. The compatibility-risk tradeoff
+this section describes (some games/map-renderers/CAPTCHAs branch on the
+reported GPU string) still exists and hasn't changed — what changed is the
+judgment that a *silent* real-GPU leak on every profile is the worse default
+of the two risks. Users who hit a real compatibility problem can still
+switch a profile back to `'off'` from the same Fingerprint tab toggle; the
+toggle itself, the warning banner, and the underlying override mechanism are
+all unchanged by this default flip. The migration's own column-level SQL
+default (`003_webgl_spoofing_mode.sql`: `DEFAULT 'off'`) is intentionally
+left as-is — every insert always sets this field explicitly from the
+generated fingerprint, so the SQL default only matters as a fallback for a
+hand-written row and was never the actual mechanism determining what new
+profiles got.
 
 ## Permissions and geolocation
 
@@ -611,3 +632,9 @@ unpatched content).
 - [x] Documentation updated (this file)
 - [x] Typecheck, lint, full unit suite, and the fingerprint E2E suite all pass
 - [x] Production build succeeds
+
+**Update, later stage:** `webglSpoofingMode`'s default was changed from
+`'off'` to `'spoof'` for newly generated profiles (see §WebGL spoofing
+above) — the toggle, warning banner, and off-by-request opt-out described in
+this checklist are all still exactly as built here; only which state a new
+profile starts in changed.

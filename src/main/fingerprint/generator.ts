@@ -54,10 +54,11 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     webrtcMode: 'proxy-only',
     fontsMode: 'system',
     mediaDevicesMode: 'real',
-    // Off by default — a JS-level getParameter() override carries real
-    // compatibility risk for WebGL-heavy sites (see docs/FINGERPRINT_AUDIT.md).
-    // The user opts in per profile via the Fingerprint tab.
-    webglSpoofingMode: 'off',
+    // Spoofed by default — leaving this off meant every new profile exposed
+    // the real host GPU renderer regardless of the rest of the fingerprint,
+    // the single largest practical detection gap (see docs/FINGERPRINT_AUDIT.md).
+    // The user can still opt out per profile via the Fingerprint tab.
+    webglSpoofingMode: 'spoof',
     seed: options.seed,
   };
 }

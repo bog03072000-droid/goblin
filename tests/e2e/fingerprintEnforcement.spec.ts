@@ -120,18 +120,20 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(snapshot.observed['canvasDeterministic']).toBe(true);
   expect(snapshot.statusByField['audioMode']).toBe('APPLIED');
 
+  // WebGL vendor/renderer now default to 'spoof' (generator.ts) — the real
+  // GPU/ANGLE backend was the single largest practical detection gap when
+  // left on the previous 'off' default, see docs/FINGERPRINT_AUDIT.md.
+  expect(snapshot.statusByField['webglVendor']).toBe('PASS');
+  expect(snapshot.observed['webglVendor']).toBe(snapshot.configured['webglVendor']);
+  expect(snapshot.statusByField['webglRenderer']).toBe('PASS');
+  expect(snapshot.observed['webglRenderer']).toBe(snapshot.configured['webglRenderer']);
+
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
 test('honestly unenforced-by-default properties are reported NOT_IMPLEMENTED, never a false PASS', async () => {
   const snapshot = readSnapshot();
-
-  // WebGL vendor/renderer: off by default (opt-in, see the dedicated
-  // "webglSpoofingMode 'spoof'..." test below) — reflects the real GPU/ANGLE
-  // backend until explicitly enabled.
-  expect(snapshot.statusByField['webglVendor']).toBe('NOT_IMPLEMENTED');
-  expect(snapshot.statusByField['webglRenderer']).toBe('NOT_IMPLEMENTED');
 
   // Fonts/media-devices default to their non-spoofing mode ('system'/'real')
   // — the diagnostics page reports the real values, not a fake pass.
