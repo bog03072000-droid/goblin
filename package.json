@@ -81,8 +81,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "REPLACE_WITH_GITHUB_OWNER",
-      "repo": "REPLACE_WITH_GITHUB_REPO"
+      "owner": "bog03072000-droid",
+      "repo": "goblin"
     }
   }
 }

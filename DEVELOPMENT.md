@@ -95,19 +95,28 @@ It reads its update feed from `build.publish` in `package.json`, currently:
 ```json
 "publish": {
   "provider": "github",
-  "owner": "REPLACE_WITH_GITHUB_OWNER",
-  "repo": "REPLACE_WITH_GITHUB_REPO"
+  "owner": "bog03072000-droid",
+  "repo": "goblin"
 }
 ```
 
-**Before shipping a real release**, replace `owner`/`repo` with this
-project's actual GitHub repository — electron-updater checks that repo's
-Releases for a newer tagged version and its published installer asset.
-`npm run package` (which runs `electron-builder` without `--publish`) never
-uploads anything on its own; publishing a release is a separate, explicit
-step (`electron-builder --publish always`, typically run from CI with a
-`GH_TOKEN` env var set) — this project does not wire that up automatically,
-so a maintainer stays in control of when a release actually goes out.
+This points at the project's real GitHub repository — electron-updater
+checks that repo's Releases for a newer tagged version and its published
+installer asset. `npm run package` (which runs `electron-builder` without
+`--publish`) never uploads anything on its own; publishing a release is a
+separate, explicit step (`electron-builder --publish always`, typically run
+from CI with a `GH_TOKEN` env var set) — this project does not wire that up
+automatically, so a maintainer stays in control of when a release actually
+goes out.
+
+**This config alone does not make auto-updates work yet.** electron-updater
+only finds something to update to once a tagged Release with a published
+installer asset actually exists on `bog03072000-droid/goblin` — until the
+first `electron-builder --publish always` run (which needs a `GH_TOKEN`
+with `repo` scope, e.g. a GitHub Personal Access Token or `gh auth token`,
+set in the environment that runs it), `checkForUpdatesAndNotify()` will
+simply find no releases and do nothing. Setting up that token/CI step is a
+separate, deliberate decision for whoever manages releases — not done here.
 
 If GitHub Releases isn't where you want to host updates, swap the whole
 block for a `"provider": "generic"` config instead:
