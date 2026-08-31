@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
 import type { Fingerprint, FingerprintInput, FingerprintValidationResult } from '@shared/schemas/fingerprint';
 import type { ProxyRecord, ProxyProtocol } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
@@ -295,29 +296,28 @@ export function ProfileCreateModal({
 
           {tab === 'general' && (
             <div>
-              <label style={{ display: 'block', marginBottom: 8 }}>
+              <label className="field">
                 {t('editor.general.name')}
-                <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
+                <input value={name} onChange={(e) => setName(e.target.value)} />
               </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
+              <label className="field">
                 {t('editor.general.description')}
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 60 }}
+                  style={{ minHeight: 60 }}
                 />
               </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
+              <label className="field">
                 {t('editor.general.tags')}
                 <input
                   value={tagsText}
                   onChange={(e) => setTagsText(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 4 }}
                 />
               </label>
-              <label style={{ display: 'block', marginBottom: 8 }}>
+              <label className="field">
                 {t('editor.general.group')}
-                <select value={groupId} onChange={(e) => setGroupId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
                   <option value="">{t('profiles.group.none')}</option>
                   {groups.map((g) => (
                     <option key={g.id} value={g.id}>
@@ -331,12 +331,11 @@ export function ProfileCreateModal({
 
           {tab === 'fingerprint' && fingerprint && draft && (
             <div>
-              <label style={{ display: 'block', marginBottom: 12 }}>
+              <label className="field">
                 {t('profileCreate.fingerprint.template')}
                 <select
                   value={templateId}
                   onChange={(e) => onTemplateChange(e.target.value)}
-                  style={{ display: 'block', width: '100%', marginTop: 4 }}
                 >
                   <option value="">{t('profiles.template.auto')}</option>
                   {templates.map((tmpl) => (
@@ -365,9 +364,9 @@ export function ProfileCreateModal({
 
           {tab === 'proxy' && (
             <div>
-              <label style={{ display: 'block', marginBottom: 8 }}>
+              <label className="field">
                 {t('editor.proxy.assigned')}
-                <select value={proxyId} onChange={(e) => setProxyId(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+                <select value={proxyId} onChange={(e) => setProxyId(e.target.value)}>
                   <option value="">{t('common.none')}</option>
                   {proxies.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -378,63 +377,59 @@ export function ProfileCreateModal({
               </label>
               {!showAddProxy && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowAddProxy(true)}>
+                  <Plus size={14} strokeWidth={2.25} />
                   {t('profileCreate.proxy.addNew')}
                 </button>
               )}
               {showAddProxy && (
                 <div className="panel" style={{ marginTop: 8 }}>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.namePlaceholder')}
                     <input
                       value={proxyForm.name}
                       onChange={(e) => setProxyForm({ ...proxyForm, name: e.target.value })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     />
                   </label>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.table.protocol')}
                     <select
                       value={proxyForm.protocol}
                       onChange={(e) => setProxyForm({ ...proxyForm, protocol: e.target.value as ProxyProtocol })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     >
                       <option value="http">HTTP</option>
                       <option value="https">HTTPS</option>
                       <option value="socks5">SOCKS5</option>
                     </select>
                   </label>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.hostPlaceholder')}
                     <input
                       value={proxyForm.host}
                       onChange={(e) => setProxyForm({ ...proxyForm, host: e.target.value })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     />
                   </label>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.portPlaceholder')}
                     <input
                       type="number"
                       value={proxyForm.port}
                       onChange={(e) => setProxyForm({ ...proxyForm, port: Number(e.target.value) })}
-                      style={{ display: 'block', width: 120, marginTop: 4 }}
+                      style={{ width: 120 }}
                     />
                   </label>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.usernamePlaceholder')}
                     <input
                       value={proxyForm.username}
                       onChange={(e) => setProxyForm({ ...proxyForm, username: e.target.value })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     />
                   </label>
-                  <label style={{ display: 'block', marginBottom: 8 }}>
+                  <label className="field">
                     {t('proxy.passwordPlaceholder')}
                     <input
                       type="password"
                       value={proxyForm.password}
                       onChange={(e) => setProxyForm({ ...proxyForm, password: e.target.value })}
-                      style={{ display: 'block', width: '100%', marginTop: 4 }}
                     />
                   </label>
                   <button className="btn btn-ghost btn-sm" disabled={addProxyAction.pending} onClick={() => void addProxy()}>

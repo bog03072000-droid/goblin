@@ -30,7 +30,7 @@ test('groups can be created, a profile moved into one, renamed, filtered, and de
   await expect(row).toBeVisible({ timeout: 15_000 });
 
   // Create — the modal itself, not a native prompt() dialog.
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   const modal = window.locator('.modal-panel');
   await expect(modal).toBeVisible();
   await modal.getByPlaceholder('New group name').fill('E2E Group');
@@ -66,7 +66,7 @@ test('groups can be created, a profile moved into one, renamed, filtered, and de
   await expect(window.locator('td', { hasText: 'E2E Group Profile' })).toBeVisible();
 
   // Delete — goes through the shared ConfirmDialog, not window.confirm().
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   await expect(modal).toBeVisible();
   await modal.getByRole('button', { name: 'Delete', exact: true }).click();
   await window.locator('.modal-panel').last().getByRole('button', { name: 'Delete', exact: true }).click();
@@ -79,7 +79,7 @@ test('groups can be created, a profile moved into one, renamed, filtered, and de
 });
 
 test('multiple selected profiles can be bulk-assigned to a group at once', async () => {
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   const modal = window.locator('.modal-panel');
   await expect(modal).toBeVisible();
   await modal.getByPlaceholder('New group name').fill('E2E Bulk Group');

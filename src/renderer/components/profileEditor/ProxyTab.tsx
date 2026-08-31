@@ -17,9 +17,9 @@ export function ProxyTab({
   const { t } = useTranslation();
   return (
     <div>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label className="field">
         {t('editor.proxy.assigned')}
-        <select value={proxyId} onChange={(e) => onProxyIdChange(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+        <select value={proxyId} onChange={(e) => onProxyIdChange(e.target.value)}>
           <option value="">{t('common.none')}</option>
           {proxies.map((p) => (
             <option key={p.id} value={p.id}>

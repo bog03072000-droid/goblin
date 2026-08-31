@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Users, Globe, Download, ScrollText, Settings as SettingsIcon } from 'lucide-react';
 import { ProfilesPage } from './pages/ProfilesPage';
 import { ProxiesPage } from './pages/ProxiesPage';
 import { DownloadsPage } from './pages/DownloadsPage';
@@ -46,18 +47,23 @@ function AppShell(): JSX.Element {
           <span className="sidebar-brand-name">Goblin</span>
         </div>
         <div className={`sidebar-item ${page === 'profiles' ? 'active' : ''}`} onClick={() => setPage('profiles')}>
+          <Users size={16} strokeWidth={2} />
           {t('app.sidebar.profiles')}
         </div>
         <div className={`sidebar-item ${page === 'proxies' ? 'active' : ''}`} onClick={() => setPage('proxies')}>
+          <Globe size={16} strokeWidth={2} />
           {t('app.sidebar.proxies')}
         </div>
         <div className={`sidebar-item ${page === 'downloads' ? 'active' : ''}`} onClick={() => setPage('downloads')}>
+          <Download size={16} strokeWidth={2} />
           {t('app.sidebar.downloads')}
         </div>
         <div className={`sidebar-item ${page === 'logs' ? 'active' : ''}`} onClick={() => setPage('logs')}>
+          <ScrollText size={16} strokeWidth={2} />
           {t('app.sidebar.logs')}
         </div>
         <div className={`sidebar-item ${page === 'settings' ? 'active' : ''}`} onClick={() => setPage('settings')}>
+          <SettingsIcon size={16} strokeWidth={2} />
           {t('app.sidebar.settings')}
         </div>
       </div>

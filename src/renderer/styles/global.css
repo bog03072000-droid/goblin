@@ -78,6 +78,9 @@ h1, h2, h3, h4 {
 }
 
 .sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 16px;
   margin: 0 8px;
   border-radius: 10px;
@@ -85,10 +88,12 @@ h1, h2, h3, h4 {
   color: var(--ash);
   font-weight: 600;
   font-size: 13px;
-  transition: background var(--ease), color var(--ease), box-shadow var(--ease);
+  transition: background var(--ease), color var(--ease), box-shadow var(--ease), transform var(--ease);
   border-left: 2px solid transparent;
 }
-.sidebar-item:hover { background: var(--char-hi); color: var(--paper); }
+.sidebar-item svg { flex-shrink: 0; opacity: 0.85; transition: opacity var(--ease); }
+.sidebar-item:hover { background: var(--char-hi); color: var(--paper); transform: translateX(1px); }
+.sidebar-item:hover svg { opacity: 1; }
 .sidebar-item.active {
   background: linear-gradient(180deg, rgba(124, 179, 66, 0.18), rgba(124, 179, 66, 0.06));
   color: var(--lime);
@@ -96,6 +101,7 @@ h1, h2, h3, h4 {
   box-shadow: inset 0 0 0 1px rgba(124, 179, 66, 0.25), 0 0 16px -4px var(--lime-glow);
   text-shadow: 0 0 12px var(--lime-glow);
 }
+.sidebar-item.active svg { opacity: 1; }
 
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .toolbar {
@@ -233,7 +239,29 @@ th {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+td { transition: background var(--ease); }
 tr:hover td { background: rgba(124, 179, 66, 0.05); }
+
+/* ---------- Form field (label + control), reusable across all
+   modals/tabs — extracted this stage from what used to be repeated inline
+   `style={{ display: 'block', marginBottom: 8 }}` on every <label>. ---------- */
+.field {
+  display: block;
+  margin-bottom: 8px;
+}
+.field > input,
+.field > select,
+.field > textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+.field-hint {
+  color: var(--ash-dim);
+  font-size: 11px;
+  margin-top: 4px;
+  margin-bottom: 0;
+}
 
 /* ---------- Status pills ---------- */
 .pill {

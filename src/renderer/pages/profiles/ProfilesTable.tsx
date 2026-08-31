@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Play, Square, RotateCw, Pencil, Copy, FileDown, Archive, Trash2 } from 'lucide-react';
 import type { ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
@@ -107,32 +108,37 @@ export function ProfilesTable({
               <td>
                 {p.status === 'RUNNING' ? (
                   <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onStop(p.id)}>
-                    {busyId === p.id && <span className="spinner" />}
+                    {busyId === p.id ? <span className="spinner" /> : <Square size={13} strokeWidth={2.25} />}
                     {t('profiles.action.stop')}
                   </button>
                 ) : (
                   <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onStart(p.id)}>
-                    {busyId === p.id && <span className="spinner" />}
+                    {busyId === p.id ? <span className="spinner" /> : <Play size={13} strokeWidth={2.25} />}
                     {t('profiles.action.start')}
                   </button>
                 )}
                 <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onRestart(p.id)}>
-                  {busyId === p.id && <span className="spinner" />}
+                  {busyId === p.id ? <span className="spinner" /> : <RotateCw size={13} strokeWidth={2.25} />}
                   {t('profiles.action.restart')}
                 </button>
                 <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onEdit(p.id)}>
+                  <Pencil size={13} strokeWidth={2.25} />
                   {t('profiles.action.edit')}
                 </button>
                 <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onClone(p)}>
+                  <Copy size={13} strokeWidth={2.25} />
                   {t('profiles.action.clone')}
                 </button>
                 <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onExport(p.id)}>
+                  <FileDown size={13} strokeWidth={2.25} />
                   {t('profiles.action.export')}
                 </button>
                 <button className="btn btn-ghost btn-sm" disabled={busyId === p.id} onClick={() => onBackup(p.id)}>
+                  <Archive size={13} strokeWidth={2.25} />
                   {t('profiles.action.backup')}
                 </button>
                 <button className="btn btn-danger-ghost btn-sm" disabled={busyId === p.id} onClick={() => onDeleteRequest(p)}>
+                  <Trash2 size={13} strokeWidth={2.25} />
                   {t('profiles.action.delete')}
                 </button>
               </td>

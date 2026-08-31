@@ -93,7 +93,7 @@ test('the complete practical workflow: create, configure, browse, download, rest
 
   try {
     // --- Group + proxy setup ---
-    await window.getByRole('button', { name: '+ Manage Groups' }).click();
+    await window.getByRole('button', { name: 'Manage Groups' }).click();
     const groupModal = window.locator('.modal-panel');
     await groupModal.getByPlaceholder('New group name').fill('Flow Group');
     await groupModal.getByRole('button', { name: 'Create', exact: true }).click();

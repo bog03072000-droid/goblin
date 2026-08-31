@@ -29,25 +29,25 @@ export function GeneralTab({
   const { t } = useTranslation();
   return (
     <div>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label className="field">
         {t('editor.general.name')}
-        <input value={name} onChange={(e) => onNameChange(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
+        <input value={name} onChange={(e) => onNameChange(e.target.value)} />
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label className="field">
         {t('editor.general.description')}
         <textarea
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 60 }}
+          style={{ minHeight: 60 }}
         />
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label className="field">
         {t('editor.general.tags')}
-        <input value={tagsText} onChange={(e) => onTagsTextChange(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }} />
+        <input value={tagsText} onChange={(e) => onTagsTextChange(e.target.value)} />
       </label>
-      <label style={{ display: 'block', marginBottom: 8 }}>
+      <label className="field">
         {t('editor.general.group')}
-        <select value={groupId} onChange={(e) => onGroupIdChange(e.target.value)} style={{ display: 'block', width: '100%', marginTop: 4 }}>
+        <select value={groupId} onChange={(e) => onGroupIdChange(e.target.value)}>
           <option value="">{t('profiles.group.none')}</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>

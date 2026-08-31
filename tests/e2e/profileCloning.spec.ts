@@ -84,7 +84,7 @@ test('cloning a profile copies its config (proxy/group/tags/fingerprint identity
   await expect(window.locator('td', { hasText: 'Clone Test Proxy' })).toBeVisible({ timeout: 10_000 });
   await window.getByText('Profiles', { exact: true }).click();
 
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   const groupModal = window.locator('.modal-panel');
   await groupModal.getByPlaceholder('New group name').fill('Clone Test Group');
   await groupModal.getByRole('button', { name: 'Create', exact: true }).click();

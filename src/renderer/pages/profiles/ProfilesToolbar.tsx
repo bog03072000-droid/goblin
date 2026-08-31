@@ -1,3 +1,4 @@
+import { ArrowUp, ArrowDown, FolderCog, ArrowLeftRight, UserPlus, Upload, ArchiveRestore, FileDown } from 'lucide-react';
 import type { ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import type { Group } from '@shared/schemas/group';
@@ -134,7 +135,10 @@ export function ProfilesToolbar({
           </option>
         ))}
       </select>
-      <button className="btn btn-ghost" onClick={onManageGroups}>+ {t('profiles.group.manage')}</button>
+      <button className="btn btn-ghost" onClick={onManageGroups}>
+        <FolderCog size={14} strokeWidth={2.25} />
+        {t('profiles.group.manage')}
+      </button>
       <div style={{ display: 'inline-flex' }}>
         <select value={sortKey} onChange={(e) => onSortKeyChange(e.target.value as SortKey)}>
           <option value="name">{t('profiles.sort.name')}</option>
@@ -146,10 +150,11 @@ export function ProfilesToolbar({
           title={sortDirection === 'asc' ? t('profiles.sort.ascending') : t('profiles.sort.descending')}
           onClick={onToggleSortDirection}
         >
-          {sortDirection === 'asc' ? '↑' : '↓'}
+          {sortDirection === 'asc' ? <ArrowUp size={14} strokeWidth={2.25} /> : <ArrowDown size={14} strokeWidth={2.25} />}
         </button>
       </div>
       <button className="btn btn-ghost btn-sm" onClick={onInvertSelection}>
+        <ArrowLeftRight size={14} strokeWidth={2.25} />
         {t('profiles.selection.invert')}
       </button>
       <div style={{ flex: 1 }} />
@@ -193,11 +198,21 @@ export function ProfilesToolbar({
         onChange={(e) => onNewTagsChange(e.target.value)}
       />
       <button className="btn btn-primary" onClick={onCreate}>
+        <UserPlus size={14} strokeWidth={2.25} />
         {t('profiles.create')}
       </button>
-      <button className="btn btn-ghost" onClick={onImport}>{t('profiles.import')}</button>
-      <button className="btn btn-ghost" onClick={onRestore}>{t('profiles.restore')}</button>
-      <button className="btn btn-ghost" onClick={onExportAll}>{t('profiles.exportAll')}</button>
+      <button className="btn btn-ghost" onClick={onImport}>
+        <Upload size={14} strokeWidth={2.25} />
+        {t('profiles.import')}
+      </button>
+      <button className="btn btn-ghost" onClick={onRestore}>
+        <ArchiveRestore size={14} strokeWidth={2.25} />
+        {t('profiles.restore')}
+      </button>
+      <button className="btn btn-ghost" onClick={onExportAll}>
+        <FileDown size={14} strokeWidth={2.25} />
+        {t('profiles.exportAll')}
+      </button>
     </div>
   );
 }

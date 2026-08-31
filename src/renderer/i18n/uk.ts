@@ -122,7 +122,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profileCreate.title': 'Створити новий профіль',
   'profileCreate.createButton': 'Створити профіль',
   'profileCreate.fingerprint.template': 'Шаблон (ОС / браузер)',
-  'profileCreate.proxy.addNew': '+ Додати новий проксі',
+  'profileCreate.proxy.addNew': 'Додати новий проксі',
   'profileCreate.storage.hint': 'Буде доступно після створення профілю — каталогу зберігання ще не існує.',
   'profileCreate.advanced.hint': 'Буде доступно після створення профілю — ще немає id чи історії.',
 
@@ -239,8 +239,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.startupBehavior.lastSession': 'Відновити останню сесію',
   'settings.logRetentionDays': 'Зберігання журналу активності (днів)',
   'settings.language.label': 'Мова',
-  'settings.language.uk': '🇺🇦 Українська',
-  'settings.language.en': '🇬🇧 English',
+  'settings.language.uk': 'Українська',
+  'settings.language.en': 'English',
   'settings.saved': 'Збережено. Деякі налаштування (апаратне прискорення) набудуть чинності після перезапуску.',
 
   'downloads.searchPlaceholder': 'Пошук за назвою файлу...',

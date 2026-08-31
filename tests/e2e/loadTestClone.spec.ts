@@ -45,7 +45,7 @@ test.beforeAll(async () => {
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
 
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   const groupModal = window.locator('.modal-panel');
   for (let i = 0; i < PAIRS; i++) {
     await groupModal.getByPlaceholder('New group name').fill(`Load Clone Group ${i}`);

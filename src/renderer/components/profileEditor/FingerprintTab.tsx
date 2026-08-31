@@ -127,22 +127,20 @@ export function FingerprintTab({
         <div>
           <p style={{ color: 'var(--ash-dim)', fontSize: 12, marginTop: 0 }}>{t('editor.fingerprint.manualHint')}</p>
           {MANUAL_FIELD_KEYS.map(([labelKey, key]) => (
-            <label key={key} style={{ display: 'block', marginBottom: 8 }}>
+            <label key={key} className="field">
               {t(labelKey)}
               <input
                 className="mono"
                 value={draft[key]}
                 onChange={(e) => onDraftChange({ ...draft, [key]: e.target.value })}
-                style={{ display: 'block', width: '100%', marginTop: 4 }}
               />
             </label>
           ))}
-          <label style={{ display: 'block', marginBottom: 8 }}>
+          <label className="field">
             {t('editor.fingerprint.field.webrtcMode')}
             <select
               value={draft.webrtcMode}
               onChange={(e) => onDraftChange({ ...draft, webrtcMode: e.target.value })}
-              style={{ display: 'block', width: '100%', marginTop: 4 }}
             >
               <option value="default">{t('editor.fingerprint.webrtc.default')}</option>
               <option value="proxy-only">{t('editor.fingerprint.webrtc.proxyOnly')}</option>
@@ -161,34 +159,31 @@ export function FingerprintTab({
           {t('editor.fingerprint.spoofing.title')}
           {spoofingSaving && <span className="spinner" />}
         </h4>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="field">
           {t('editor.fingerprint.row.canvasMode')}
           <select
             value={fingerprint.canvasMode}
             onChange={(e) => onUpdateSpoofing({ canvasMode: e.target.value as Fingerprint['canvasMode'] })}
-            style={{ display: 'block', width: '100%', marginTop: 4 }}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
           </select>
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="field">
           {t('editor.fingerprint.row.audioMode')}
           <select
             value={fingerprint.audioMode}
             onChange={(e) => onUpdateSpoofing({ audioMode: e.target.value as Fingerprint['audioMode'] })}
-            style={{ display: 'block', width: '100%', marginTop: 4 }}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
           </select>
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="field">
           {t('editor.fingerprint.row.fontsMode')}
           <select
             value={fingerprint.fontsMode}
             onChange={(e) => onUpdateSpoofing({ fontsMode: e.target.value as Fingerprint['fontsMode'] })}
-            style={{ display: 'block', width: '100%', marginTop: 4 }}
           >
             <option value="system">{t('editor.fingerprint.spoofing.fontsSystem')}</option>
             <option value="restricted">{t('editor.fingerprint.spoofing.fontsRestricted')}</option>
@@ -197,12 +192,11 @@ export function FingerprintTab({
             {t('editor.fingerprint.spoofing.fontsHint')}
           </p>
         </label>
-        <label style={{ display: 'block', marginBottom: 8 }}>
+        <label className="field">
           {t('editor.fingerprint.row.mediaDevicesMode')}
           <select
             value={fingerprint.mediaDevicesMode}
             onChange={(e) => onUpdateSpoofing({ mediaDevicesMode: e.target.value as Fingerprint['mediaDevicesMode'] })}
-            style={{ display: 'block', width: '100%', marginTop: 4 }}
           >
             <option value="real">{t('editor.fingerprint.spoofing.mediaReal')}</option>
             <option value="hidden">{t('editor.fingerprint.spoofing.mediaHidden')}</option>
@@ -213,7 +207,6 @@ export function FingerprintTab({
           <select
             value={fingerprint.webglSpoofingMode}
             onChange={(e) => onUpdateSpoofing({ webglSpoofingMode: e.target.value as Fingerprint['webglSpoofingMode'] })}
-            style={{ display: 'block', width: '100%', marginTop: 4 }}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="spoof">{t('editor.fingerprint.spoofing.webglSpoof')}</option>

@@ -41,7 +41,7 @@ test('creating a profile with group/proxy/tags set inline applies them immediate
   await expect(window.locator('td', { hasText: 'Polish Proxy' })).toBeVisible({ timeout: 10_000 });
   await window.getByText('Profiles', { exact: true }).click();
 
-  await window.getByRole('button', { name: '+ Manage Groups' }).click();
+  await window.getByRole('button', { name: 'Manage Groups' }).click();
   const groupModal = window.locator('.modal-panel');
   await groupModal.getByPlaceholder('New group name').fill('Polish Group');
   await groupModal.getByRole('button', { name: 'Create', exact: true }).click();
@@ -89,7 +89,7 @@ test('sort direction toggle actually reverses the visible order', async () => {
   await sortSelect.selectOption('name');
 
   const firstAsc = await nameCells().first().textContent();
-  const dirButton = window.locator('button', { hasText: '↑' }).or(window.locator('button', { hasText: '↓' }));
+  const dirButton = window.locator('button[title="Ascending"], button[title="Descending"]');
   await dirButton.click();
   const firstDesc = await nameCells().first().textContent();
   expect(firstAsc).not.toBe(firstDesc);

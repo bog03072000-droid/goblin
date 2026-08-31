@@ -120,7 +120,7 @@ const en = {
   'profileCreate.title': 'Create New Profile',
   'profileCreate.createButton': 'Create profile',
   'profileCreate.fingerprint.template': 'Template (OS / browser)',
-  'profileCreate.proxy.addNew': '+ Add new proxy',
+  'profileCreate.proxy.addNew': 'Add new proxy',
   'profileCreate.storage.hint': 'Available once the profile is created — there is no storage directory yet.',
   'profileCreate.advanced.hint': 'Available once the profile is created — there is no id or history yet.',
 
@@ -237,8 +237,8 @@ const en = {
   'settings.startupBehavior.lastSession': 'Restore last session',
   'settings.logRetentionDays': 'Activity log retention (days)',
   'settings.language.label': 'Language',
-  'settings.language.uk': '🇺🇦 Українська',
-  'settings.language.en': '🇬🇧 English',
+  'settings.language.uk': 'Українська',
+  'settings.language.en': 'English',
   'settings.saved': 'Saved. Some settings (hardware acceleration) take effect on next launch.',
 
   'downloads.searchPlaceholder': 'Search by filename...',
