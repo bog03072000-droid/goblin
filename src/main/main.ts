@@ -1,4 +1,5 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import { log } from './logger';
 import { getDb } from './database/db';
@@ -113,6 +114,8 @@ function runManagerProcess(): void {
       void mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist-renderer', 'index.html'));
     }
 
+    setUpAutoUpdater(mainWindow);
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         void mainWindow?.loadFile(path.join(__dirname, '..', '..', 'dist-renderer', 'index.html'));
@@ -123,4 +126,40 @@ function runManagerProcess(): void {
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });
+}
+
+/**
+ * electron-updater reads its feed URL from `build.publish` in package.json
+ * (see that file for the real GitHub owner/repo this still needs, and
+ * README.md's "Releases and auto-updates" section for how to fill it in or
+ * switch providers). Only meaningful for a packaged, signed build — an
+ * unpackaged dev run has no real version/feed to check against, so this
+ * intentionally no-ops there rather than logging a stream of dev-only
+ * "update check failed" noise on every launch.
+ *
+ * `checkForUpdatesAndNotify()` already shows a native OS notification once
+ * an update is downloaded; the `update-downloaded` listener additionally
+ * pushes an in-app banner (see App.tsx) so the user isn't relying on the OS
+ * notification alone, and `update-error` is logged rather than surfaced —
+ * a failed background check should never interrupt someone's browsing.
+ */
+function setUpAutoUpdater(mainWindow: BrowserWindow): void {
+  if (!app.isPackaged) return;
+
+  autoUpdater.logger = log;
+  autoUpdater.on('update-available', (info) => {
+    log.info('[autoUpdater] update available', info.version);
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info('[autoUpdater] update downloaded, ready to install', info.version);
+    mainWindow.webContents.send('pf:update-available', { version: info.version });
+  });
+  autoUpdater.on('error', (err) => {
+    log.error('[autoUpdater] update check failed:', err);
+  });
+  ipcMain.on('pf:update-install', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  void autoUpdater.checkForUpdatesAndNotify();
 }

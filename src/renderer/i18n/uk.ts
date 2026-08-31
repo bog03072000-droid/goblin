@@ -8,6 +8,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'app.sidebar.downloads': 'Завантаження',
   'app.sidebar.logs': 'Журнал',
   'app.sidebar.settings': 'Налаштування',
+  'app.updateAvailable': 'Нова версія ({version}) завантажена і готова до встановлення.',
+  'app.updateRestart': 'Перезапустити та встановити',
 
   'common.close': 'Закрити',
   'common.save': 'Зберегти',

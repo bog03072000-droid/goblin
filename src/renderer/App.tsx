@@ -37,7 +37,12 @@ export function App(): JSX.Element | null {
 
 function AppShell(): JSX.Element {
   const [page, setPage] = useState<Page>('profiles');
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    window.profileforge.onUpdateAvailable((info) => setUpdateVersion(info.version));
+  }, []);
 
   return (
     <>
@@ -68,6 +73,14 @@ function AppShell(): JSX.Element {
         </div>
       </div>
       <div className="main">
+        {updateVersion && (
+          <div className="banner banner-success" style={{ margin: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ flex: 1 }}>{t('app.updateAvailable', { version: updateVersion })}</span>
+            <button className="btn btn-primary btn-sm" onClick={() => window.profileforge.installUpdate()}>
+              {t('app.updateRestart')}
+            </button>
+          </div>
+        )}
         {page === 'profiles' && <ProfilesPage />}
         {page === 'proxies' && <ProxiesPage />}
         {page === 'downloads' && <DownloadsPage />}

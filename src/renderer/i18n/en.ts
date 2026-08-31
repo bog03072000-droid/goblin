@@ -6,6 +6,8 @@ const en = {
   'app.sidebar.downloads': 'Downloads',
   'app.sidebar.logs': 'Logs',
   'app.sidebar.settings': 'Settings',
+  'app.updateAvailable': 'A new version ({version}) has been downloaded and is ready to install.',
+  'app.updateRestart': 'Restart & Install',
 
   'common.close': 'Close',
   'common.save': 'Save',

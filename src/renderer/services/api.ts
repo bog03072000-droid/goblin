@@ -4,6 +4,8 @@ declare global {
   interface Window {
     profileforge: {
       invoke: (channel: IpcChannel, payload: unknown) => Promise<unknown>;
+      onUpdateAvailable: (callback: (info: { version: string }) => void) => void;
+      installUpdate: () => void;
     };
   }
 }
