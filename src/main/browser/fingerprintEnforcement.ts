@@ -27,6 +27,18 @@ export interface EnforceableFingerprint {
  * `screen.width`/`screen.height`/`devicePixelRatio` (the claimed *monitor*,
  * not the *window*) are overridden. Verified this decouples cleanly rather
  * than distorting the visible page layout.
+ *
+ * Deliberately kept on CDP rather than moved to the preload-injected script
+ * (see spoofingScript.ts / diagnosticsPreload.ts, which now carries Canvas/
+ * Audio/WebGL/deviceMemory/Fonts/MediaDevices/Worker-propagation instead):
+ * `setDeviceMetricsOverride` changes `screen.width`/`height`/devicePixelRatio
+ * at the Blink layout engine level, which also drives CSS `@media` /
+ * `matchMedia()` evaluation — a JS-only override of the same properties
+ * would leave those two disagreeing (CreepJS's own "CSS Media Queries" check
+ * exists specifically to catch that class of mismatch), trading one
+ * detectable signal for a worse one. `navigator.platform` similarly stays
+ * here for consistency with `setUserAgentOverride`. A conscious decision,
+ * not an oversight — see docs/FINGERPRINT_AUDIT.md.
  */
 export async function enforceFingerprint(wc: WebContents, fp: EnforceableFingerprint): Promise<void> {
   if (!wc.debugger.isAttached()) {
@@ -82,22 +94,4 @@ export function webrtcModeToPolicy(
 
 export function applyWebrtcPolicy(wc: WebContents, mode: WebrtcMode): void {
   wc.setWebRTCIPHandlingPolicy(webrtcModeToPolicy(mode));
-}
-
-/**
- * Injects a script into the MAIN world of every future document this
- * WebContents navigates to, via CDP `Page.addScriptToEvaluateOnNewDocument`
- * — it runs before any of the page's own scripts, same category of native
- * Chromium mechanism as the `Emulation.*` overrides above (not a preload/
- * contextBridge isolated-world hack, which couldn't reach the page's own
- * canvas/audio/WebGL prototypes under contextIsolation anyway). Used for the
- * Canvas/Audio/WebGL/deviceMemory/Fonts/MediaDevices spoofing built by
- * spoofingScript.ts — see docs/FINGERPRINT_AUDIT.md.
- */
-export async function injectSpoofingScript(wc: WebContents, script: string): Promise<void> {
-  if (!wc.debugger.isAttached()) {
-    wc.debugger.attach('1.3');
-  }
-  await wc.debugger.sendCommand('Page.enable');
-  await wc.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: script });
 }

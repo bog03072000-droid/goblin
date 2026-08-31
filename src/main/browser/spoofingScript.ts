@@ -35,13 +35,18 @@ export function buildFakeMediaDevices(seed: string): FakeMediaDevice[] {
 const RESTRICTED_FONT_ALLOWLIST = ['Arial', 'Times New Roman', 'Courier New', 'Segoe UI', 'Verdana'];
 
 /**
- * Builds a JS source string injected via CDP `Page.addScriptToEvaluateOnNewDocument`
- * — the same category of mechanism (native Chromium DevTools Protocol, not a
- * preload/contextBridge world) already used for the enforced fields in
- * fingerprintEnforcement.ts, so this runs in the page's own MAIN world before
- * any of its own scripts, exactly like a real anti-detect browser's own
- * "evaluate on new document" approach — not a same-world monkeypatch racing
- * the page's own code.
+ * Builds a JS source string injected into the page's MAIN world via a
+ * preload script's classic "append a <script> element, then remove it"
+ * technique (see diagnosticsPreload.ts) — NOT CDP anymore (see
+ * docs/FINGERPRINT_AUDIT.md, "CDP footprint reduction" section, for why this
+ * moved off `Page.addScriptToEvaluateOnNewDocument`).
+ *
+ * Written against `self`, not `window`, throughout — `self` refers to the
+ * same global in a normal document AND inside a Worker/SharedWorker global
+ * scope, which is what makes this exact script string reusable verbatim as
+ * the Worker-context patch below (previously, before this stage, Worker/
+ * SharedWorker/ServiceWorker contexts received NONE of these overrides at
+ * all — a real leak confirmed via a live CreepJS scan, see the audit doc).
  *
  * Canvas/Audio noise is *seeded*, not "crude global random noise": the noise
  * for a given canvas/audio buffer is a deterministic function of
@@ -52,15 +57,27 @@ const RESTRICTED_FONT_ALLOWLIST = ['Arial', 'Times New Roman', 'Courier New', 'S
  */
 export type SpoofableFingerprint = Pick<
   Fingerprint,
-  'seed' | 'canvasMode' | 'audioMode' | 'deviceMemory' | 'webglSpoofingMode' | 'webglVendor' | 'webglRenderer' | 'fontsMode' | 'mediaDevicesMode'
+  | 'seed'
+  | 'canvasMode'
+  | 'audioMode'
+  | 'deviceMemory'
+  | 'webglSpoofingMode'
+  | 'webglVendor'
+  | 'webglRenderer'
+  | 'fontsMode'
+  | 'mediaDevicesMode'
+  | 'userAgent'
+  | 'platform'
+  | 'hardwareConcurrency'
 >;
 
-export function buildSpoofingScript(fp: SpoofableFingerprint): string {
+/** The part of the script that patches THIS global scope's own
+ * canvas/audio/webgl/navigator surface — shared verbatim between the main
+ * document and every Worker/SharedWorker it spawns (see buildSpoofingScript). */
+function buildCoreScript(fp: SpoofableFingerprint): string {
   const parts: string[] = [];
 
-  // Shared seeded PRNG (mulberry32) + a cheap content hash, inlined once.
   parts.push(`
-(function () {
   function mulberry32(a) {
     return function () {
       a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -96,7 +113,7 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
       }
       return imageData;
     }
-    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    var proto = self.CanvasRenderingContext2D && self.CanvasRenderingContext2D.prototype;
     if (proto) {
       var origGetImageData = proto.getImageData;
       proto.getImageData = function () {
@@ -104,7 +121,7 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
         return noisify(result);
       };
     }
-    var canvasProto = window.HTMLCanvasElement && window.HTMLCanvasElement.prototype;
+    var canvasProto = self.HTMLCanvasElement && self.HTMLCanvasElement.prototype;
     if (canvasProto) {
       var origToDataURL = canvasProto.toDataURL;
       canvasProto.toDataURL = function () {
@@ -122,6 +139,16 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
         return origToDataURL.apply(this, arguments);
       };
     }
+    // OffscreenCanvas exists in Worker global scopes (no HTMLCanvasElement
+    // there) — same noise function, same seeded determinism.
+    var offscreenProto = self.OffscreenCanvasRenderingContext2D && self.OffscreenCanvasRenderingContext2D.prototype;
+    if (offscreenProto) {
+      var origOffGetImageData = offscreenProto.getImageData;
+      offscreenProto.getImageData = function () {
+        var result = origOffGetImageData.apply(this, arguments);
+        return noisify(result);
+      };
+    }
   })();
 `);
   }
@@ -129,7 +156,7 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
   if (fp.audioMode === 'noise') {
     parts.push(`
   (function patchAudio() {
-    var proto = window.AudioBuffer && window.AudioBuffer.prototype;
+    var proto = self.AudioBuffer && self.AudioBuffer.prototype;
     if (!proto) return;
     var orig = proto.getChannelData;
     proto.getChannelData = function (channel) {
@@ -146,18 +173,6 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
 `);
   }
 
-  // Device memory has no on/off mode — it's always a configured value with
-  // no native override (see docs/FINGERPRINT_AUDIT.md Finding 3), so this is
-  // the only way to apply it at all, unconditionally.
-  parts.push(`
-  try {
-    Object.defineProperty(Navigator.prototype, 'deviceMemory', {
-      get: function () { return ${JSON.stringify(fp.deviceMemory)}; },
-      configurable: true,
-    });
-  } catch (e) {}
-`);
-
   if (fp.webglSpoofingMode === 'spoof') {
     parts.push(`
   (function patchWebGL() {
@@ -172,8 +187,8 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
         return orig.call(this, param);
       };
     }
-    patch(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
-    patch(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
+    patch(self.WebGLRenderingContext && self.WebGLRenderingContext.prototype);
+    patch(self.WebGL2RenderingContext && self.WebGL2RenderingContext.prototype);
   })();
 `);
   }
@@ -188,13 +203,13 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
   (function patchFonts() {
     var ALLOW = ${JSON.stringify(RESTRICTED_FONT_ALLOWLIST)};
     try {
-      if (document.fonts) {
-        document.fonts.check = function (font) {
+      if (self.document && self.document.fonts) {
+        self.document.fonts.check = function (font) {
           return ALLOW.some(function (f) { return font.indexOf(f) !== -1; });
         };
       }
-      if (navigator.fonts && navigator.fonts.query) {
-        navigator.fonts.query = function () { return Promise.resolve([]); };
+      if (self.navigator && self.navigator.fonts && self.navigator.fonts.query) {
+        self.navigator.fonts.query = function () { return Promise.resolve([]); };
       }
     } catch (e) {}
   })();
@@ -207,8 +222,8 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
   (function patchMediaDevices() {
     var FAKE = ${JSON.stringify(devices)};
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-        navigator.mediaDevices.enumerateDevices = function () {
+      if (self.navigator && self.navigator.mediaDevices && self.navigator.mediaDevices.enumerateDevices) {
+        self.navigator.mediaDevices.enumerateDevices = function () {
           return Promise.resolve(FAKE.map(function (d) {
             return { deviceId: d.deviceId, kind: d.kind, label: d.label, groupId: d.groupId, toJSON: function () { return this; } };
           }));
@@ -219,6 +234,95 @@ export function buildSpoofingScript(fp: SpoofableFingerprint): string {
 `);
   }
 
-  parts.push('})();');
+  // Navigator identity fields with no CDP coverage inside Worker/SharedWorker
+  // scopes (CDP's Emulation.setUserAgentOverride/setHardwareConcurrencyOverride
+  // only ever reach the main document — see docs/FINGERPRINT_AUDIT.md). For
+  // the main document these values already match what CDP set (harmless,
+  // redundant); for a Worker, this JS-level override is the ONLY thing that
+  // sets them at all — that gap is exactly what a live CreepJS scan caught
+  // (Worker reported the real host's Windows/NVIDIA identity while the main
+  // document correctly reported the configured one).
+  //
+  // deviceMemory has no native override at all anywhere (see Finding 3) —
+  // this getter is its only mechanism, unconditionally, same as before.
+  parts.push(`
+  (function overrideNavigatorIdentity() {
+    if (!self.navigator) return;
+    // Each property is its own try/catch: WorkerNavigator (unlike the main
+    // document's Navigator) was found to throw on some of these — e.g.
+    // 'platform' — while 'userAgent' succeeds, on this Chromium build. A
+    // single shared try/catch around all four meant one throw silently
+    // aborted the rest, leaving platform/hardwareConcurrency/deviceMemory
+    // unset inside every Worker — a real bug caught by a live CreepJS scan
+    // (the dedicated-Worker path reported the real host's Win32/16-core
+    // values while userAgent alone was correctly overridden). Isolating
+    // each call means a property this Chromium build won't let us redefine
+    // fails on its own without taking the others down with it.
+    try { Object.defineProperty(self.navigator, 'userAgent', { get: function () { return ${JSON.stringify(fp.userAgent)}; }, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'platform', { get: function () { return ${JSON.stringify(fp.platform)}; }, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'hardwareConcurrency', { get: function () { return ${JSON.stringify(fp.hardwareConcurrency)}; }, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'deviceMemory', { get: function () { return ${JSON.stringify(fp.deviceMemory)}; }, configurable: true }); } catch (e) {}
+  })();
+`);
+
   return parts.join('\n');
+}
+
+export function buildSpoofingScript(fp: SpoofableFingerprint): string {
+  const core = buildCoreScript(fp);
+
+  return `
+(function () {
+${core}
+
+  // Propagate the exact same patches into every Worker/SharedWorker this
+  // page spawns. new Worker()/new SharedWorker() are synchronous
+  // constructors, so the original script source is fetched with a
+  // synchronous XHR (works instantly against blob:/data: URLs and any
+  // same-origin script — no real network wait) and re-served as a Blob URL
+  // with our patch code prepended, so it runs first inside the worker's own
+  // global scope, before any of the worker's own code.
+  function wrapWorkerCtor(Original) {
+    if (!Original) return Original;
+    return function (scriptURL, options) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', scriptURL, false);
+        xhr.send(null);
+        var originalSrc = (xhr.status === 200 || xhr.status === 0) ? xhr.responseText : null;
+        if (originalSrc === null) return new Original(scriptURL, options);
+        var combined = ${JSON.stringify(core)} + '\\n' + originalSrc;
+        var blobUrl = URL.createObjectURL(new Blob([combined], { type: 'application/javascript' }));
+        return new Original(blobUrl, options);
+      } catch (e) {
+        return new Original(scriptURL, options);
+      }
+    };
+  }
+  try { if (typeof self.Worker !== 'undefined') self.Worker = wrapWorkerCtor(self.Worker); } catch (e) {}
+  try { if (typeof self.SharedWorker !== 'undefined') self.SharedWorker = wrapWorkerCtor(self.SharedWorker); } catch (e) {}
+
+  // Best-effort only: Service Worker registration is async by nature and
+  // Chromium restricts acceptable script origins for it more strictly than
+  // for dedicated/shared workers (a blob: URL is not reliably accepted for
+  // navigator.serviceWorker.register across Chromium versions) — this is
+  // documented as a known, unresolved gap in docs/FINGERPRINT_AUDIT.md
+  // rather than silently claimed as covered.
+  try {
+    if (self.navigator && self.navigator.serviceWorker && self.navigator.serviceWorker.register) {
+      var origRegister = self.navigator.serviceWorker.register.bind(self.navigator.serviceWorker);
+      self.navigator.serviceWorker.register = function (scriptURL, options) {
+        return fetch(scriptURL)
+          .then(function (r) { return r.text(); })
+          .then(function (originalSrc) {
+            var combined = ${JSON.stringify(core)} + '\\n' + originalSrc;
+            var blobUrl = URL.createObjectURL(new Blob([combined], { type: 'application/javascript' }));
+            return origRegister(blobUrl, options);
+          })
+          .catch(function () { return origRegister(scriptURL, options); });
+      };
+    }
+  } catch (e) {}
+})();
+`;
 }

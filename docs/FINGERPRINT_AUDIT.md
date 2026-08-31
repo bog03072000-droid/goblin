@@ -378,6 +378,122 @@ control the nested Electron window's UI directly. This is a test-harness
 convenience, not a fingerprint-spoofing mechanism — it changes only which
 page loads, not any reported value.
 
+## CDP footprint reduction + Worker/SharedWorker propagation fix (new this stage)
+
+**Motivation.** A real CreepJS scan (https://abrahamjuliot.github.io/creepjs/,
+run against a genuine, unmodified profile via `tests/e2e/creepjsBenchmark.spec.ts`
+— see `docs/creepjs-results/` for the full, unedited, dated captures this
+section is based on) surfaced two real, previously undocumented problems:
+
+1. Every real profile's spoofing mechanism relied on
+   `webContents.debugger.attach('1.3')` (a real Chrome DevTools Protocol
+   session) for canvas/audio/WebGL/deviceMemory/fonts/mediaDevices injection
+   (`Page.enable` + `Page.addScriptToEvaluateOnNewDocument`), on top of the
+   `Emulation.*` calls already needed for UA/platform/hardwareConcurrency/
+   screen. An attached CDP session with `Page`/`Runtime` domains enabled is
+   exactly the kind of automation tell sophisticated fingerprint scripts
+   (CreepJS explicitly among them) are built to detect.
+2. **Web Workers and Service Workers received none of these overrides at
+   all.** A live scan showed a profile configured as macOS reporting its
+   *real* host identity — Windows, an NVIDIA RTX 4060, a real
+   `profileforge/0.1.0 ... Electron/32.3.3` user agent, 16 real CPU cores —
+   from inside a Worker context, while the main document correctly reported
+   the configured macOS identity. Neither CDP's `Emulation.*` overrides nor
+   the old `Page.addScriptToEvaluateOnNewDocument` injection reach a
+   Worker's own separate global scope at all.
+
+**What moved off CDP.** `src/main/browser/spoofingScript.ts`'s output
+(canvas/audio/WebGL-vendor-spoofing/deviceMemory/fonts/mediaDevices, plus the
+new Worker propagation below) is now injected via
+`src/main/browser/diagnosticsPreload.ts` — a real `<webview preload>` script,
+forced by `will-attach-webview` the same way the pre-existing diagnostics
+bridge already was — using the classic "insert a same-document `<script>`
+element with inline text content" technique instead of
+`Page.addScriptToEvaluateOnNewDocument`. `fingerprintEnforcement.ts` no
+longer calls `Page.enable` at all; `injectSpoofingScript()` was removed
+entirely. `wc.debugger.attach()` is still used, but only for the three
+`Emulation.*` calls below — a real, verifiable reduction in enabled CDP
+domains, not a cosmetic one.
+
+**What deliberately stayed on CDP, and why** (a conscious decision, recorded
+here per that decision):
+- `Emulation.setUserAgentOverride` (UA/platform/acceptLanguage on the main
+  document) and `Emulation.setHardwareConcurrencyOverride` — `navigator.platform`
+  has no non-CDP equivalent that also stays consistent with the real
+  `Emulation.setUserAgentOverride`-driven UA at the network level.
+- `Emulation.setDeviceMetricsOverride` (screen/devicePixelRatio) — this
+  changes the actual Blink layout engine's `@media`/`matchMedia()`
+  evaluation, not just the JS-readable `screen.width`/`height`. A JS-only
+  override would leave `screen.width` and `matchMedia('(width: ...)')`
+  disagreeing — exactly the class of mismatch CreepJS's own "CSS Media
+  Queries" check exists to catch. Trading the CDP tell for a worse,
+  guaranteed-detectable JS/CSS mismatch was judged the wrong trade.
+- Session-level UA (`ses.setUserAgent()` in `profileWindowEntry.ts`, unchanged)
+  already covers the real HTTP `User-Agent`/`Accept-Language` headers without
+  CDP at all — this was already true before this stage and remains the
+  authoritative mechanism for the network-level UA.
+
+**Worker/SharedWorker propagation (new, real fix).** `buildSpoofingScript()`
+now rewrites every `window.X` reference to `self.X` throughout (a normal
+document's `self` is `window`; a Worker's `self` is its own global scope —
+same script, portable to both without change) and adds:
+- An unconditional per-property `navigator.userAgent`/`platform`/
+  `hardwareConcurrency`/`deviceMemory` override, applied identically inside
+  the main document (redundant with the CDP values there, harmless) and
+  inside every Worker (the *only* mechanism providing these values there at
+  all). Each property is wrapped in its own `try`/`catch` — a real bug found
+  this stage: a single shared `try`/`catch` around all four meant one
+  property throwing on `WorkerNavigator` (`platform`, on this Chromium
+  build) silently aborted the other three, leaving `hardwareConcurrency`/
+  `deviceMemory` unset even though `userAgent` alone had already succeeded.
+- `window.Worker`/`window.SharedWorker` are wrapped so that
+  `new Worker(scriptURL)` fetches the original script via a **synchronous**
+  `XMLHttpRequest` (resolves instantly against `blob:`/`data:`/same-origin
+  URLs — no real network wait), prepends the exact same patch script, and
+  constructs the real worker from a combined `Blob` URL instead — so the
+  patches run first, inside the worker's own global scope, before any of
+  the worker's own code. **Verified directly** (not just via CreepJS) with a
+  standalone dedicated-Worker diagnostic: a profile configured as
+  `Linux x86_64 / 4 cores / 8GB` reported *exactly* that — UA, platform,
+  hardwareConcurrency, and deviceMemory all correct — from inside a real
+  `new Worker('/worker.js')` created by an ordinary same-origin page, both
+  for a `blob:`-URL worker and a same-origin-file worker.
+
+**Confirmed, real, honest limitation: Service Workers.** CreepJS's own
+"Worker" test tries `navigator.serviceWorker.register()` *first*, only
+falling back to `SharedWorker` then a dedicated `Worker` if registration
+throws. A rerun of the live CreepJS scan after this stage's fix still shows
+the real host identity leaking specifically through that path — confirmed,
+not just predicted, by the unchanged CreepJS output alongside the
+independently-verified working dedicated-Worker diagnostic above. Root
+cause: Chromium rejects `blob:` URLs for `navigator.serviceWorker.register()`
+scripts (Service Worker registration requires a same-origin http(s) script
+URL), so this project's best-effort `register()` wrapper
+(`spoofingScript.ts`) silently falls back to registering the real,
+unpatched script whenever the `blob:` substitution is rejected — the same
+honest fallback-on-failure the Worker/SharedWorker wrapper uses, just for a
+restriction that Chromium enforces unconditionally rather than one this
+project chose. No clean fix exists without either a session-level
+network-response-rewriting layer (replacing Electron's default network
+handling for the whole profile session just to catch this one case — judged
+too invasive/risky to core browsing for the benefit, not attempted this
+stage) or a custom Chromium build. Left as a documented, verified gap rather
+than silently claimed as covered.
+
+**CreepJS raw numbers, before and after (see `docs/creepjs-results/` for the
+full unedited captures).** The `44% like headless` figure was unchanged
+across all three runs (before the fix, after the Worker per-property
+try/catch fix alone, and after the full preload migration) — consistent
+with it reflecting the still-present `Emulation.*` CDP domain (kept per the
+decision above), which this stage never touched. The Worker section's
+`userAgent`/`device`/`gpu` fields changed from the real host machine (before
+this stage) to the real host machine *still* (after — confirmed the
+ServiceWorker-specific gap above) for the exact same reason each time; a
+separate, non-CreepJS diagnostic is what actually proves the dedicated-Worker
+path itself is fixed, since CreepJS's own fallback ordering means it never
+reaches that path on a machine where SW registration "succeeds" (even with
+unpatched content).
+
 ## Automated test coverage
 
 - `tests/e2e/fingerprintEnforcement.spec.ts` (3 tests) — starts a real

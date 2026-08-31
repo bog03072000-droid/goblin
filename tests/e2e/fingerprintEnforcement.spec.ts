@@ -104,9 +104,11 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(snapshot.statusByField['hardwareConcurrency']).toBe('PASS');
   expect(Number(snapshot.observed['hardwareConcurrency'])).toBe(Number(snapshot.configured['hardwareConcurrency']));
 
-  // deviceMemory is now genuinely applied via the CDP-injected spoofing
+  // deviceMemory is genuinely applied via the preload-injected spoofing
   // script (there's still no CDP Emulation method for it — see Finding 3 —
-  // this is the JS-override path added for this stage).
+  // this is the JS-override path; moved off CDP's Page domain onto a real
+  // <webview preload> injection in a later stage — see FINGERPRINT_AUDIT.md's
+  // "CDP footprint reduction" section).
   expect(snapshot.statusByField['deviceMemory']).toBe('PASS');
   expect(Number(snapshot.observed['deviceMemory'])).toBe(Number(snapshot.configured['deviceMemory']));
 

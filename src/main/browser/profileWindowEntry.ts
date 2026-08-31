@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, protocol, screen, session, shell } from 'e
 import type { DownloadItem } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { enforceFingerprint, applyWebrtcPolicy, injectSpoofingScript } from './fingerprintEnforcement';
+import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
 import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
 import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
 import type { DownloadEvent } from './browserShellPreload';
@@ -219,6 +219,36 @@ export function runProfileWindowProcess(): void {
       webPreferences.preload = path.join(__dirname, 'diagnosticsPreload.js');
     });
 
+    // Computed once, outside any per-attach handler, so both the sync IPC
+    // handler below (answered from diagnosticsPreload.js, which needs the
+    // script BEFORE the guest page's own scripts run) and did-attach-webview
+    // (still applying the CDP-only fields) see the identical fingerprint.
+    const fpForSpoofing = args.fingerprintConfig;
+    const spoofableFingerprint: SpoofableFingerprint = {
+      seed: String(fpForSpoofing['seed'] ?? args.profileId),
+      canvasMode: (fpForSpoofing['canvasMode'] as Fingerprint['canvasMode']) ?? 'off',
+      audioMode: (fpForSpoofing['audioMode'] as Fingerprint['audioMode']) ?? 'off',
+      deviceMemory: Number(fpForSpoofing['deviceMemory'] ?? 8),
+      webglSpoofingMode: (fpForSpoofing['webglSpoofingMode'] as Fingerprint['webglSpoofingMode']) ?? 'off',
+      webglVendor: String(fpForSpoofing['webglVendor'] ?? 'Google Inc.'),
+      webglRenderer: String(fpForSpoofing['webglRenderer'] ?? 'ANGLE'),
+      fontsMode: (fpForSpoofing['fontsMode'] as Fingerprint['fontsMode']) ?? 'system',
+      mediaDevicesMode: (fpForSpoofing['mediaDevicesMode'] as Fingerprint['mediaDevicesMode']) ?? 'real',
+      userAgent: args.userAgent,
+      platform: String(fpForSpoofing['platform'] ?? 'Win32'),
+      hardwareConcurrency: Number(fpForSpoofing['hardwareConcurrency'] ?? 8),
+    };
+    const spoofingScript = buildSpoofingScript(spoofableFingerprint);
+
+    // Answered synchronously (event.returnValue, not an async invoke) because
+    // diagnosticsPreload.js must have this script in hand and injected before
+    // the guest page's own scripts get a chance to run — an async round trip
+    // would race that. One profile == one OS process here (see the module
+    // doc comment), so a single global handler for this channel is safe.
+    ipcMain.on('pf:get-spoofing-script', (event) => {
+      event.returnValue = spoofingScript;
+    });
+
     const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
     const diagnosticsUrl = `profileforge://fingerprint-test?config=${configB64}`;
 
@@ -241,18 +271,6 @@ export function runProfileWindowProcess(): void {
       applyWebrtcPolicy(webviewContents, webrtcMode);
 
       const fp = args.fingerprintConfig;
-      const spoofableFingerprint: SpoofableFingerprint = {
-        seed: String(fp['seed'] ?? args.profileId),
-        canvasMode: (fp['canvasMode'] as Fingerprint['canvasMode']) ?? 'off',
-        audioMode: (fp['audioMode'] as Fingerprint['audioMode']) ?? 'off',
-        deviceMemory: Number(fp['deviceMemory'] ?? 8),
-        webglSpoofingMode: (fp['webglSpoofingMode'] as Fingerprint['webglSpoofingMode']) ?? 'off',
-        webglVendor: String(fp['webglVendor'] ?? 'Google Inc.'),
-        webglRenderer: String(fp['webglRenderer'] ?? 'ANGLE'),
-        fontsMode: (fp['fontsMode'] as Fingerprint['fontsMode']) ?? 'system',
-        mediaDevicesMode: (fp['mediaDevicesMode'] as Fingerprint['mediaDevicesMode']) ?? 'real',
-      };
-
       enforceFingerprint(webviewContents, {
         userAgent: args.userAgent,
         platform: String(fp['platform'] ?? 'Win32'),
@@ -262,7 +280,6 @@ export function runProfileWindowProcess(): void {
         screenHeight: Number(fp['screenHeight'] ?? 1080),
         deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
       })
-        .then(() => injectSpoofingScript(webviewContents, buildSpoofingScript(spoofableFingerprint)))
         .catch((err: unknown) => {
           console.error('[ProfileForge] fingerprint enforcement failed:', err);
         })
