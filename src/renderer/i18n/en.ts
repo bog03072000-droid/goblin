@@ -268,6 +268,7 @@ const en = {
   'settings.language.label': 'Language',
   'settings.language.uk': 'Українська',
   'settings.language.en': 'English',
+  'settings.theme.note': "There's no light theme yet — the dark interface is a deliberate design choice, not a missing feature. See the README's Design section.",
   'settings.saved': 'Saved. Some settings (hardware acceleration) take effect on next launch.',
 
   'downloads.searchPlaceholder': 'Search by filename...',

@@ -61,6 +61,7 @@ export function SettingsPage(): JSX.Element {
             ))}
           </select>
         </label>
+        <p className="text-dim text-xs mt-8 mb-0">{t('settings.theme.note')}</p>
       </div>
 
       <div className="panel">

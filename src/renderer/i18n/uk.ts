@@ -270,6 +270,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.language.label': 'Мова',
   'settings.language.uk': 'Українська',
   'settings.language.en': 'English',
+  'settings.theme.note': 'Світлої теми поки немає — темний інтерфейс це свідомий вибір дизайну, а не відсутня функція. Див. розділ Design у README.',
   'settings.saved': 'Збережено. Деякі налаштування (апаратне прискорення) набудуть чинності після перезапуску.',
 
   'downloads.searchPlaceholder': 'Пошук за назвою файлу...',
