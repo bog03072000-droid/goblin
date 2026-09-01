@@ -1,6 +1,6 @@
 # Load test — stability (raw data)
 
-Generated: 2026-09-01T14:23:46.995Z
+Generated: 2026-09-01T15:13:24.699Z
 
 Cycles per profile: 10, profiles: Stability Profile A, Stability Profile B (sequential, one real browser at a time)
 Crash/error status observed during any cycle: no
@@ -8,36 +8,36 @@ DB/UI coherence issue observed (row identity mismatch after cycling): no
 
 ## Stability Profile A
 
-Total electron.exe memory growth across 10 cycles: 13424 KB
+Total electron.exe memory growth across 10 cycles: 14900 KB
 
 | Cycle | Process count after stop | Total electron.exe memory (KB) |
 |---|---|---|
-| 0 | 4 | 412292 |
-| 1 | 4 | 413540 |
-| 2 | 4 | 418496 |
-| 3 | 4 | 421628 |
-| 4 | 4 | 424432 |
-| 5 | 4 | 423332 |
-| 6 | 4 | 423684 |
-| 7 | 4 | 424924 |
-| 8 | 4 | 425140 |
-| 9 | 4 | 425716 |
+| 0 | 4 | 407976 |
+| 1 | 4 | 411244 |
+| 2 | 4 | 415608 |
+| 3 | 4 | 418696 |
+| 4 | 4 | 420388 |
+| 5 | 4 | 420888 |
+| 6 | 4 | 421172 |
+| 7 | 4 | 422396 |
+| 8 | 4 | 422228 |
+| 9 | 4 | 422876 |
 
 ## Stability Profile B
 
-Total electron.exe memory growth across 10 cycles: 3736 KB
+Total electron.exe memory growth across 10 cycles: 5000 KB
 
 | Cycle | Process count after stop | Total electron.exe memory (KB) |
 |---|---|---|
-| 0 | 4 | 426996 |
-| 1 | 4 | 429724 |
-| 2 | 4 | 430052 |
-| 3 | 4 | 429800 |
-| 4 | 4 | 430588 |
-| 5 | 4 | 429544 |
-| 6 | 4 | 430148 |
-| 7 | 4 | 430384 |
-| 8 | 4 | 430720 |
-| 9 | 4 | 430732 |
+| 0 | 4 | 425584 |
+| 1 | 4 | 427492 |
+| 2 | 4 | 427792 |
+| 3 | 4 | 427784 |
+| 4 | 4 | 428416 |
+| 5 | 4 | 428816 |
+| 6 | 4 | 428880 |
+| 7 | 4 | 429824 |
+| 8 | 4 | 429828 |
+| 9 | 4 | 430584 |
 
 _Real measured numbers from this machine/run — not fabricated._
