@@ -80,6 +80,20 @@ test('duplicate profile names are accepted without corrupting the list (no uniqu
   await expect(rows.nth(0)).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
+// Deliberately re-investigated with the same exit-code/signal/timing
+// diagnostic that root-caused the resourceManagement.spec.ts CRASHED flake
+// (see profileManager.ts's child.on('exit', ...) handler and its
+// SOFT_DELETE_WINDOW_MS-adjacent comment) — this test's own Start-then-
+// immediately-Stop shape is a similarly early stop, and it seemed worth
+// checking for the same class of bug rather than assuming clean forever.
+// Ran 5x + one preserved-log run: consistently clean (code=0, signal=null,
+// aliveMs in the ~550-600ms range every time) — this scenario does NOT
+// reproduce the CRASHED flake. The real difference: the flake needed
+// restart() specifically (stop the OLD child, spawn a brand NEW one, then
+// stop THAT one almost immediately) — a plain single start()-then-stop()
+// gives app.quit()'s graceful path enough of a window to complete cleanly
+// even at a similarly low aliveMs. No bug found here; recorded so a future
+// reader sees this was checked, not assumed.
 test('a profile assigned to an unreachable proxy still starts and stops cleanly instead of taking the app down', async () => {
   await window.getByText('Proxies', { exact: true }).click();
   await window.getByPlaceholder('Name', { exact: true }).fill('E2E Dead Proxy');
