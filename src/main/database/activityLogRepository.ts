@@ -19,6 +19,20 @@ function rowToEntry(row: ActivityLogRow): ActivityLogEntry {
   };
 }
 
+export interface ActivityLogListOptions {
+  limit: number;
+  /** Cursor-based pagination: only rows with id strictly less than this are
+   * returned, i.e. "the page before whatever ends in this id" — used for
+   * "load more" rather than an offset, so a new row appearing between pages
+   * (this table is append-only and actively growing) can never shift
+   * already-seen rows into view again or skip one. */
+  beforeId?: number;
+  eventType?: ActivityEventType;
+  profileId?: string;
+  /** Case-insensitive substring match against the message field only. */
+  search?: string;
+}
+
 /** Records must never contain secrets (passwords, cookies, tokens) — see SECURITY.md. */
 export class ActivityLogRepository {
   constructor(private readonly db: Database.Database) {}
@@ -31,10 +45,40 @@ export class ActivityLogRepository {
       .run(eventType, profileId, message, new Date().toISOString());
   }
 
-  list(limit: number): ActivityLogEntry[] {
+  list(options: ActivityLogListOptions): ActivityLogEntry[] {
+    const conditions: string[] = [];
+    const params: Record<string, unknown> = { limit: options.limit };
+    if (options.beforeId !== undefined) {
+      conditions.push('id < @beforeId');
+      params['beforeId'] = options.beforeId;
+    }
+    if (options.eventType) {
+      conditions.push('event_type = @eventType');
+      params['eventType'] = options.eventType;
+    }
+    if (options.profileId) {
+      conditions.push('profile_id = @profileId');
+      params['profileId'] = options.profileId;
+    }
+    if (options.search) {
+      conditions.push('message LIKE @search ESCAPE \'\\\'');
+      params['search'] = `%${options.search.replace(/[\\%_]/g, '\\$&')}%`;
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const rows = this.db
-      .prepare('SELECT * FROM activity_logs ORDER BY id DESC LIMIT ?')
-      .all(limit) as ActivityLogRow[];
+      .prepare(`SELECT * FROM activity_logs ${where} ORDER BY id DESC LIMIT @limit`)
+      .all(params) as ActivityLogRow[];
     return rows.map(rowToEntry);
+  }
+
+  /** The single most recent row's id, or null if the table is empty — used
+   * by the renderer's live-tail poll to detect "is there anything newer
+   * than what I already have" without re-fetching/re-filtering the whole
+   * page each tick. */
+  latestId(): number | null {
+    const row = this.db.prepare('SELECT id FROM activity_logs ORDER BY id DESC LIMIT 1').get() as
+      | { id: number }
+      | undefined;
+    return row?.id ?? null;
   }
 }

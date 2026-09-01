@@ -8,6 +8,7 @@ import { FingerprintInputSchema } from '../schemas/fingerprint';
 import { ProxyInputSchema } from '../schemas/proxy';
 import { SettingsUpdateSchema } from '../schemas/settings';
 import { GroupCreateInputSchema, GroupRenameInputSchema, GroupDeleteInputSchema } from '../schemas/group';
+import { ActivityEventTypeSchema } from '../schemas/activityLog';
 
 /**
  * Central IPC contract registry. Every channel's request/response shape is
@@ -48,7 +49,14 @@ export const IpcRequestSchemas = {
   'proxy:delete': z.object({ id: z.string().uuid() }),
   'proxy:test': z.object({ id: z.string().uuid() }),
 
-  'logs:list': z.object({ limit: z.number().int().min(1).max(1000).default(200) }),
+  'logs:list': z.object({
+    limit: z.number().int().min(1).max(1000).default(200),
+    beforeId: z.number().int().optional(),
+    eventType: ActivityEventTypeSchema.optional(),
+    profileId: z.string().optional(),
+    search: z.string().optional(),
+  }),
+  'logs:latestId': z.object({}),
 
   'templates:list': z.object({}),
 

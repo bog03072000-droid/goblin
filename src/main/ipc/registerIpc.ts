@@ -90,9 +90,21 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('fingerprint:update', (p) => deps.fingerprints.update(p.id, p));
 
   handle('proxy:list', () => deps.proxies.list());
-  handle('proxy:create', (p) => deps.proxies.create(p));
-  handle('proxy:update', (p) => deps.proxies.update(p.id, p));
-  handle('proxy:delete', (p) => deps.proxies.delete(p.id));
+  handle('proxy:create', (p) => {
+    const created = deps.proxies.create(p);
+    deps.logs.record('PROXY_CREATED', null, `Proxy "${created.name}" created`);
+    return created;
+  });
+  handle('proxy:update', (p) => {
+    const updated = deps.proxies.update(p.id, p);
+    deps.logs.record('PROXY_UPDATED', null, `Proxy "${updated.name}" updated`);
+    return updated;
+  });
+  handle('proxy:delete', (p) => {
+    const existing = deps.proxies.getById(p.id);
+    deps.proxies.delete(p.id);
+    deps.logs.record('PROXY_DELETED', null, `Proxy "${existing?.name ?? p.id}" deleted`);
+  });
   handle('proxy:test', async (p) => {
     const proxy = deps.proxies.getById(p.id);
     if (!proxy) throw new Error('Proxy not found');
@@ -100,7 +112,16 @@ export function registerIpc(deps: IpcDependencies): void {
     return testProxyConnection(proxy, password);
   });
 
-  handle('logs:list', (p) => deps.logs.list(p.limit));
+  handle('logs:list', (p) =>
+    deps.logs.list({
+      limit: p.limit,
+      beforeId: p.beforeId,
+      eventType: p.eventType,
+      profileId: p.profileId,
+      search: p.search,
+    }),
+  );
+  handle('logs:latestId', () => deps.logs.latestId());
 
   handle('templates:list', () => deps.templates.list());
 

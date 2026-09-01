@@ -276,6 +276,11 @@ const en = {
   'logs.table.profile': 'Profile',
   'logs.table.message': 'Message',
   'logs.empty.none': 'No activity yet. Actions on your profiles will show up here.',
+  'logs.searchPlaceholder': 'Search messages...',
+  'logs.filter.allEvents': 'All events',
+  'logs.filter.allProfiles': 'All profiles',
+  'logs.live': 'Live',
+  'logs.loadMore': 'Load more',
 } as const;
 
 export default en;

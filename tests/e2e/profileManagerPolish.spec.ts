@@ -214,3 +214,32 @@ test('keyboard shortcuts: Ctrl+F focuses search, Ctrl+N focuses create name, Ctr
   await window.getByRole('button', { name: 'Cancel', exact: true }).click();
   await window.getByRole('button', { name: 'Clear selection' }).click();
 });
+
+test('Logs page: search and event-type filter narrow the real activity log', async () => {
+  // By this point in the file, real profile CRUD from earlier tests has
+  // already recorded genuine PROFILE_CREATED rows (ProfileManager.create()
+  // logs `Profile "<name>" created` — see profileManager.ts) — no synthetic
+  // log entries are seeded here. Proxy create/update do NOT currently log
+  // anything (a separate, pre-existing gap, not part of this change), so
+  // the search text has to be a profile name, not a proxy name.
+  await window.getByText('Logs', { exact: true }).click();
+  await expect(window.locator('tbody tr').first()).toBeVisible({ timeout: 10_000 });
+  const totalRows = await window.locator('tbody tr').count();
+  expect(totalRows).toBeGreaterThan(0);
+
+  await window.getByPlaceholder('Search messages...').fill('Fully Configured Profile');
+  await expect
+    .poll(async () => window.locator('tbody tr').count(), { timeout: 5_000 })
+    .toBeLessThan(totalRows);
+  await expect(window.locator('tbody tr td', { hasText: /Fully Configured Profile/ }).first()).toBeVisible();
+  await window.getByPlaceholder('Search messages...').fill('');
+
+  await window.locator('select').filter({ hasText: 'All events' }).selectOption('PROFILE_CREATED');
+  await expect
+    .poll(async () => {
+      const events = await window.locator('tbody tr td .pill').allTextContents();
+      return events.length > 0 && events.every((e) => e === 'PROFILE_CREATED');
+    })
+    .toBe(true);
+  await window.locator('select').filter({ hasText: 'PROFILE_CREATED' }).selectOption('');
+});

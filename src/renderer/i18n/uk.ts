@@ -278,6 +278,11 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'logs.table.profile': 'Профіль',
   'logs.table.message': 'Повідомлення',
   'logs.empty.none': 'Активності ще немає. Дії з профілями з’являтимуться тут.',
+  'logs.searchPlaceholder': 'Пошук у повідомленнях...',
+  'logs.filter.allEvents': 'Усі події',
+  'logs.filter.allProfiles': 'Усі профілі',
+  'logs.live': 'Наживо',
+  'logs.loadMore': 'Завантажити ще',
 };
 
 export default uk;
