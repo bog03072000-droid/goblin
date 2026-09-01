@@ -164,6 +164,7 @@ export function FingerprintTab({
           <select
             value={fingerprint.canvasMode}
             onChange={(e) => onUpdateSpoofing({ canvasMode: e.target.value as Fingerprint['canvasMode'] })}
+            title={t('editor.fingerprint.spoofing.canvasTooltip')}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
@@ -174,6 +175,7 @@ export function FingerprintTab({
           <select
             value={fingerprint.audioMode}
             onChange={(e) => onUpdateSpoofing({ audioMode: e.target.value as Fingerprint['audioMode'] })}
+            title={t('editor.fingerprint.spoofing.audioTooltip')}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="noise">{t('editor.fingerprint.spoofing.noise')}</option>
@@ -184,6 +186,7 @@ export function FingerprintTab({
           <select
             value={fingerprint.fontsMode}
             onChange={(e) => onUpdateSpoofing({ fontsMode: e.target.value as Fingerprint['fontsMode'] })}
+            title={t('editor.fingerprint.spoofing.fontsHint')}
           >
             <option value="system">{t('editor.fingerprint.spoofing.fontsSystem')}</option>
             <option value="restricted">{t('editor.fingerprint.spoofing.fontsRestricted')}</option>
@@ -197,6 +200,7 @@ export function FingerprintTab({
           <select
             value={fingerprint.mediaDevicesMode}
             onChange={(e) => onUpdateSpoofing({ mediaDevicesMode: e.target.value as Fingerprint['mediaDevicesMode'] })}
+            title={t('editor.fingerprint.spoofing.mediaTooltip')}
           >
             <option value="real">{t('editor.fingerprint.spoofing.mediaReal')}</option>
             <option value="hidden">{t('editor.fingerprint.spoofing.mediaHidden')}</option>
@@ -207,6 +211,7 @@ export function FingerprintTab({
           <select
             value={fingerprint.webglSpoofingMode}
             onChange={(e) => onUpdateSpoofing({ webglSpoofingMode: e.target.value as Fingerprint['webglSpoofingMode'] })}
+            title={t('editor.fingerprint.spoofing.webglTooltip')}
           >
             <option value="off">{t('editor.fingerprint.spoofing.off')}</option>
             <option value="spoof">{t('editor.fingerprint.spoofing.webglSpoof')}</option>

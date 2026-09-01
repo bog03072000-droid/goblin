@@ -177,6 +177,14 @@ const en = {
   'editor.fingerprint.spoofing.title': 'Spoofing',
   'editor.fingerprint.spoofing.off': 'Off',
   'editor.fingerprint.spoofing.noise': 'Noise (seeded, consistent per profile)',
+  'editor.fingerprint.spoofing.canvasTooltip':
+    'Off: canvas reads (toDataURL/getImageData) return the real, unmodified pixels. Noise: perturbs a few RGB values per read — same content in this profile always produces the same perturbed bytes; a different profile reading identical content gets different (but internally consistent) bytes.',
+  'editor.fingerprint.spoofing.audioTooltip':
+    'Off: AudioContext reads return real, unmodified sample data. Noise: adds a tiny seeded perturbation to AudioBuffer.getChannelData() output, deterministic per profile, the same technique as canvas noise.',
+  'editor.fingerprint.spoofing.mediaTooltip':
+    'Real: enumerateDevices() reports this machine\'s actual camera/microphone list. Hidden: reports a fake, profile-consistent device list instead (same seed always produces the same fake devices).',
+  'editor.fingerprint.spoofing.webglTooltip':
+    'Off: WebGL reports this machine\'s real GPU vendor/renderer strings. Spoof: overrides just those two values with the profile\'s configured GPU — does NOT reach every code path a site might read WebGL from (see docs/FINGERPRINT_AUDIT.md\'s Service Worker section for a known, unresolved gap).',
   'editor.fingerprint.spoofing.fontsSystem': 'System (real fonts visible)',
   'editor.fingerprint.spoofing.fontsRestricted': 'Restricted (limited allow-list)',
   'editor.fingerprint.spoofing.fontsHint':

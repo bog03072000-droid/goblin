@@ -179,6 +179,14 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.spoofing.title': 'Спуфінг',
   'editor.fingerprint.spoofing.off': 'Вимкнено',
   'editor.fingerprint.spoofing.noise': 'Шум (детермінований, консистентний для профілю)',
+  'editor.fingerprint.spoofing.canvasTooltip':
+    'Вимкнено: читання canvas (toDataURL/getImageData) повертає реальні, незмінені пікселі. Шум: змінює кілька RGB-значень при кожному читанні — той самий контент у цьому профілі завжди дає ті самі змінені байти; інший профіль на тому самому контенті отримує інші (але внутрішньо консистентні) байти.',
+  'editor.fingerprint.spoofing.audioTooltip':
+    'Вимкнено: AudioContext повертає реальні, незмінені дані. Шум: додає крихітне детерміноване спотворення до AudioBuffer.getChannelData(), той самий підхід, що й canvas-шум.',
+  'editor.fingerprint.spoofing.mediaTooltip':
+    'Реальні: enumerateDevices() показує справжній список камер/мікрофонів цієї машини. Приховані: показує фейковий, консистентний для профілю список пристроїв (той самий seed завжди дає ті самі фейкові пристрої).',
+  'editor.fingerprint.spoofing.webglTooltip':
+    'Вимкнено: WebGL показує реальні vendor/renderer рядки GPU цієї машини. Підміна: перекриває лише ці два значення налаштованим GPU профілю — НЕ досягає кожного шляху, яким сайт може прочитати WebGL (див. розділ Service Worker у docs/FINGERPRINT_AUDIT.md — відомий, невирішений пробіл).',
   'editor.fingerprint.spoofing.fontsSystem': 'Системні (реальні шрифти видимі)',
   'editor.fingerprint.spoofing.fontsRestricted': 'Обмежені (короткий allow-list)',
   'editor.fingerprint.spoofing.fontsHint':
