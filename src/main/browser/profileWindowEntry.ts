@@ -1,13 +1,11 @@
-import { app, BrowserWindow, ipcMain, protocol, screen, session, shell } from 'electron';
-import type { DownloadItem } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
 import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
 import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
-import type { DownloadEvent } from './browserShellPreload';
-import { getDb } from '../database/db';
-import { DownloadRepository } from '../database/downloadRepository';
+import { parseArgs, readStdinCredentials } from './profileWindowArgs';
+import { setupDownloadHandling } from './profileWindowDownloads';
 
 const BROWSER_START_URL = 'https://www.google.com';
 
@@ -129,91 +127,7 @@ export function runProfileWindowProcess(): void {
     });
     win.maximize();
 
-    // Downloads are saved under this profile's own storage directory and
-    // driven entirely by this profile's own session (`ses`) — since every
-    // profile is a fully separate OS process with its own userDataDir and
-    // session partition (see the module doc comment above), there is no
-    // code path by which one profile's download could land in, or even see,
-    // another profile's directory.
-    const downloadsDir = path.join(args.userDataDir, 'downloads');
-    const downloads = new Map<string, DownloadItem>();
-    let nextDownloadId = 1;
-
-    function uniqueSavePath(dir: string, filename: string): string {
-      fs.mkdirSync(dir, { recursive: true });
-      const ext = path.extname(filename);
-      const base = path.basename(filename, ext);
-      let candidate = path.join(dir, filename);
-      let n = 1;
-      while (fs.existsSync(candidate)) {
-        candidate = path.join(dir, `${base} (${n})${ext}`);
-        n++;
-      }
-      return candidate;
-    }
-
-    // Recording is best-effort and lazily-connected: the manager app's own DB
-    // migrations already ran by the time any profile is ever started (the
-    // manager opens it at app startup, before its window/IPC even exist), so
-    // this call only ever *reuses* an already-migrated file — it never races
-    // schema creation. See docs — same WAL-mode file, second OS process.
-    function recordDownload(
-      profileId: string,
-      filename: string,
-      savePath: string,
-      url: string,
-      totalBytes: number,
-      state: 'completed' | 'cancelled' | 'failed',
-    ): void {
-      if (!args.dbPath) return;
-      try {
-        const db = getDb(args.dbPath, migrationsDir());
-        new DownloadRepository(db).create({ profileId, filename, savePath, url, totalBytes, state });
-      } catch (err) {
-        console.error('[ProfileForge] failed to record download history:', err);
-      }
-    }
-
-    ses.on('will-download', (_event, item) => {
-      const id = String(nextDownloadId++);
-      const savePath = uniqueSavePath(downloadsDir, item.getFilename());
-      item.setSavePath(savePath);
-      downloads.set(id, item);
-
-      const send = (state: DownloadEvent['state']): void => {
-        win.webContents.send('pf:download-event', {
-          id,
-          filename: path.basename(savePath),
-          savePath,
-          state,
-          receivedBytes: item.getReceivedBytes(),
-          totalBytes: item.getTotalBytes(),
-        } satisfies DownloadEvent);
-      };
-      send('started');
-
-      item.on('updated', (_e, state) => {
-        send(state === 'interrupted' ? 'failed' : 'progressing');
-      });
-      item.once('done', (_e, state) => {
-        const finalState = state === 'completed' ? 'completed' : state === 'cancelled' ? 'cancelled' : 'failed';
-        send(finalState);
-        recordDownload(args.profileId, path.basename(savePath), savePath, item.getURL(), item.getTotalBytes(), finalState);
-      });
-    });
-
-    ipcMain.on('pf:download-open', (_e, id: string) => {
-      const item = downloads.get(id);
-      if (item) void shell.openPath(item.getSavePath());
-    });
-    ipcMain.on('pf:download-show', (_e, id: string) => {
-      const item = downloads.get(id);
-      if (item) shell.showItemInFolder(item.getSavePath());
-    });
-    ipcMain.on('pf:download-cancel', (_e, id: string) => {
-      const item = downloads.get(id);
-      if (item && item.getState() === 'progressing') item.cancel();
-    });
+    setupDownloadHandling({ win, ses, userDataDir: args.userDataDir, profileId: args.profileId, dbPath: args.dbPath });
 
     // Forced here (main process) rather than left to the <webview> tag's own
     // `preload` attribute, so a compromised/malicious page loaded inside the
@@ -322,109 +236,3 @@ export function runProfileWindowProcess(): void {
   });
 }
 
-interface ProfileWindowArgs {
-  profileId: string;
-  profileName: string;
-  userDataDir: string;
-  userAgent: string;
-  locale: string;
-  proxyRules: string | null;
-  proxyUsername: string | null;
-  proxyPassword: string | null;
-  fingerprintConfig: Record<string, unknown>;
-  dbPath: string | null;
-  navigateTo: string | null;
-}
-
-/** Same logic main.ts uses for the manager process — recomputed here rather
- * than passed as a CLI arg because it depends only on `app.isPackaged`/
- * `process.resourcesPath`, which are identical for this child process (same
- * Electron binary and app bundle, just a different --profile-window flag).
- * NOTE: one `..` deeper than main.ts's version — this file compiles to
- * dist-electron/main/browser/profileWindowEntry.js, one directory below
- * main.ts's dist-electron/main/main.js, so it needs an extra step up to
- * reach the repo root in dev mode. */
-function migrationsDir(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'database', 'migrations')
-    : path.join(__dirname, '..', '..', '..', 'database', 'migrations');
-}
-
-function parseArgs(argv: string[]): ProfileWindowArgs {
-  const get = (name: string): string | null => {
-    const prefix = `--${name}=`;
-    const found = argv.find((a) => a.startsWith(prefix));
-    return found ? found.slice(prefix.length) : null;
-  };
-  const profileId = get('profile-id');
-  const profileName = get('profile-name');
-  const userDataDir = get('user-data-dir');
-  const userAgent = get('user-agent');
-  if (!profileId || !profileName || !userDataDir || !userAgent) {
-    throw new Error('Missing required profile window arguments');
-  }
-  const fingerprintConfigB64 = get('fingerprint-config');
-  let fingerprintConfig: Record<string, unknown> = {};
-  if (fingerprintConfigB64) {
-    try {
-      fingerprintConfig = JSON.parse(Buffer.from(fingerprintConfigB64, 'base64').toString('utf-8')) as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      fingerprintConfig = {};
-    }
-  }
-  return {
-    profileId,
-    profileName,
-    userDataDir,
-    userAgent,
-    locale: get('locale') ?? 'en-US',
-    proxyRules: get('proxy-rules'),
-    // Filled in by readStdinCredentials() right after this returns — never
-    // sourced from argv/env, since both are visible to other processes on
-    // this machine for the child's whole lifetime (argv via any process
-    // listing tool, env vars via /proc or Task Manager), unlike a one-shot
-    // stdin read.
-    proxyUsername: null,
-    proxyPassword: null,
-    fingerprintConfig,
-    dbPath: get('db-path'),
-    navigateTo: get('navigate-to'),
-  };
-}
-
-/** Reads the one newline-terminated JSON line browserLauncher.ts's spawn()
- * call writes to this process's stdin, immediately followed by stdin.end().
- * This is the replacement for passing proxy credentials as environment
- * variables: an env var stays readable by any other process running as the
- * same OS user for the whole lifetime of this child process (via /proc on
- * Linux or Task Manager on Windows), while a stdin write is consumed once
- * and never retained anywhere after.
- *
- * Deliberately synchronous (`fs.readFileSync(0, ...)`) rather than the
- * async `process.stdin` stream API: the async 'data'/'end' event approach
- * was tried first and, verified empirically against a real packaged
- * profile-window child process, never fired a single 'data' event even
- * though the parent's write() completed successfully (confirmed via its
- * own completion callback) — 'end' fired immediately with an empty buffer,
- * as if the child's `process.stdin` were a distinct stream from the pipe
- * the parent actually wrote to. This is a known category of Electron/
- * Windows main-process stdin quirk; reading fd 0 directly and synchronously
- * sidesteps whatever stream-wiring issue causes it, and is the standard,
- * well-tested pattern for reading all of a piped (non-TTY) stdin in Node.
- * Only attempted when stdin isn't a TTY — an interactive `electron .
- * --profile-window ...` run from a real terminal (dev debugging only; every
- * real launch goes through browserLauncher.ts's piped spawn) would
- * otherwise block here waiting for a human to type EOF. */
-function readStdinCredentials(): { proxyUsername: string | null; proxyPassword: string | null } {
-  if (process.stdin.isTTY) return { proxyUsername: null, proxyPassword: null };
-  try {
-    const raw = fs.readFileSync(0, 'utf-8').split('\n')[0] ?? '';
-    const parsed = JSON.parse(raw) as { proxyUsername?: string | null; proxyPassword?: string | null };
-    return { proxyUsername: parsed.proxyUsername ?? null, proxyPassword: parsed.proxyPassword ?? null };
-  } catch {
-    return { proxyUsername: null, proxyPassword: null };
-  }
-}

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Profile, ProfileListItem } from '@shared/schemas/profile';
-import type { FingerprintInput } from '@shared/schemas/fingerprint';
 import type { Template } from '@shared/schemas/template';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
@@ -10,6 +9,10 @@ import { ProfileCreateModal } from '../components/ProfileCreateModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { GroupsModal } from '../components/GroupsModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { useProfileSelection, type BulkResult } from '../hooks/useProfileSelection';
+import { useProfilesKeyboardShortcuts } from '../hooks/useProfilesKeyboardShortcuts';
+import { useProfileCreate } from '../hooks/useProfileCreate';
+import { useProfileIO } from '../hooks/useProfileIO';
 import { useTranslation } from '../i18n';
 import {
   ProfilesToolbar,
@@ -21,21 +24,6 @@ import {
 } from './profiles/ProfilesToolbar';
 import { BulkToolbar } from './profiles/BulkToolbar';
 import { ProfilesTable } from './profiles/ProfilesTable';
-
-interface BulkResult {
-  succeeded: string[];
-  failed: Array<{ id: string; message: string }>;
-}
-
-/** True while the user is typing into any text input/select — used so
- * page-level keyboard shortcuts (Ctrl+A, Delete, Enter) never hijack normal
- * typing, while Ctrl+N/Ctrl+F still work from anywhere as quick jumps. */
-function isEditingText(): boolean {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
-}
 
 export function ProfilesPage(): JSX.Element {
   const { t } = useTranslation();
@@ -51,25 +39,15 @@ export function ProfilesPage(): JSX.Element {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [newName, setNewName] = useState('');
-  const [templateId, setTemplateId] = useState('');
-  const [newGroupId, setNewGroupId] = useState('');
-  const [newProxyId, setNewProxyId] = useState('');
-  const [newTags, setNewTags] = useState('');
   const [info, setInfo] = useState<string | null>(null);
   const [bulkFailures, setBulkFailures] = useState<Array<{ id: string; name: string; message: string }>>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<ProfileListItem | null>(null);
-  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const generalAction = useAsyncAction();
   const rowAction = useAsyncAction();
-  const bulkAction = useAsyncAction();
-  const error = generalAction.error ?? rowAction.error ?? bulkAction.error;
 
   // A 250ms debounce keeps every keystroke from firing its own IPC round-trip
   // + full list refetch — the search box stays instantly responsive to type
@@ -136,83 +114,71 @@ export function ProfilesPage(): JSX.Element {
     return sorted;
   }, [profiles, statusFilter, sortKey, sortDirection, groupFilter, proxyFilter]);
 
-  const selectedVisible = visibleProfiles.filter((p) => selected.has(p.id));
-  const allVisibleSelected = visibleProfiles.length > 0 && selectedVisible.length === visibleProfiles.length;
-
-  function toggleSelectAll(): void {
-    if (allVisibleSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(visibleProfiles.map((p) => p.id)));
-    }
+  /** Shows a bulk action's own specific success message (unchanged from
+   * before — "Tag added to 2 profile(s)", not a generic count) AND, when any
+   * profile failed, exactly which ones and why — never just a silent count
+   * that discards the per-item detail the backend already computed. Passed
+   * into useProfileSelection so its bulk* functions can report through the
+   * same info/bulkFailures banner every other action on this page uses. */
+  function reportBulkResult(successMessage: string, result: BulkResult): void {
+    setInfo(successMessage);
+    setBulkFailures(
+      result.failed.map((f) => ({
+        id: f.id,
+        name: profiles.find((p) => p.id === f.id)?.name ?? f.id,
+        message: f.message,
+      })),
+    );
   }
 
-  function invertSelection(): void {
-    setSelected((prev) => {
-      const next = new Set<string>();
-      for (const p of visibleProfiles) {
-        if (!prev.has(p.id)) next.add(p.id);
-      }
-      return next;
-    });
-  }
-
-  function toggleSelect(id: string): void {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  /** Opens the full profile-creation modal instead of creating a profile
-   * immediately — nothing is written to the database until the user
-   * explicitly confirms inside that modal. Whatever's already been typed
-   * into the toolbar's quick fields (name/group/proxy/tags/template) just
-   * seeds the modal's initial state, exactly as it used to seed the
-   * immediate create call. */
-  function openCreateModal(): void {
-    setShowCreateModal(true);
-  }
-
-  function onProfileCreated(): void {
-    setNewName('');
-    setNewGroupId('');
-    setNewProxyId('');
-    setNewTags('');
-    void refresh();
-    void refreshGroups();
-  }
-
-  /** The one-click path the full config modal (openCreateModal) replaced:
-   * generates a fingerprint the same way the modal's own preview does
-   * (fingerprint:generate, honoring whatever template is selected in the
-   * toolbar) and creates the profile immediately with it — no modal, no
-   * extra confirmation step. Whatever's already typed into the toolbar's
-   * quick fields (name/group/proxy/tags) is used exactly as-is; an empty
-   * name falls back to a timestamp-based one since profiles:create requires
-   * a non-empty name. */
-  async function quickCreateProfile(): Promise<void> {
-    await generalAction.run(async () => {
-      const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
-        seed: `quick-${Date.now()}`,
-        templateId: templateId || undefined,
-      });
-      const name = newName.trim() || `Profile ${new Date().toLocaleString()}`;
-      await callApi('profiles:create', {
-        name,
-        groupId: newGroupId || undefined,
-        proxyId: newProxyId || undefined,
-        tags: newTags
-          .split(',')
-          .map((tg) => tg.trim())
-          .filter(Boolean),
-        fingerprint: generated,
-      });
-      onProfileCreated();
-    });
-  }
+  const selection = useProfileSelection({
+    visibleProfiles,
+    onBulkResult: reportBulkResult,
+    refresh,
+    refreshGroups,
+  });
+  const {
+    selected,
+    setSelected,
+    allVisibleSelected,
+    toggleSelectAll,
+    invertSelection,
+    toggleSelect,
+    confirmBulkDelete,
+    setConfirmBulkDelete,
+    bulkAction,
+    bulk,
+    bulkBackup,
+    bulkAssignProxy,
+    bulkAssignGroup,
+    bulkAddTag,
+    bulkRemoveTag,
+  } = selection;
+  const create = useProfileCreate({ refresh, refreshGroups });
+  const {
+    newName,
+    setNewName,
+    templateId,
+    setTemplateId,
+    newGroupId,
+    setNewGroupId,
+    newProxyId,
+    setNewProxyId,
+    newTags,
+    setNewTags,
+    showCreateModal,
+    openCreateModal,
+    closeCreateModal,
+    onProfileCreated,
+    quickCreateProfile,
+    createAction,
+  } = create;
+  const { ioAction, exportConfig, backupOne, restoreProfile, importProfiles, exportSelected, exportAll } = useProfileIO({
+    selected,
+    setInfo,
+    refresh,
+  });
+  const error = generalAction.error ?? rowAction.error ?? bulkAction.error ?? createAction.error ?? ioAction.error;
 
   async function runAction(
     id: string,
@@ -233,149 +199,6 @@ export function ProfilesPage(): JSX.Element {
       await refresh();
     });
     setBusyId(null);
-  }
-
-  async function exportConfig(id: string): Promise<void> {
-    await generalAction.run(async () => {
-      const savedPath = await callApi<'profiles:exportConfig', string | null>('profiles:exportConfig', { id });
-      if (savedPath) setInfo(t('profiles.msg.exportedConfig', { path: savedPath }));
-    });
-  }
-
-  async function backupOne(id: string): Promise<void> {
-    await generalAction.run(async () => {
-      const savedPath = await callApi<'profiles:backup', string>('profiles:backup', { id });
-      setInfo(t('profiles.msg.backedUp', { path: savedPath }));
-    });
-  }
-
-  async function restoreProfile(): Promise<void> {
-    await generalAction.run(async () => {
-      const restored = await callApi<'profiles:restore', Profile | null>('profiles:restore', {});
-      if (restored) {
-        setInfo(t('profiles.msg.restored', { name: restored.name }));
-        await refresh();
-      }
-    });
-  }
-
-  async function importProfiles(): Promise<void> {
-    await generalAction.run(async () => {
-      const result = await callApi<'profiles:import', { created: Profile[]; errors: Array<{ path: string; message: string }> }>(
-        'profiles:import',
-        {},
-      );
-      if (result.created.length > 0) {
-        setInfo(
-          t('profiles.msg.imported', { count: result.created.length }) +
-            (result.errors.length > 0 ? t('profiles.msg.importedWithFailures', { count: result.errors.length }) : ''),
-        );
-        await refresh();
-      } else if (result.errors.length > 0) {
-        generalAction.setError(result.errors.map((e) => `${e.path}: ${e.message}`).join('; '));
-      }
-    });
-  }
-
-  async function exportSelected(): Promise<void> {
-    await generalAction.run(async () => {
-      const dir = await callApi<'profiles:exportSelected', string | null>('profiles:exportSelected', {
-        ids: Array.from(selected),
-      });
-      if (dir) setInfo(t('profiles.msg.exportedSelected', { count: selected.size, path: dir }));
-    });
-  }
-
-  async function exportAll(): Promise<void> {
-    await generalAction.run(async () => {
-      const dir = await callApi<'profiles:exportAll', string | null>('profiles:exportAll', {});
-      if (dir) setInfo(t('profiles.msg.exportedAll', { path: dir }));
-    });
-  }
-
-  /** Shared by every bulk action: shows that action's own specific success
-   * message (unchanged from before — "Tag added to 2 profile(s)", not a
-   * generic count) AND, when any profile failed, exactly which ones and why
-   * — never just a silent count that discards the per-item detail the
-   * backend already computed. */
-  function reportBulkResult(successMessage: string, result: BulkResult): void {
-    setInfo(successMessage);
-    setBulkFailures(
-      result.failed.map((f) => ({
-        id: f.id,
-        name: profiles.find((p) => p.id === f.id)?.name ?? f.id,
-        message: f.message,
-      })),
-    );
-  }
-
-  async function bulk(
-    action: 'profiles:bulkStart' | 'profiles:bulkStop' | 'profiles:bulkRestart' | 'profiles:bulkDelete' | 'profiles:bulkClone',
-  ): Promise<void> {
-    if (selected.size === 0) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<typeof action, BulkResult>(action, { ids: Array.from(selected) });
-      reportBulkResult(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }), result);
-      setSelected(new Set());
-      await refresh();
-    });
-  }
-
-  async function bulkBackup(): Promise<void> {
-    if (selected.size === 0) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<'profiles:bulkBackup', BulkResult>('profiles:bulkBackup', { ids: Array.from(selected) });
-      reportBulkResult(t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }), result);
-    });
-  }
-
-  async function bulkAssignProxy(proxyId: string): Promise<void> {
-    if (selected.size === 0) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<'profiles:bulkAssignProxy', BulkResult>('profiles:bulkAssignProxy', {
-        ids: Array.from(selected),
-        proxyId: proxyId || null,
-      });
-      reportBulkResult(t('profiles.msg.proxyAssigned', { count: result.succeeded.length }), result);
-      await refresh();
-    });
-  }
-
-  async function bulkAssignGroup(groupIdValue: string): Promise<void> {
-    if (selected.size === 0) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<'profiles:bulkAssignGroup', BulkResult>('profiles:bulkAssignGroup', {
-        ids: Array.from(selected),
-        groupId: groupIdValue || null,
-      });
-      reportBulkResult(t('profiles.msg.groupAssigned', { count: result.succeeded.length }), result);
-      await refresh();
-      await refreshGroups();
-    });
-  }
-
-  async function bulkAddTag(tag: string): Promise<void> {
-    if (selected.size === 0 || !tag.trim()) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<'profiles:bulkAddTags', BulkResult>('profiles:bulkAddTags', {
-        ids: Array.from(selected),
-        tags: [tag.trim()],
-      });
-      reportBulkResult(t('profiles.msg.tagAdded', { count: result.succeeded.length }), result);
-      await refresh();
-    });
-  }
-
-  async function bulkRemoveTag(tag: string): Promise<void> {
-    if (selected.size === 0 || !tag.trim()) return;
-    await bulkAction.run(async () => {
-      const result = await callApi<'profiles:bulkRemoveTags', BulkResult>('profiles:bulkRemoveTags', {
-        ids: Array.from(selected),
-        tags: [tag.trim()],
-      });
-      reportBulkResult(t('profiles.msg.tagRemoved', { count: result.succeeded.length }), result);
-      await refresh();
-    });
   }
 
   async function createGroup(name: string): Promise<void> {
@@ -401,39 +224,13 @@ export function ProfilesPage(): JSX.Element {
     });
   }
 
-  // Page-level shortcuts: Ctrl+N (focus the create-name field), Ctrl+F
-  // (focus search), Ctrl+A (select all visible), Delete (delete selection),
-  // Enter (start the single selected profile). Ctrl+F/Ctrl+N work from
-  // anywhere; Ctrl+A/Delete/Enter are suppressed while typing so they never
-  // fight with normal text editing (Ctrl+A to select text, Enter in a form).
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent): void {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        document.getElementById('profiles-create-name-input')?.focus();
-      } else if (mod && e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        document.getElementById('profiles-search-input')?.focus();
-      } else if (mod && e.key.toLowerCase() === 'a' && !isEditingText()) {
-        e.preventDefault();
-        setSelected(new Set(visibleProfiles.map((p) => p.id)));
-      } else if (e.key === 'Delete' && !isEditingText() && selected.size > 0) {
-        e.preventDefault();
-        setConfirmBulkDelete(true);
-      } else if (e.key === 'Enter' && !isEditingText() && selected.size === 1) {
-        e.preventDefault();
-        const id = Array.from(selected)[0]!;
-        const target = visibleProfiles.find((p) => p.id === id);
-        if (target && target.status !== 'RUNNING' && target.status !== 'STARTING') {
-          void runAction(id, 'profiles:start');
-        }
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleProfiles, selected]);
+  useProfilesKeyboardShortcuts({
+    visibleProfiles,
+    selected,
+    setSelected,
+    setConfirmBulkDelete,
+    onStart: (id) => void runAction(id, 'profiles:start'),
+  });
 
   return (
     <>
@@ -470,7 +267,7 @@ export function ProfilesPage(): JSX.Element {
         onNewTagsChange={setNewTags}
         onCreate={openCreateModal}
         onQuickCreate={() => void quickCreateProfile()}
-        quickCreatePending={generalAction.pending}
+        quickCreatePending={createAction.pending}
         onImport={() => void importProfiles()}
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}
@@ -540,7 +337,7 @@ export function ProfilesPage(): JSX.Element {
           initialProxyId={newProxyId}
           initialTags={newTags}
           initialTemplateId={templateId}
-          onClose={() => setShowCreateModal(false)}
+          onClose={closeCreateModal}
           onCreated={onProfileCreated}
         />
       )}

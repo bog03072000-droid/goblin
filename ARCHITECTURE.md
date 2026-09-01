@@ -87,10 +87,11 @@ all.
   nullable foreign key, never a tag under the hood.
 - `database/downloadRepository.ts` — persistent download history (filename,
   path, URL, size, state, owning profile), written to directly by each
-  per-profile child process's own `will-download` handler on every terminal
-  outcome (completed/cancelled/failed) — the manager reads the same SQLite
-  file (in WAL mode, which is what makes a second OS process safely writing
-  to it a supported pattern, not a race).
+  per-profile child process's own `will-download` handler (see
+  `browser/profileWindowDownloads.ts` below) on every terminal outcome
+  (completed/cancelled/failed) — the manager reads the same SQLite file (in
+  WAL mode, which is what makes a second OS process safely writing to it a
+  supported pattern, not a race).
 - `fingerprint/` — `platformProfiles.ts` (coherent OS/GPU/UA bundles),
   `generator.ts` (seeded, deterministic), `validator.ts` (cross-field
   coherence checks, not an anonymity/undetectability guarantee),
@@ -108,6 +109,15 @@ all.
   string from a profile's fingerprint row; deterministic per profile+content
   (seeded PRNG, not `Math.random()`), unit-tested directly in
   `tests/unit/spoofingScript.test.ts` without needing a real browser.
+- `browser/profileWindowEntry.ts` — the `--profile-window` child process's
+  entry point (see Process model above); wires up the session, the
+  `BrowserWindow`, fingerprint enforcement, and the `profileforge://`
+  diagnostics scheme, delegating two self-contained pieces to their own
+  files rather than growing indefinitely: `browser/profileWindowArgs.ts`
+  (CLI-argument parsing plus the one-shot stdin read for proxy credentials —
+  see SECURITY.md) and `browser/profileWindowDownloads.ts` (the
+  `will-download` handler and the three `pf:download-*` IPC handlers the
+  Downloads page uses).
 - `proxy/proxyTester.ts` — TCP-reachability check only; documented as such.
 - `security/credentialVault.ts` — wraps Electron `safeStorage` (Windows DPAPI)
   for proxy passwords.
@@ -159,10 +169,24 @@ Plain React + Vite, talking to the main process exclusively through
 by `src/main/preload.ts` via `contextBridge`. No `fs`, `child_process`, or
 direct DB access is ever reachable from the renderer. Pages: Profiles
 (list/filter/sort/bulk/context-menu/keyboard-shortcuts), Proxies, Downloads
-(history page), Logs, Settings (including a Keyboard Shortcuts reference
-panel). The per-profile browser shell itself (`browser-shell.html`/`.js`) is
-a separate, vanilla-JS surface — not part of the React renderer — since it
-runs inside the per-profile child process, not the manager.
+(history page), Logs (search/filter/pagination/live-tail), Settings
+(including a Keyboard Shortcuts reference panel). The per-profile browser
+shell itself (`browser-shell.html`/`.js`) is a separate, vanilla-JS surface —
+not part of the React renderer — since it runs inside the per-profile child
+process, not the manager.
+
+`pages/ProfilesPage.tsx` composes four custom hooks under `hooks/` rather
+than owning all of the Profiles page's state itself (it was pushing 600
+lines before this split): `useProfileSelection.ts` (which profiles are
+selected, and every bulk action against that selection),
+`useProfileCreate.ts` (the toolbar's quick-create fields, the full
+create-modal flow, and the one-click quick-create flow),
+`useProfileIO.ts` (single-profile and whole-list export/backup/restore/
+import), and `useProfilesKeyboardShortcuts.ts` (the page-level Ctrl+N/
+Ctrl+F/Ctrl+A/Delete/Enter listener). Each hook is a self-contained slice —
+nothing outside its own domain reads its state or calls its functions — with
+the page itself left owning only data-fetching, filtering/sorting, and
+composing the four hooks' results into JSX.
 
 ## Shared (`src/shared`)
 
