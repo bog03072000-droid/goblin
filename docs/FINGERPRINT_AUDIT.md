@@ -735,12 +735,41 @@ worried about reimplementing streaming/redirects/cookies by hand, which
 `Session.fetch()` actually handles fine — the real, fatal problem is the
 interactive-auth restriction, which no amount of careful scoping avoids,
 since it applies to the request mechanism itself, not to what the handler
-does with it). The fourth (CDP `Target.setAutoAttach`) remains correctly
-unattempted for the same CDP-footprint reason as before. No fix currently
-known that doesn't either reintroduce this regression or add disproportionate
-new surface — this is now a more thoroughly investigated dead end than
-before this stage, which has real value even though the gap itself is
-unchanged.
+does with it).
+
+**Third and final attempt — confirmed the restriction is unconditional, not
+avoidable by scoping.** The obvious next question after the paragraph above
+is "what if only non-navigation requests go through the handler's actual
+logic, and navigation requests are left alone?" — tried directly: the
+interceptor was changed to check `request.mode === 'navigate'` first and,
+for exactly those requests, do nothing but the same unmodified
+`ses.fetch(request, { bypassCustomProtocolHandlers: true })` pass-through
+every request already got in the first attempt (a Service Worker script
+fetch is never itself a navigation, so this doesn't weaken the injection —
+it only changes what happens to requests that were never the target
+anyway). Result: **identical failure**, `proxyVerification.spec.ts`'s
+authenticated-proxy test failed 2/2 attempts with the narrowed interceptor
+active, confirmed passing again 4/4 the instant it was reverted. This
+proves the earlier hypothesis rather than just restating it: the moment
+`session.protocol.handle('https', …)` is registered on a session at all,
+*every* request for that scheme — including navigations — must be answered
+by constructing a `Response` inside the handler, and there is no
+`Response`-construction path (an unmodified `Session.fetch()` pass-through
+included) that preserves a real navigation's ability to complete an
+interactive 407 challenge. The restriction lives in *how the response gets
+back to Chromium*, not in what the handler computes — so no scoping rule
+inside the handler can dodge it. Reverted again (`serviceWorkerScriptInjection.ts`
+deleted, the same three files restored, confirmed via a clean
+`proxyVerification.spec.ts` run afterward), and this is now closed as an
+exhaustively investigated dead end: three concrete attempts (full
+interception, narrowed-by-destination — abandoned early once `destination`
+proved unpopulated — and narrowed-by-navigation-mode), one confirmed
+working injection mechanism, one confirmed unconditional blocker, no
+remaining unscoped variation of `protocol.handle()` left to try. The fourth
+alternative (CDP `Target.setAutoAttach`) remains correctly unattempted for
+the same CDP-footprint reason as before. No fix currently known that
+doesn't either reintroduce this regression or add disproportionate new
+surface.
 
 ## Automated test coverage
 
