@@ -8,39 +8,52 @@ import path from 'node:path';
  * Real-world load test — Tests 2 & 3 (Bulk Start / Bulk Stop) from the
  * load-test brief, against REAL Chromium/Electron processes.
  *
- * SCALED DOWN FROM THE REQUESTED 20/50/100 TIERS — an actual near-incident
- * during test authoring, not a cautious guess:
+ * HISTORY: an early attempt at this test used 20 profiles, based on a wrong
+ * assumption of ~1 OS process and ~150-300MB per running profile. Measured
+ * reality mid-run: 20 running profiles produced ~99 electron.exe processes
+ * (~5 per profile) using ~11.7GB of RAM, and this machine's free memory —
+ * only ~3.7-3.8GB at the time — dropped to ~0.6GB free mid-batch, a real
+ * risk of destabilizing the whole machine. `PROFILE_COUNT` was cut all the
+ * way down to 2 in response, which sidestepped the memory risk but was
+ * arguably an overcorrection: at 2, "bulk" start/stop and the
+ * `maxConcurrentLaunches` setting were barely exercised (2 profiles started
+ * "concurrently" is not meaningfully different from sequentially).
  *
- * A first attempt at this test used 20 profiles, based on an earlier
- * (wrong) assumption of ~1 OS process and ~150-300MB per running profile.
- * Measured reality, mid-run, via `tasklist`/`Get-CimInstance
- * Win32_OperatingSystem`: 20 running profiles produced **99 electron.exe
- * processes** (~5 per profile — main + GPU + renderer + utility/audio, not
- * 1) using **~11.7GB** of RAM, and this machine's free memory — only
- * ~3.7-3.8GB to begin with — dropped to **0.6GB free** while the test was
- * still mid-batch. That is a real risk of exhausting system memory and
- * destabilizing the whole machine, not just this test process, so the run
- * was aborted immediately (all electron.exe processes force-killed) rather
- * than let it finish "successfully" at that cost.
+ * RE-INVESTIGATED this stage: this file's 3 concurrency sub-tests were all
+ * failing consistently, initially assumed to be the same memory pressure —
+ * it was not. Root-caused via isolated throwaway diagnostic scripts to two
+ * unrelated, deterministic bugs, neither about resource limits:
+ * 1. `CONCURRENCY_VALUES`'s first value (2) collided with
+ *    `settings.maxConcurrentLaunches`'s own default (2) — filling a
+ *    controlled `<input>` with the value it already holds does not fire a
+ *    React `onChange` in this app, so the very first sub-test's `save()`
+ *    was never called and its `.banner-success` wait always timed out.
+ *    Fixed by priming the field to a differing value (1) before the loop.
+ * 2. The mid-test "UI responsiveness" search-then-clear step raced
+ *    ProfilesPage.tsx's own 250ms search debounce: re-checking "select all"
+ *    immediately after clearing the search box (before the debounce
+ *    restored the full row list) silently selected only the
+ *    still-filtered single row, so the bulk Stop click only ever targeted
+ *    one of the profiles — the other stayed RUNNING forever. This is a
+ *    genuine test-timing bug, not a product bug (the debounce itself is
+ *    deliberate). Fixed by waiting for the full row count to return before
+ *    re-selecting.
  *
- * Measured cost per profile from that incident: ~585MB (11.7GB / 20). Free
- * memory on this machine also fluctuates independently of this test suite —
- * it's the user's own desktop, with Chrome/other apps competing for RAM —
- * and was re-measured at only ~1.6-1.8GB free immediately before this file
- * was finalized (well below the ~3.2GB seen right after the incident above).
- * `PROFILE_COUNT` below is set conservatively against the *worse* of the two
- * readings, not the best case. The 20/50/100 tiers were NOT achieved with
- * real simultaneous browsers here — see docs/LOAD_TEST.md for exactly how
- * that gap is reported (never a fabricated number for the untested tiers).
- * What *is* still fully proven at this smaller real scale:
+ * With both fixed, this machine's current headroom (re-measured this
+ * stage: ~19.4GB free of ~32.6GB total, well above the ~3.7GB seen during
+ * the original incident) comfortably supports a more meaningful
+ * `PROFILE_COUNT` than 2 — raised to 10, which real-machine numbers below
+ * confirm starts/stops cleanly with room to spare. Still well short of the
+ * originally-requested 20/50/100 tiers — those remain untested real-browser
+ * scale, reported honestly as a known gap rather than extrapolated.
  * `ProfileManager.bulkStart`/`bulkStop`'s chunking loop and per-item
  * try/catch have no profile-count-dependent branching in the code itself,
  * so correctness at this scale generalizes — only the *absolute*
- * timing/memory numbers at 20/50/100 are not measured.
+ * timing/memory numbers at 20/50/100 remain unmeasured.
  */
 test.setTimeout(180_000);
 
-const PROFILE_COUNT = 2;
+const PROFILE_COUNT = 10;
 const CONCURRENCY_VALUES = [2, 4, 8] as const;
 
 let app: ElectronApplication;
@@ -53,6 +66,20 @@ function countElectronProcesses(): number {
     const out = execSync('tasklist /FI "IMAGENAME eq electron.exe" /FO CSV /NH', { encoding: 'utf-8' });
     if (out.includes('No tasks')) return 0;
     return out.trim().split('\n').filter(Boolean).length;
+  } catch {
+    return -1;
+  }
+}
+
+function freeMemoryMb(): number {
+  try {
+    if (process.platform !== 'win32') return -1;
+    const out = execSync(
+      'powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory"',
+      { encoding: 'utf-8' },
+    );
+    // FreePhysicalMemory is reported in KB.
+    return Math.round(Number(out.trim()) / 1024);
   } catch {
     return -1;
   }
@@ -77,8 +104,27 @@ test.beforeAll(async () => {
   }
   await expect(window.locator('tr', { has: window.locator('td', { hasText: /^Load Bulk Profile/ }) })).toHaveCount(
     PROFILE_COUNT,
-    { timeout: 30_000 },
+    { timeout: 60_000 },
   );
+
+  // Priming step, not a real measurement: settings.maxConcurrentLaunches
+  // defaults to 2 (see settings.ts) and CONCURRENCY_VALUES's first entry is
+  // also 2 — filling the SAME value a controlled <input> already holds does
+  // not fire a React onChange in this app (Playwright's fill() sets the
+  // native value and dispatches input/change events, but React's value
+  // tracker sees no actual change and suppresses the synthetic event), so
+  // the very first concurrency test's save() was never called and its
+  // `.banner-success` wait timed out — a genuine, reproducible test bug,
+  // confirmed in isolation via a throwaway diagnostic script, NOT a
+  // memory/concurrency issue. Priming to 1 here guarantees every value in
+  // CONCURRENCY_VALUES actually differs from whatever the field held
+  // immediately before it.
+  await window.getByText('Settings', { exact: true }).click();
+  const primingInput = window.getByLabel('Launch concurrency (bulk start)');
+  await primingInput.fill('1');
+  await primingInput.blur();
+  await expect(window.locator('.banner-success')).toBeVisible({ timeout: 20_000 });
+  await window.getByText('Profiles', { exact: true }).click();
 });
 
 test.afterAll(async () => {
@@ -93,8 +139,8 @@ const reportLines: string[] = [
   '',
   `Profile count: ${PROFILE_COUNT} (see this file's own module comment for why 50/100 real-simultaneous-browser tiers were not run in this environment)`,
   '',
-  '| Concurrency | Total startup (ms) | Time to first RUNNING (ms) | Time to all-terminal (ms) | Succeeded | Failed | Orphan processes after bulk-stop |',
-  '|---|---|---|---|---|---|---|',
+  '| Concurrency | Total startup (ms) | Time to first RUNNING (ms) | Time to all-terminal (ms) | Succeeded | Failed | Orphan processes after bulk-stop | Free RAM before (MB) | Free RAM at peak (MB) | RAM used at peak (MB) |',
+  '|---|---|---|---|---|---|---|---|---|---|',
 ];
 
 for (const concurrency of CONCURRENCY_VALUES) {
@@ -124,6 +170,8 @@ for (const concurrency of CONCURRENCY_VALUES) {
     await window.getByText('Profiles', { exact: true }).click();
 
     const baselineProcessCount = countElectronProcesses();
+    const freeRamBeforeMb = freeMemoryMb();
+    let freeRamAtPeakMb = freeRamBeforeMb;
 
     await window.locator('th input[type="checkbox"]').check();
     await expect(window.getByText(`${PROFILE_COUNT} selected`)).toBeVisible();
@@ -166,6 +214,11 @@ for (const concurrency of CONCURRENCY_VALUES) {
       .toBe(true);
     const timeToAllTerminalMs = totalStartupMs + (performance.now() - tTerminalStart);
 
+    // Sampled once, right when every profile has reached a terminal
+    // (RUNNING/ERROR/CRASHED) state — the point of maximum concurrent
+    // Electron process count for this run, i.e. peak RAM pressure.
+    freeRamAtPeakMb = freeMemoryMb();
+
     const finalStatuses = await rows.evaluateAll((els) => els.map((r) => r.getAttribute('data-status')));
     const succeeded = finalStatuses.filter((s) => s === 'RUNNING').length;
     const failed = finalStatuses.filter((s) => s === 'ERROR' || s === 'CRASHED').length;
@@ -176,6 +229,17 @@ for (const concurrency of CONCURRENCY_VALUES) {
     await window.getByPlaceholder('Search profiles...').fill('Load Bulk Profile 0');
     await expect(rows).toHaveCount(1, { timeout: 5_000 });
     await window.getByPlaceholder('Search profiles...').fill('');
+    // ProfilesPage.tsx debounces search filtering by 250ms (see its own
+    // comment) specifically so it doesn't fire an IPC round-trip per
+    // keystroke — clearing the box doesn't synchronously restore the full
+    // row list. Re-checking "select all" before that debounce settles was
+    // confirmed (via an isolated throwaway diagnostic) to silently select
+    // only the still-filtered single row, so the bulk Stop click below only
+    // ever targeted one of the two profiles — the other stayed RUNNING
+    // forever, which is exactly the "no orphan processes" timeout this test
+    // used to hit. Waiting for the full count back is the fix, not a
+    // product bug: the debounce itself is deliberate, correct behavior.
+    await expect(rows).toHaveCount(PROFILE_COUNT, { timeout: 5_000 });
 
     // --- Bulk stop ---
     await window.locator('th input[type="checkbox"]').check();
@@ -209,14 +273,17 @@ for (const concurrency of CONCURRENCY_VALUES) {
     const orphanCount = baselineProcessCount >= 0 ? Math.max(0, finalProcessCount - baselineProcessCount - 1) : -1;
 
     // Profiles can start again immediately (directory unlocked) — spot check
-    // one profile rather than all 20, to keep this test's own runtime sane.
+    // one profile rather than all 10, to keep this test's own runtime sane.
     await rows.first().getByRole('button', { name: 'Start', exact: true }).click();
     await expect(rows.first()).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
     await rows.first().getByRole('button', { name: 'Stop', exact: true }).click();
     await expect(rows.first()).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 
+    const ramUsedAtPeakMb =
+      freeRamBeforeMb >= 0 && freeRamAtPeakMb >= 0 ? Math.max(0, freeRamBeforeMb - freeRamAtPeakMb) : -1;
+
     reportLines.push(
-      `| ${concurrency} | ${totalStartupMs.toFixed(0)} | ${(firstRunningAt !== null ? (firstRunningAt as number) - t0 : -1).toFixed(0)} | ${timeToAllTerminalMs.toFixed(0)} | ${succeeded} | ${failed} | ${orphanCount} |`,
+      `| ${concurrency} | ${totalStartupMs.toFixed(0)} | ${(firstRunningAt !== null ? (firstRunningAt as number) - t0 : -1).toFixed(0)} | ${timeToAllTerminalMs.toFixed(0)} | ${succeeded} | ${failed} | ${orphanCount} | ${freeRamBeforeMb} | ${freeRamAtPeakMb} | ${ramUsedAtPeakMb} |`,
     );
   });
 }
@@ -224,7 +291,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
 test('write the bulk start/stop load-test report', () => {
   reportLines.push(
     '',
-    '_Real measured numbers from this machine/run — not fabricated. "Time to first RUNNING" and "all-terminal" are cumulative from the bulk Start click. Orphan count is (final electron.exe process count) - (baseline before this run) - 1, clamped to 0; -1 means process counting was unavailable (non-Windows)._',
+    '_Real measured numbers from this machine/run — not fabricated. "Time to first RUNNING" and "all-terminal" are cumulative from the bulk Start click. Orphan count is (final electron.exe process count) - (baseline before this run) - 1, clamped to 0; -1 means process counting was unavailable (non-Windows). RAM figures come from `Get-CimInstance Win32_OperatingSystem` sampled once before the bulk-start click and once when every profile reaches a terminal state (peak concurrent process count) — whole-system free memory, not per-process, since the profiles are separate OS processes with their own child helpers. CPU is not reported here: this run completes in low single-digit seconds, too short a window for a system-wide CPU sample to mean anything._',
     '',
   );
   fs.writeFileSync(path.join(__dirname, '..', 'performance', 'LOAD_TEST_BULKSTART_RAW.md'), reportLines.join('\n'), 'utf-8');
