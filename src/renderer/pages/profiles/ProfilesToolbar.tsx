@@ -98,7 +98,7 @@ export function ProfilesToolbar({
 }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div className="toolbar" style={{ flexWrap: 'wrap' }}>
+    <div className="toolbar toolbar-wrap">
       <input
         id="profiles-search-input"
         placeholder={t('profiles.searchPlaceholder')}
@@ -143,7 +143,7 @@ export function ProfilesToolbar({
         <FolderCog size={14} strokeWidth={2.25} />
         {t('profiles.group.manage')}
       </button>
-      <div style={{ display: 'inline-flex' }}>
+      <div className="inline-flex">
         <select value={sortKey} onChange={(e) => onSortKeyChange(e.target.value as SortKey)}>
           <option value="name">{t('profiles.sort.name')}</option>
           <option value="status">{t('profiles.sort.status')}</option>
@@ -161,7 +161,7 @@ export function ProfilesToolbar({
         <ArrowLeftRight size={14} strokeWidth={2.25} />
         {t('profiles.selection.invert')}
       </button>
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
       <select value={templateId} onChange={(e) => onTemplateIdChange(e.target.value)}>
         <option value="">{t('profiles.template.auto')}</option>
         {templates.map((tmpl) => (
@@ -197,7 +197,7 @@ export function ProfilesToolbar({
       </select>
       <input
         placeholder={t('profiles.newTagsPlaceholder')}
-        style={{ width: 120 }}
+        className="w-120"
         value={newTags}
         onChange={(e) => onNewTagsChange(e.target.value)}
       />

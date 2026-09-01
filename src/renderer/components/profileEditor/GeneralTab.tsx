@@ -38,7 +38,7 @@ export function GeneralTab({
         <textarea
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          style={{ minHeight: 60 }}
+          className="field-textarea"
         />
       </label>
       <label className="field">

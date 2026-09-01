@@ -48,7 +48,7 @@ function AppShell(): JSX.Element {
     <>
       <div className="sidebar">
         <div className="sidebar-brand">
-          <img src={goblinLogo} alt="Goblin" width="28" height="28" style={{ borderRadius: 8 }} />
+          <img src={goblinLogo} alt="Goblin" width="28" height="28" className="brand-logo" />
           <span className="sidebar-brand-name">Goblin</span>
         </div>
         <div className={`sidebar-item ${page === 'profiles' ? 'active' : ''}`} onClick={() => setPage('profiles')}>
@@ -74,8 +74,8 @@ function AppShell(): JSX.Element {
       </div>
       <div className="main">
         {updateVersion && (
-          <div className="banner banner-success" style={{ margin: '12px 20px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ flex: 1 }}>{t('app.updateAvailable', { version: updateVersion })}</span>
+          <div className="banner banner-success update-banner">
+            <span className="flex-1">{t('app.updateAvailable', { version: updateVersion })}</span>
             <button className="btn btn-primary btn-sm" onClick={() => window.profileforge.installUpdate()}>
               {t('app.updateRestart')}
             </button>

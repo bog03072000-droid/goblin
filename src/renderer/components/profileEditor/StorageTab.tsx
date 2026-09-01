@@ -13,7 +13,7 @@ export function StorageTab({
       <p>
         <strong>{t('editor.storage.path')}</strong> <span className="mono">{profilePath}</span>
       </p>
-      <p style={{ color: 'var(--ash-dim)', fontSize: 12 }}>{t('editor.storage.hint')}</p>
+      <p className="text-dim text-sm">{t('editor.storage.hint')}</p>
       <button className="btn btn-ghost btn-sm" onClick={onClearCache}>{t('editor.storage.clearCache')}</button>
     </div>
   );

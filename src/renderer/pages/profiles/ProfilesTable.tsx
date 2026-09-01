@@ -61,7 +61,7 @@ export function ProfilesTable({
       <table>
         <thead>
           <tr>
-            <th style={{ width: 24 }}>
+            <th className="w-24">
               <input type="checkbox" checked={allVisibleSelected} onChange={onToggleSelectAll} />
             </th>
             <th>{t('profiles.table.name')}</th>
@@ -93,7 +93,7 @@ export function ProfilesTable({
               <td>
                 <span className={`pill ${PILL_VARIANT[p.status]}`}>{t(STATUS_LABEL_KEYS[p.status])}</span>
               </td>
-              <td style={{ textTransform: 'capitalize' }}>{p.os}</td>
+              <td className="capitalize">{p.os}</td>
               <td>Chrome {p.browserVersion.split('.')[0]}</td>
               <td>{proxies.find((pr) => pr.id === p.proxyId)?.name ?? '—'}</td>
               <td>{groups.find((g) => g.id === p.groupId)?.name ?? '—'}</td>
@@ -146,7 +146,7 @@ export function ProfilesTable({
           ))}
           {profiles.length === 0 && (
             <tr>
-              <td colSpan={10} style={{ color: 'var(--ash-dim)' }}>
+              <td colSpan={10} className="text-dim">
                 {totalProfileCount === 0 ? t('profiles.empty.none') : t('profiles.empty.noMatch')}
               </td>
             </tr>

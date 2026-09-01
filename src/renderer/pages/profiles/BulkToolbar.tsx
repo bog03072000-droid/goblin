@@ -40,7 +40,7 @@ export function BulkToolbar({
   const { t } = useTranslation();
   return (
     <div className="toolbar bulk-toolbar">
-      <strong style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center' }}>
+      <strong className="selected-count">
         {bulkBusy && <span className="spinner" />}
         {bulkBusy ? t('common.working') : t('profiles.selectedCount', { count: selectedCount })}
       </strong>
@@ -103,7 +103,7 @@ export function BulkToolbar({
       </select>
       <input
         placeholder={t('profiles.bulk.addTagPlaceholder')}
-        style={{ width: 140 }}
+        className="w-140"
         disabled={bulkBusy}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -114,7 +114,7 @@ export function BulkToolbar({
       />
       <input
         placeholder={t('profiles.bulk.removeTagPlaceholder')}
-        style={{ width: 140 }}
+        className="w-140"
         disabled={bulkBusy}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {

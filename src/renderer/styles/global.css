@@ -526,3 +526,99 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
   border-radius: var(--radius-card);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -20px rgba(0, 0, 0, 0.7);
 }
+
+/* ---------- Layout utilities ----------
+ * Added to let style-src drop 'unsafe-inline' (see index.html/browser-shell.html's
+ * CSP): every one of these replaces a `style={{ ... }}` prop that only ever
+ * held static values, since a static value has no reason to be inline
+ * rather than a class. Conditional-but-still-static values (e.g. a color
+ * that only ever switches between two fixed tokens) use two classes toggled
+ * by className, not inline style. */
+.field { display: block; margin-bottom: 8px; }
+.field:last-child { margin-bottom: 0; }
+.field-inline { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.field-input { display: block; width: 100%; margin-top: 4px; }
+
+.w-24 { width: 24px; }
+.w-80 { width: 80px; }
+.w-120 { width: 120px; }
+.w-160 { width: 160px; }
+.w-180 { width: 180px; }
+.w-140 { width: 140px; }
+.w-220 { width: 220px; }
+.w-full { width: 100%; }
+.min-w-220 { min-width: 220px; }
+.max-w-440 { max-width: 440px; }
+
+.flex-1 { flex: 1; }
+.flex-row { display: flex; align-items: center; gap: 8px; }
+.flex-row-gap6 { display: flex; align-items: center; gap: 6px; }
+.flex-row-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.flex-row-wrap-gap6 { display: flex; gap: 6px; flex-wrap: wrap; }
+.flex-row-end { display: flex; gap: 8px; justify-content: flex-end; }
+.flex-col-gap { display: flex; flex-direction: column; gap: 8px; }
+
+.text-dim { color: var(--ash-dim); }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }
+.mb-0 { margin-bottom: 0 !important; }
+.mb-4 { margin-bottom: 4px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-10 { margin-bottom: 10px; }
+.mb-12 { margin-bottom: 12px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-20 { margin-bottom: 20px; }
+.mt-0 { margin-top: 0; }
+.mt-4 { margin-top: 4px; }
+.mt-8 { margin-top: 8px; }
+.mt-10 { margin-top: 10px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.block { display: block; }
+
+.text-valid { color: var(--lime); }
+.text-invalid { color: var(--danger); }
+.text-warn { color: var(--warn); }
+.capitalize { text-transform: capitalize; }
+
+.fp-toolbar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.toolbar-inline { border-bottom: none; background: transparent; padding: 0; margin-bottom: 12px; }
+.selected-count { font-size: 12px; display: inline-flex; align-items: center; }
+.toolbar-wrap { flex-wrap: wrap; }
+.inline-flex { display: inline-flex; }
+.bulk-failure-list { margin: 6px 0 0; padding-left: 18px; }
+
+.settings-content { max-width: 560px; }
+.field-narrow { display: block; margin-bottom: 4px; }
+.field-input-160 { display: block; width: 160px; margin-top: 4px; }
+.field-input-220 { display: block; width: 220px; margin-top: 4px; }
+.settings-description { color: var(--ash-dim); font-size: 12px; max-width: 440px; margin-bottom: 8px; }
+.banner-maxw440 { max-width: 440px; }
+.shortcut-key-col { width: 100px; }
+.fp-heading { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+
+.brand-logo { border-radius: 8px; }
+.update-banner { margin: 12px 20px 0; display: flex; align-items: center; gap: 12px; }
+
+.modal-panel-sm { width: 380px; padding: 20px; }
+.confirm-message { margin-top: 0; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 10px; }
+.confirm-icon { flex-shrink: 0; margin-top: 1px; color: var(--warn); }
+
+.modal-panel-groups { width: 420px; max-height: 70vh; display: flex; flex-direction: column; }
+.modal-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--stroke); }
+.modal-header-title { margin: 0; flex: 1; }
+.modal-body-scroll { padding: 16px; overflow: auto; flex: 1; }
+.group-create-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.group-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--stroke); }
+.group-name { flex: 1; font-size: 13px; }
+.group-count { color: var(--ash-dim); font-size: 11px; }
+
+.modal-panel-lg { width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
+.modal-tabs-header { display: flex; border-bottom: 1px solid var(--stroke); align-items: center; }
+.modal-tabs-title { padding: 8px 12px; }
+.tab-item-capitalize { text-transform: capitalize; }
+.modal-close-btn { margin: 8px; }
+.field-textarea { min-height: 60px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--stroke); }
+.modal-body-pad { padding: 16px; overflow: auto; }
+.reset-btn { margin: 8px 0; }

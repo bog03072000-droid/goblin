@@ -136,7 +136,7 @@ export function LogsPage(): JSX.Element {
             </option>
           ))}
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label className="flex-row-gap6">
           <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
           {t('logs.live')}
         </label>
@@ -166,7 +166,7 @@ export function LogsPage(): JSX.Element {
               ))}
               {entries.length === 0 && !error && (
                 <tr>
-                  <td colSpan={4} style={{ color: 'var(--ash-dim)' }}>
+                  <td colSpan={4} className="text-dim">
                     {t('logs.empty.none')}
                   </td>
                 </tr>
@@ -175,7 +175,7 @@ export function LogsPage(): JSX.Element {
           </table>
         </div>
         {hasMore && (
-          <button className="btn btn-ghost" onClick={() => void loadMore()} disabled={loadMoreAction.pending} style={{ marginTop: 12 }}>
+          <button className="btn btn-ghost mt-12" onClick={() => void loadMore()} disabled={loadMoreAction.pending}>
             {t('logs.loadMore')}
           </button>
         )}

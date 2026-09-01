@@ -7,7 +7,7 @@ export function AdvancedTab({ profile }: { profile: Profile }): JSX.Element {
     <table>
       <tbody>
         <tr>
-          <th style={{ width: 180 }}>{t('editor.advanced.id')}</th>
+          <th className="w-180">{t('editor.advanced.id')}</th>
           <td className="mono">{profile.id}</td>
         </tr>
         <tr>

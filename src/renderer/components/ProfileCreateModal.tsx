@@ -268,29 +268,24 @@ export function ProfileCreateModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-panel"
-        style={{ width: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--stroke)', alignItems: 'center' }}>
-          <strong style={{ padding: '8px 12px' }}>{t('profileCreate.title')}</strong>
+      <div className="modal-panel modal-panel-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-tabs-header">
+          <strong className="modal-tabs-title">{t('profileCreate.title')}</strong>
           {(['general', 'fingerprint', 'proxy', 'storage', 'advanced'] as Tab[]).map((tabKey) => (
             <div
               key={tabKey}
-              className={`tab-item ${tab === tabKey ? 'active' : ''}`}
-              style={{ textTransform: 'capitalize' }}
+              className={`tab-item tab-item-capitalize ${tab === tabKey ? 'active' : ''}`}
               onClick={() => setTab(tabKey)}
             >
               {TAB_LABELS[tabKey]}
             </div>
           ))}
-          <div style={{ flex: 1 }} />
-          <button className="btn btn-ghost btn-sm" style={{ margin: 8 }} onClick={onClose}>
+          <div className="flex-1" />
+          <button className="btn btn-ghost btn-sm modal-close-btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
         </div>
-        <div style={{ padding: 16, overflow: 'auto', flex: 1 }}>
+        <div className="modal-body-scroll">
           {error && <div className="banner banner-error">{error}</div>}
           {loadAction.pending && !fingerprint && <p>{t('common.loading')}</p>}
 
@@ -305,7 +300,7 @@ export function ProfileCreateModal({
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  style={{ minHeight: 60 }}
+                  className="field-textarea"
                 />
               </label>
               <label className="field">
@@ -382,7 +377,7 @@ export function ProfileCreateModal({
                 </button>
               )}
               {showAddProxy && (
-                <div className="panel" style={{ marginTop: 8 }}>
+                <div className="panel mt-8">
                   <label className="field">
                     {t('proxy.namePlaceholder')}
                     <input
@@ -414,7 +409,7 @@ export function ProfileCreateModal({
                       type="number"
                       value={proxyForm.port}
                       onChange={(e) => setProxyForm({ ...proxyForm, port: Number(e.target.value) })}
-                      style={{ width: 120 }}
+                      className="w-120"
                     />
                   </label>
                   <label className="field">
@@ -444,11 +439,11 @@ export function ProfileCreateModal({
             </div>
           )}
 
-          {tab === 'storage' && <p style={{ color: 'var(--ash-dim)', fontSize: 12 }}>{t('profileCreate.storage.hint')}</p>}
+          {tab === 'storage' && <p className="text-dim text-sm">{t('profileCreate.storage.hint')}</p>}
 
-          {tab === 'advanced' && <p style={{ color: 'var(--ash-dim)', fontSize: 12 }}>{t('profileCreate.advanced.hint')}</p>}
+          {tab === 'advanced' && <p className="text-dim text-sm">{t('profileCreate.advanced.hint')}</p>}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: 12, borderTop: '1px solid var(--stroke)' }}>
+        <div className="modal-footer">
           <button
             className="btn btn-primary"
             disabled={createAction.pending || !name.trim() || !fingerprint}

@@ -72,7 +72,7 @@ export function ProxiesPage(): JSX.Element {
           type="number"
           value={form.port}
           onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-          style={{ width: 80 }}
+          className="w-80"
         />
         <input placeholder={t('proxy.usernamePlaceholder')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
         <input
@@ -138,7 +138,7 @@ export function ProxiesPage(): JSX.Element {
             ))}
             {proxies.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ color: 'var(--ash-dim)' }}>
+                <td colSpan={7} className="text-dim">
                   {t('proxy.empty.none')}
                 </td>
               </tr>

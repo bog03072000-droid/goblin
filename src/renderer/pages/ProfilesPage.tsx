@@ -503,7 +503,7 @@ export function ProfilesPage(): JSX.Element {
           <div className={`banner ${bulkFailures.length > 0 ? 'banner-warn' : 'banner-success'}`}>
             {info}
             {bulkFailures.length > 0 && (
-              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+              <ul className="bulk-failure-list">
                 {bulkFailures.map((f) => (
                   <li key={f.id}>
                     <strong>{f.name}</strong>: {f.message}

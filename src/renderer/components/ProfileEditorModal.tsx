@@ -266,38 +266,28 @@ export function ProfileEditorModal({
 
   return (
     <div className="modal-overlay" onClick={requestClose}>
-      <div
-        className="modal-panel"
-        style={{
-          width: 640,
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--stroke)', alignItems: 'center' }}>
+      <div className="modal-panel modal-panel-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-tabs-header">
           {(['general', 'fingerprint', 'proxy', 'storage', 'advanced'] as Tab[]).map((tabKey) => (
             <div
               key={tabKey}
-              className={`tab-item ${tab === tabKey ? 'active' : ''}`}
-              style={{ textTransform: 'capitalize' }}
+              className={`tab-item tab-item-capitalize ${tab === tabKey ? 'active' : ''}`}
               onClick={() => setTab(tabKey)}
             >
               {t(TAB_LABEL_KEYS[tabKey])}
             </div>
           ))}
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
           {isDirty && (
-            <button className="btn btn-ghost btn-sm" style={{ margin: '8px 0' }} onClick={resetFields}>
+            <button className="btn btn-ghost btn-sm reset-btn" onClick={resetFields}>
               {t('common.reset')}
             </button>
           )}
-          <button className="btn btn-ghost btn-sm" style={{ margin: 8 }} onClick={requestClose}>
+          <button className="btn btn-ghost btn-sm modal-close-btn" onClick={requestClose}>
             {t('common.close')}
           </button>
         </div>
-        <div style={{ padding: 16, overflow: 'auto' }}>
+        <div className="modal-body-pad">
           {error && <div className="banner banner-error">{error}</div>}
           {!profile && <p>{t('common.loading')}</p>}
 

@@ -2,7 +2,21 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'" />
+    <!-- style-src has no 'unsafe-inline': verified empirically (a throwaway
+         diagnostic script watching for CSP console errors across every page,
+         every modal, and a mouse-position-based context menu) that Chromium's
+         style-src only restricts parsing a style ATTRIBUTE STRING — from
+         markup, `setAttribute('style', ...)`, or `.cssText =` — not
+         individual CSSOM property assignment (`el.style.prop = value`),
+         which is what React's `style={{...}}` prop actually uses internally.
+         Every genuinely-static inline style in this app was still converted
+         to a CSS class (see global.css's own "Layout utilities" comment) for
+         readability, not because CSP required it — the one remaining
+         `style={{ left, top }}` in ProfileContextMenu.tsx (mouse-coordinate
+         positioning, which can't be a static class) confirmed this by
+         continuing to work with zero console errors once 'unsafe-inline'
+         was removed. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'" />
     <title>Goblin</title>
   </head>
   <body>

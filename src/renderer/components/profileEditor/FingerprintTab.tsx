@@ -86,7 +86,7 @@ export function FingerprintTab({
   const { t } = useTranslation();
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+      <div className="fp-toolbar">
         <button className={`btn btn-sm ${!manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => onManualModeChange(false)}>
           {t('editor.fingerprint.auto')}
         </button>
@@ -98,7 +98,7 @@ export function FingerprintTab({
             {t('editor.fingerprint.regenerate')}
           </button>
         )}
-        <div style={{ flex: 1 }} />
+        <div className="flex-1" />
         <button className="btn btn-ghost btn-sm" onClick={onValidate}>
           {t('editor.fingerprint.validate')}
         </button>
@@ -109,7 +109,7 @@ export function FingerprintTab({
           <tbody>
             {FIELD_ROW_KEYS.map(([labelKey, key]) => (
               <tr key={key}>
-                <th style={{ width: 180 }}>{t(labelKey)}</th>
+                <th className="w-180">{t(labelKey)}</th>
                 <td className="mono">
                   {key === 'languages'
                     ? fingerprint.languages.join(', ')
@@ -125,7 +125,7 @@ export function FingerprintTab({
 
       {manualMode && (
         <div>
-          <p style={{ color: 'var(--ash-dim)', fontSize: 12, marginTop: 0 }}>{t('editor.fingerprint.manualHint')}</p>
+          <p className="text-dim text-sm mt-0">{t('editor.fingerprint.manualHint')}</p>
           {MANUAL_FIELD_KEYS.map(([labelKey, key]) => (
             <label key={key} className="field">
               {t(labelKey)}
@@ -154,8 +154,8 @@ export function FingerprintTab({
         </div>
       )}
 
-      <div className="panel" style={{ marginTop: 16 }}>
-        <h4 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="panel mt-16">
+        <h4 className="fp-heading">
           {t('editor.fingerprint.spoofing.title')}
           {spoofingSaving && <span className="spinner" />}
         </h4>
@@ -188,7 +188,7 @@ export function FingerprintTab({
             <option value="system">{t('editor.fingerprint.spoofing.fontsSystem')}</option>
             <option value="restricted">{t('editor.fingerprint.spoofing.fontsRestricted')}</option>
           </select>
-          <p style={{ color: 'var(--ash-dim)', fontSize: 11, marginTop: 4, marginBottom: 0 }}>
+          <p className="text-dim text-xs mt-4 mb-0">
             {t('editor.fingerprint.spoofing.fontsHint')}
           </p>
         </label>
@@ -202,7 +202,7 @@ export function FingerprintTab({
             <option value="hidden">{t('editor.fingerprint.spoofing.mediaHidden')}</option>
           </select>
         </label>
-        <label style={{ display: 'block' }}>
+        <label className="block">
           {t('editor.fingerprint.spoofing.webglLabel')}
           <select
             value={fingerprint.webglSpoofingMode}
@@ -212,7 +212,7 @@ export function FingerprintTab({
             <option value="spoof">{t('editor.fingerprint.spoofing.webglSpoof')}</option>
           </select>
           {fingerprint.webglSpoofingMode === 'spoof' && (
-            <div className="banner banner-warn" style={{ marginTop: 8, marginBottom: 0, fontSize: 11 }}>
+            <div className="banner banner-warn mt-8 mb-0 text-xs">
               {t('editor.fingerprint.spoofing.webglWarning')}
             </div>
           )}
@@ -220,17 +220,17 @@ export function FingerprintTab({
       </div>
 
       {validation && (
-        <div style={{ marginTop: 10, fontSize: 12 }}>
-          <p style={{ color: validation.valid ? 'var(--lime)' : 'var(--danger)' }}>
+        <div className="mt-10 text-sm">
+          <p className={validation.valid ? 'text-valid' : 'text-invalid'}>
             {validation.valid ? t('editor.fingerprint.valid') : t('editor.fingerprint.invalid')}
           </p>
           {validation.errors.map((e) => (
-            <p key={e} style={{ color: 'var(--danger)' }}>
+            <p key={e} className="text-invalid">
               ERROR: {e}
             </p>
           ))}
           {validation.warnings.map((w) => (
-            <p key={w} style={{ color: 'var(--warn)' }}>
+            <p key={w} className="text-warn">
               WARNING: {w}
             </p>
           ))}

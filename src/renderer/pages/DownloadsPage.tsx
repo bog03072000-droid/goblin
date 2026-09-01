@@ -82,12 +82,12 @@ export function DownloadsPage(): JSX.Element {
   return (
     <div className="content">
       {error && <div className="banner banner-error">{error}</div>}
-      <div className="toolbar" style={{ borderBottom: 'none', background: 'transparent', padding: 0, marginBottom: 12 }}>
+      <div className="toolbar toolbar-inline">
         <input
           placeholder={t('downloads.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ minWidth: 220 }}
+          className="min-w-220"
         />
         <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
           <option value="">{t('downloads.filter.allProfiles')}</option>
@@ -123,7 +123,7 @@ export function DownloadsPage(): JSX.Element {
                   <span className={`pill ${statusPillVariant(d)}`}>{statusLabel(d)}</span>
                 </td>
                 <td>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div className="flex-row-wrap-gap6">
                     {!d.missing && d.state === 'completed' && (
                       <>
                         <button className="btn btn-ghost btn-sm" onClick={() => void handleOpen(d.id)}>
@@ -150,7 +150,7 @@ export function DownloadsPage(): JSX.Element {
             ))}
             {downloads.length === 0 && !error && (
               <tr>
-                <td colSpan={6} style={{ color: 'var(--ash-dim)' }}>
+                <td colSpan={6} className="text-dim">
                   {search || profileId || dateFrom || dateTo ? t('downloads.empty.noMatch') : t('downloads.empty.none')}
                 </td>
               </tr>

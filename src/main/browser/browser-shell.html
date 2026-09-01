@@ -2,7 +2,13 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'" />
+<!-- style-src has no 'unsafe-inline' — same finding as src/renderer/index.html's
+     own CSP comment: verified via browserTabs.spec.ts (real multi-tab
+     interactions) that this file's `.style.visibility/.zIndex/.pointerEvents = ...`
+     assignments in browser-shell.js keep working with zero console CSP
+     errors, since CSSOM property assignment isn't governed by style-src the
+     way a style="" attribute string is. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'" />
 <title>Goblin Browser</title>
 <style>
   /* Self-hosted, same reasoning as global.css's own @font-face block — no

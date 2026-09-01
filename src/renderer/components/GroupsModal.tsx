@@ -45,34 +45,31 @@ export function GroupsModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel" style={{ width: 420, maxHeight: '70vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--stroke)' }}>
-          <h3 style={{ margin: 0, flex: 1 }}>{t('profiles.group.manage')}</h3>
+      <div className="modal-panel modal-panel-groups" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-header-title">{t('profiles.group.manage')}</h3>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             {t('common.close')}
           </button>
         </div>
-        <div style={{ padding: 16, overflow: 'auto', flex: 1 }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div className="modal-body-scroll">
+          <div className="group-create-row">
             <input
               placeholder={t('profiles.group.newNamePlaceholder')}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submitCreate()}
-              style={{ flex: 1 }}
+              className="flex-1"
             />
             <button className="btn btn-primary" onClick={submitCreate}>
               {t('profiles.group.create')}
             </button>
           </div>
 
-          {groups.length === 0 && <p style={{ color: 'var(--ash-dim)', fontSize: 13 }}>{t('profiles.group.empty')}</p>}
+          {groups.length === 0 && <p className="text-dim text-sm">{t('profiles.group.empty')}</p>}
 
           {groups.map((g) => (
-            <div
-              key={g.id}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--stroke)' }}
-            >
+            <div key={g.id} className="group-row">
               {editingId === g.id ? (
                 <input
                   autoFocus
@@ -83,11 +80,11 @@ export function GroupsModal({
                     if (e.key === 'Escape') setEditingId(null);
                   }}
                   onBlur={() => commitRename(g)}
-                  style={{ flex: 1 }}
+                  className="flex-1"
                 />
               ) : (
-                <span style={{ flex: 1, fontSize: 13 }}>
-                  {g.name} <span className="mono" style={{ color: 'var(--ash-dim)', fontSize: 11 }}>({g.profileCount})</span>
+                <span className="group-name">
+                  {g.name} <span className="mono group-count">({g.profileCount})</span>
                 </span>
               )}
               <button className="btn btn-ghost btn-sm" onClick={() => startRename(g)}>

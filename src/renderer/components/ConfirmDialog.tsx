@@ -15,12 +15,12 @@ export function ConfirmDialog({
   const { t } = useTranslation();
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-panel" style={{ width: 380, padding: 20 }} onClick={(e) => e.stopPropagation()}>
-        <p style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-          <TriangleAlert size={18} strokeWidth={2.25} style={{ flexShrink: 0, marginTop: 1, color: 'var(--warn)' }} />
+      <div className="modal-panel modal-panel-sm" onClick={(e) => e.stopPropagation()}>
+        <p className="confirm-message">
+          <TriangleAlert size={18} strokeWidth={2.25} className="confirm-icon" />
           <span>{message}</span>
         </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className="flex-row-end">
           <button className="btn btn-ghost btn-sm" onClick={onCancel}>
             {t('common.cancel')}
           </button>
