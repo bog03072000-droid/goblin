@@ -181,7 +181,9 @@ every supported field's actual enforcement status.
   (Canvas/Audio/WebGL/Fonts/Media Devices are toggled by mode, not
   hand-typed); the always-enforced identity fields (UA, platform, locale,
   timezone, screen, hardware concurrency) can be hand-edited in Manual mode.
-- Concurrent-launch throttling (`maxConcurrentLaunches`, default 2) staggers
+- Concurrent-launch throttling (`maxConcurrentLaunches`, default 4 — real
+  measurements across 20-100 profiles showed 4 beats 2 on both speed and
+  peak RAM, see `tests/performance/LOAD_TEST_BULKSTART_RAW.md`) staggers
   the *rate* of new process launches to avoid a startup burst — it does not
   cap the total number of profiles that end up running simultaneously once a
   bulk start completes, which is the intended behavior (the point of a bulk

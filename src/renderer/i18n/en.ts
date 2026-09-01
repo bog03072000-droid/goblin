@@ -241,9 +241,9 @@ const en = {
   'settings.autoCacheCleanup': 'Automatic cache cleanup',
   'settings.maxConcurrentLaunches': 'Launch concurrency (bulk start)',
   'settings.maxConcurrentLaunches.description':
-    'How many profiles are allowed to START AT THE SAME TIME during a bulk start. This does not limit how many profiles can end up running in total — it only paces the burst of new launches.',
+    'How many profiles are allowed to START AT THE SAME TIME during a bulk start. This does not limit how many profiles can end up running in total — it only paces the burst of new launches. Default is 4: real measurements across 20-100 profiles showed it finishes faster AND uses less peak RAM than 2, by draining the launch queue sooner.',
   'settings.maxConcurrentLaunches.ramWarning':
-    'Each simultaneously launching profile uses roughly 500-600MB of RAM. A high value can spike memory usage sharply, especially on machines with limited free RAM.',
+    'Each simultaneously launching profile uses roughly 500-600MB of RAM. Values above 4 trade that faster/lighter sweet spot for a shorter queue at a higher instantaneous RAM spike — can hit hard on machines with limited free RAM.',
   'settings.cacheLimitMb': 'Cache limit per profile (MB)',
   'settings.startupBehavior': 'Startup behavior',
   'settings.startupBehavior.showProfileList': 'Show profile list',
