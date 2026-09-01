@@ -45,7 +45,7 @@ never a mocked browser, never a hand-edited diagnostics page.
 | Device Memory | Yes | Yes, always | Yes | No CDP method exists for this (Finding 3) — a JS-level `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument`, applied unconditionally. |
 | Canvas | Yes | Yes, on by default (`canvasMode: 'noise'`) | Yes | Seeded per-profile noise (±1 on RGB channels) on `toDataURL()`/`getImageData()` — same-content-same-profile is byte-deterministic (tested), different profiles diverge on identical content (tested). |
 | Audio | Yes | Yes, on by default (`audioMode: 'noise'`) | Partial | Seeded per-profile noise on `AudioBuffer.getChannelData()` — override-installed is directly verified; the noise's numeric effect isn't independently re-derived by the test (would require re-implementing the seeded-PRNG math in the test itself, not currently done). |
-| WebGL (vendor/renderer) | Yes | **On by default since this audit stage** (`webglSpoofingMode: 'spoof'`), still a per-profile opt-out toggle | Yes on the main document/dedicated/shared Worker — **confirmed NOT reached inside a Service Worker** (see §Service Workers' later-stage addendum: a real CreepJS run leaks the true GPU through this exact path despite spoofing being on) | Off (opted out): honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On (default): `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content, and (c) does **not** apply inside a Service Worker, root-caused and documented below rather than left as a silent gap. |
+| WebGL (vendor/renderer) | Yes | **On by default since this audit stage** (`webglSpoofingMode: 'spoof'`), still a per-profile opt-out toggle | Yes on the main document/dedicated/shared Worker — **confirmed NOT reached inside a Service Worker** (see §Service Workers' addenda: a real CreepJS run leaks the true GPU through this exact path despite spoofing being on; a later-stage attempt at closing it via network-level `protocol.handle()` injection worked technically but was reverted after it broke authenticated proxy browsing — see that addendum) | Off (opted out): honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On (default): `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content, and (c) does **not** apply inside a Service Worker, root-caused and documented below rather than left as a silent gap. |
 | Media Devices | Yes | Opt-in, off by default (`mediaDevicesMode: 'real'`) | Yes | Off: real device enumeration (verified empirically: real inputs/outputs, not fabricated). On: `enumerateDevices()` returns a seeded synthetic list structurally distinguishable as fake by the diagnostics page's own check — not just trusting the mode flag. |
 | Fonts | Yes | Opt-in, off by default (`fontsMode: 'system'`); **partial even when on** | Yes | On: blocks `document.fonts.check()` and the Local Font Access API only. Does **not** block CSS-fallback-width-measurement font detection — re-investigated this stage (see §Fonts below), no clean fix exists without a Chromium patch or breaking real page layout; kept as-is and documented rather than silently claimed as full coverage. |
 
@@ -67,8 +67,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | devicePixelRatio | ✅ (`deviceScaleFactor`) | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setDeviceMetricsOverride({deviceScaleFactor})` | **A** |
 | hardwareConcurrency | ✅ | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setHardwareConcurrencyOverride` | **A** |
 | deviceMemory | ✅ | ✅ (unconditional) | ✅ configured value | ✅ (range only) | ✅ (asserts PASS) | `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument` — see Finding 6 | **A** |
-| WebGL vendor | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (see §Service Workers' later-stage addendum — confirmed leak path, not theoretical) | ✅ (plausibility only) | ✅ **both states on the main document** (off: asserts NOT_IMPLEMENTED; on/default: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility); ✅ **Service Worker case added later this stage** (asserts the real, unpatched value — an honest NOT_IMPLEMENTED-style expectation, not a false PASS) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — on by default, see §WebGL spoofing; reaches dedicated/shared Workers via the same propagation as navigator fields, does **not** reach Service Workers, see §Service Workers | **B** on the main document/dedicated/shared Worker by default (→ **C** if opted out); **D** (not implemented, now proven not just assumed) specifically for the Service Worker path |
-| WebGL renderer | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (same confirmed leak path as WebGL vendor) | ✅ (Apple-only-on-macOS check) | ✅ **both states on the main document** (same test as vendor); ✅ **Service Worker case added later this stage** | same as WebGL vendor | same grading as WebGL vendor |
+| WebGL vendor | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (see §Service Workers' addenda — confirmed leak path; a later attempt to close it via `protocol.handle()` network injection worked but was reverted after breaking authenticated proxy browsing) | ✅ (plausibility only) | ✅ **both states on the main document** (off: asserts NOT_IMPLEMENTED; on/default: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility); ✅ **Service Worker case** (asserts the real, unpatched value — an honest NOT_IMPLEMENTED-style expectation, not a false PASS) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — on by default, see §WebGL spoofing; reaches dedicated/shared Workers via the same propagation as navigator fields, does **not** reach Service Workers, see §Service Workers | **B** on the main document/dedicated/shared Worker by default (→ **C** if opted out); **D** (not implemented, confirmed by both the original investigation and a reverted fix attempt) specifically for the Service Worker path |
+| WebGL renderer | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (same confirmed leak path as WebGL vendor) | ✅ (Apple-only-on-macOS check) | ✅ **both states on the main document** (same test as vendor); ✅ **Service Worker case** | same as WebGL vendor | same grading as WebGL vendor |
 | Canvas | ✅ (`canvasMode`, default `noise`) | ✅ | ✅ deterministic per-profile noise | schema only | ✅ (asserts APPLIED + determinism, cross-profile difference) | seeded noise on `toDataURL()`/`getImageData()`, injected via CDP main-world script — see §Canvas (implemented) | **B** |
 | AudioContext | ✅ (`audioMode`, default `noise`) | ✅ | not read back numerically by diagnostics (override presence checked instead) | schema only | ✅ (asserts APPLIED — override installed) | seeded noise on `AudioBuffer.prototype.getChannelData`, same injection mechanism — see §Audio (implemented) | **B** |
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
@@ -654,6 +654,93 @@ separate, non-CreepJS diagnostic is what actually proves the dedicated-Worker
 path itself is fixed, since CreepJS's own fallback ordering means it never
 reaches that path on a machine where SW registration "succeeds" (even with
 unpatched content).
+
+**Later stage still — alternative #2 re-investigated as explicit R&D,
+proven technically capable of closing the gap, then reverted after finding
+a real, reproducible regression in core proxy functionality.** This was
+approached on the explicit understanding it was research, not a guaranteed
+fix, with instructions not to trade the app's stability for this one gap.
+That is exactly what happened, in the end — recorded here in full because
+the negative result (and *why* it's negative) is exactly as valuable as a
+positive one would have been.
+
+**What actually got built, and it did work:**
+
+1. **Detecting "this is a Service Worker script fetch" turned out not to
+   need `session.webRequest.onBeforeRequest`'s `resourceType` after all.**
+   `Request.destination` (the spec-correct Fetch API signal, which *should*
+   read `'serviceworker'`) was tried first and confirmed, empirically, to
+   **not** be reliably populated by Electron's `protocol.handle()` — a
+   temporary diagnostic logging every intercepted request's `destination`
+   against a real `navigator.serviceWorker.register()` call came back with
+   `destination` **empty on every single request**, SW script included.
+   Instead: the page's own JS already knows the exact URL it's about to
+   register — `spoofingScript.ts`'s existing `register()` wrapper computes
+   it right before its (always-failing) blob: attempt falls back to the
+   real one. That fallback was made to call a small `contextBridge`-exposed
+   function telling the main process the exact absolute URL about to be
+   registered, which kept a one-shot allowlist and only patched a request
+   if its URL was in it.
+2. **The network-level pass-through worked correctly for everything it was
+   tested against.** Electron's `Session.fetch(request, {
+   bypassCustomProtocolHandlers: true })` routed non-matching requests
+   through the session's real Chromium network stack — `downloads.spec.ts`,
+   `profileBrowserLifecycle.spec.ts` (including the persistent cookie/
+   localStorage/IndexedDB-across-restart test), `fullUserFlow.spec.ts`, and
+   `reliability.spec.ts`'s dead-proxy-still-starts-cleanly case all passed
+   unchanged.
+3. **The injection itself worked, confirmed live against real CreepJS, not
+   just the internal test.** `fingerprintEnforcement.spec.ts`'s real-Service-
+   Worker test passed with the spoofed value actually observed inside a real
+   Service Worker, and a real CreepJS capture confirmed it independently:
+   `Worker` section reporting `ServiceWorkerGlobalScope` (registration
+   genuinely succeeded) with the **spoofed** GPU instead of the real host
+   GPU, in both the `Worker` and separate `WebGL` report sections.
+
+**The regression that stopped it: `protocol.handle('https', …)` broke
+authenticated proxy browsing, reproducibly, 100% of the time.**
+`proxyVerification.spec.ts`'s "a proxy with a username/password actually
+authenticates" test — previously reliable — failed on every attempt (2/2 in
+the full suite, 2/2 again in isolation) once the interceptor was active, and
+passed again immediately (1/1) the moment it was disabled, with no other
+change — a clean, deliberate A/B confirming direct causation, not
+correlation. Root cause: per the Fetch specification, a request issued
+through a `fetch()`-family API (`Session.fetch()` included) is not permitted
+to trigger an interactive HTTP/proxy authentication prompt the way a real
+top-level navigation is — that's a deliberate browser security boundary
+(unrestricted programmatic credential prompting would be a phishing vector),
+not an Electron bug or something this project's code got wrong. Once
+`protocol.handle()` is registered for `https`, *every* request for that
+session — real navigations included — gets rerouted through exactly that
+kind of fetch-style call, so every request loses the ability to complete a
+407 challenge, not just the injected ones. This is a spec-level ceiling on
+the whole approach, not a narrow implementation bug with a plausible patch.
+
+**Decision: reverted, not shipped.** Authenticated proxy support is core
+functionality for an antidetect browser — trading it away to close one
+fingerprint gap, however real that gap is, fails the explicit instruction
+this stage was given. `serviceWorkerScriptInjection.ts` was deleted;
+`profileWindowEntry.ts`, `spoofingScript.ts`, and `diagnosticsPreload.ts`
+were reverted to their pre-this-stage state; `fingerprintEnforcement.spec.ts`
+was reverted to its original honest-gap assertion (the leak is real again in
+shipped code, exactly as documented above). The Service Worker gap remains
+open, exactly as characterized in the rest of this section.
+
+**Alternatives #1 and #3 above remain correctly rejected** (custom-scheme
+serving still hits the same Chromium blob:-adjacent restriction; the
+`session.serviceWorkers` API still has no script-injection capability).
+**Alternative #2 is now also correctly rejected**, but for a different,
+newly-discovered reason than originally guessed (the original writeup
+worried about reimplementing streaming/redirects/cookies by hand, which
+`Session.fetch()` actually handles fine — the real, fatal problem is the
+interactive-auth restriction, which no amount of careful scoping avoids,
+since it applies to the request mechanism itself, not to what the handler
+does with it). The fourth (CDP `Target.setAutoAttach`) remains correctly
+unattempted for the same CDP-footprint reason as before. No fix currently
+known that doesn't either reintroduce this regression or add disproportionate
+new surface — this is now a more thoroughly investigated dead end than
+before this stage, which has real value even though the gap itself is
+unchanged.
 
 ## Automated test coverage
 
