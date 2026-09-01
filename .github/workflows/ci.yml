@@ -63,15 +63,29 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Rebuild native modules for Electron ABI
-        run: npm run rebuild:electron
-      - run: npm run build
+      # better-sqlite3 is ABI-locked to whichever runtime last rebuilt it
+      # (plain Node vs. Electron's own Node build have different
+      # NODE_MODULE_VERSIONs) — test:perf runs under plain Node (vitest), so
+      # it must run BEFORE the Electron rebuild below, not after. Running
+      # this job on a real GitHub Actions runner for the first time (see the
+      # test PR that verified this workflow) caught this ordering bug live:
+      # test:perf failed with a NODE_MODULE_VERSION mismatch because the
+      # first version of this job rebuilt for Electron before running it.
+      - name: Rebuild native modules for Node ABI
+        run: npm run rebuild:node
       - name: Vitest-based performance tests (tests/performance/*.test.ts)
         run: npm run test:perf
+      - run: npx playwright install --with-deps chromium
+      - name: Rebuild native modules for Electron ABI
+        if: always()
+        run: npm run rebuild:electron
+      - run: npm run build
+        if: always()
       - name: E2E load-test suite (tests/e2e/loadTest*.spec.ts)
+        if: always()
         run: npx playwright test tests/e2e/loadTestBulkStartStop.spec.ts tests/e2e/loadTestClone.spec.ts tests/e2e/loadTestIsolation.spec.ts tests/e2e/loadTestStability.spec.ts tests/e2e/loadTestUIResponsiveness.spec.ts
       - name: Upload regenerated performance reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: performance-reports
