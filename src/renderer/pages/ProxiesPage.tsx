@@ -7,6 +7,18 @@ import { EditProxyModal } from '../components/EditProxyModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
 
+/** "3m ago" / "2h ago" / "just now" — used for the proxy health-check badge's
+ * timestamp so it stays readable without a full date. */
+function formatRelativeTime(iso: string, t: ReturnType<typeof useTranslation>['t']): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return t('proxy.status.justNow');
+  if (minutes < 60) return t('proxy.status.minutesAgo', { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return t('proxy.status.hoursAgo', { n: hours });
+  return t('proxy.status.daysAgo', { n: Math.floor(hours / 24) });
+}
+
 export function ProxiesPage(): JSX.Element {
   const { t } = useTranslation();
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
@@ -111,13 +123,26 @@ export function ProxiesPage(): JSX.Element {
                 <td>{p.username ?? '—'}</td>
                 <td>
                   {results[p.id] ? (
+                    // A manual "Test" click this session always wins over the
+                    // (possibly older) background-scheduler result below.
                     <span className={`pill ${results[p.id]!.success ? 'on' : 'danger'}`}>
                       {results[p.id]!.success
                         ? t('proxy.status.ok', { ms: results[p.id]!.latencyMs ?? 0 })
                         : t('proxy.status.failed', { error: results[p.id]!.error ?? '' })}
                     </span>
+                  ) : p.lastCheckedAt ? (
+                    // Persisted result from the periodic health-check
+                    // scheduler (see proxyHealthScheduler.ts) or an earlier
+                    // session's manual test — not just "no data yet".
+                    <span className={`pill ${p.lastCheckStatus === 'OK' ? 'on' : 'danger'}`}>
+                      {p.lastCheckStatus === 'OK'
+                        ? t('proxy.status.autoOk', { ms: p.lastCheckLatencyMs ?? 0, when: formatRelativeTime(p.lastCheckedAt, t) })
+                        : t('proxy.status.autoFail', { when: formatRelativeTime(p.lastCheckedAt, t) })}
+                    </span>
                   ) : (
-                    <span className="pill idle">—</span>
+                    <span className="pill idle" title={t('proxy.status.neverChecked')}>
+                      —
+                    </span>
                   )}
                 </td>
                 <td>

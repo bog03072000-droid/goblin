@@ -110,7 +110,12 @@ export function registerIpc(deps: IpcDependencies): void {
     const proxy = deps.proxies.getById(p.id);
     if (!proxy) throw new Error('Proxy not found');
     const password = deps.proxies.getPassword(p.id);
-    return testProxyConnection(proxy, password);
+    const result = await testProxyConnection(proxy, password);
+    // A manual "Test" click is itself a health check — persist it the same
+    // way the periodic scheduler does, so the badge in the UI reflects
+    // whichever check (manual or scheduled) happened most recently.
+    deps.proxies.recordCheckResult(p.id, result);
+    return result;
   });
 
   handle('logs:list', (p) =>

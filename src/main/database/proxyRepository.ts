@@ -13,6 +13,9 @@ interface ProxyRow {
   encrypted_password: Buffer | null;
   created_at: string;
   updated_at: string;
+  last_check_status: string | null;
+  last_checked_at: string | null;
+  last_check_latency_ms: number | null;
 }
 
 function rowToProxy(row: ProxyRow): ProxyRecord {
@@ -25,6 +28,9 @@ function rowToProxy(row: ProxyRow): ProxyRecord {
     username: row.username ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    lastCheckStatus: row.last_check_status as ProxyRecord['lastCheckStatus'],
+    lastCheckedAt: row.last_checked_at,
+    lastCheckLatencyMs: row.last_check_latency_ms,
   };
 }
 
@@ -105,5 +111,15 @@ export class ProxyRepository {
   list(): ProxyRecord[] {
     const rows = this.db.prepare('SELECT * FROM proxies ORDER BY created_at DESC').all() as ProxyRow[];
     return rows.map(rowToProxy);
+  }
+
+  /** Records a health-check result (scheduled or manual) without touching
+   * updated_at — a background check is not a user edit. */
+  recordCheckResult(id: string, result: { success: boolean; latencyMs: number | null }): void {
+    this.db
+      .prepare(
+        `UPDATE proxies SET last_check_status = ?, last_checked_at = ?, last_check_latency_ms = ? WHERE id = ?`,
+      )
+      .run(result.success ? 'OK' : 'FAIL', new Date().toISOString(), result.latencyMs, id);
   }
 }

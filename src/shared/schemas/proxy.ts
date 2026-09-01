@@ -12,6 +12,12 @@ export const ProxySchema = z.object({
   username: z.string().max(255).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Filled in by the periodic health-check scheduler (see
+  // src/main/proxy/proxyHealthScheduler.ts), not just the manual "Test"
+  // button — null until the first scheduled check runs.
+  lastCheckStatus: z.enum(['OK', 'FAIL']).nullable(),
+  lastCheckedAt: z.string().nullable(),
+  lastCheckLatencyMs: z.number().nullable(),
 });
 export type ProxyRecord = z.infer<typeof ProxySchema>;
 

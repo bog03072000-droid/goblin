@@ -226,6 +226,13 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'proxy.table.actions': 'Дії',
   'proxy.status.ok': 'OK ({ms}мс)',
   'proxy.status.failed': 'Помилка: {error}',
+  'proxy.status.autoOk': 'OK · {ms}мс · {when}',
+  'proxy.status.autoFail': 'FAIL · {when}',
+  'proxy.status.neverChecked': 'Ще не перевірявся',
+  'proxy.status.justNow': 'щойно',
+  'proxy.status.minutesAgo': '{n} хв тому',
+  'proxy.status.hoursAgo': '{n} год тому',
+  'proxy.status.daysAgo': '{n} дн тому',
   'proxy.empty.none': 'Проксі ще немає. Додайте перший вище.',
 
   'settings.title.performance': 'Продуктивність',

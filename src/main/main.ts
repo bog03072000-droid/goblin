@@ -13,6 +13,7 @@ import { GroupRepository } from './database/groupRepository';
 import { DownloadRepository } from './database/downloadRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
+import { ProxyHealthScheduler } from './proxy/proxyHealthScheduler';
 import { registerIpc } from './ipc/registerIpc';
 import { runProfileWindowProcess } from './browser/profileWindowEntry';
 
@@ -81,6 +82,12 @@ function runManagerProcess(): void {
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
     const groups = new GroupRepository(db);
     const downloads = new DownloadRepository(db);
+
+    // Runs for the lifetime of the app (its own interval is .unref()'d, so
+    // it never keeps the process alive on its own) — see
+    // proxyHealthScheduler.ts for why this exists alongside the manual
+    // "Test" button.
+    new ProxyHealthScheduler(proxies).start();
 
     registerIpc({
       profileManager,

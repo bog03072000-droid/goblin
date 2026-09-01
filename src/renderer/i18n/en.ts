@@ -224,6 +224,13 @@ const en = {
   'proxy.table.actions': 'Actions',
   'proxy.status.ok': 'OK ({ms}ms)',
   'proxy.status.failed': 'Failed: {error}',
+  'proxy.status.autoOk': 'OK · {ms}ms · {when}',
+  'proxy.status.autoFail': 'FAIL · {when}',
+  'proxy.status.neverChecked': 'Not checked yet',
+  'proxy.status.justNow': 'just now',
+  'proxy.status.minutesAgo': '{n}m ago',
+  'proxy.status.hoursAgo': '{n}h ago',
+  'proxy.status.daysAgo': '{n}d ago',
   'proxy.empty.none': 'No proxies yet. Add one above.',
 
   'settings.title.performance': 'Performance',

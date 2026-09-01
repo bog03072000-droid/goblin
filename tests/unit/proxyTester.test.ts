@@ -40,6 +40,9 @@ function makeProxy(overrides: Partial<ProxyRecord> = {}): ProxyRecord {
     port: 8080,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    lastCheckStatus: null,
+    lastCheckedAt: null,
+    lastCheckLatencyMs: null,
     ...overrides,
   };
 }
