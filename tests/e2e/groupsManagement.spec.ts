@@ -73,8 +73,10 @@ test('groups can be created, a profile moved into one, renamed, filtered, and de
   await expect(modal.locator('text=E2E Group Renamed')).toHaveCount(0, { timeout: 10_000 });
   await window.getByRole('button', { name: 'Close', exact: true }).click();
 
+  // A single profile delete is soft and no longer confirms first (the Undo
+  // toast is the safety net — see profileSoftDelete.spec.ts); only the
+  // group-delete above still goes through the shared ConfirmDialog.
   await row.getByRole('button', { name: 'Delete' }).click();
-  await window.locator('.modal-panel').last().getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(window.locator('td', { hasText: 'E2E Group Profile' })).toHaveCount(0, { timeout: 15_000 });
 });
 

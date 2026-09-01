@@ -6,6 +6,7 @@ export const ActivityEventTypeSchema = z.enum([
   'PROFILE_STOPPED',
   'PROFILE_CRASHED',
   'PROFILE_DELETED',
+  'PROFILE_DELETE_UNDONE',
   'PROFILE_CLONED',
   'PROFILE_UPDATED',
   'PROXY_ASSIGNED',

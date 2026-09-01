@@ -86,9 +86,12 @@ test('search filters the profile list', async () => {
 });
 
 test('deleting a profile removes it from the list', async () => {
+  // Single delete is soft (see profileManager.ts's SOFT_DELETE_WINDOW_MS) and
+  // no longer confirms first — the Undo toast is the safety net now (full
+  // soft-delete/undo cycle coverage lives in profileSoftDelete.spec.ts); this
+  // test just needs the row to actually disappear.
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile Two' }) });
   await row.getByRole('button', { name: 'Delete' }).click();
-  await window.locator('.modal-panel').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile Two' })).toHaveCount(0, { timeout: 15_000 });
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible();
 });

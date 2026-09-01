@@ -15,6 +15,7 @@ interface ProfileRow {
   updated_at: string;
   last_started_at: string | null;
   last_stopped_at: string | null;
+  deleted_at: string | null;
 }
 
 interface ProfileListRow extends ProfileRow {
@@ -106,12 +107,17 @@ export class ProfileRepository {
 
   /** Includes OS/browser version via a single SQL join — not a per-profile
    * fingerprint lookup — so this stays fast at 200 stored profiles (see
-   * tests/performance/profileScale.test.ts). */
-  list(filter?: { search?: string; tag?: string; groupId?: string }): ProfileListItem[] {
+   * tests/performance/profileScale.test.ts). Soft-deleted profiles (deleted_at
+   * set — see softDelete()) are excluded by default; pass includeDeleted to
+   * see them (used only by the startup purge of stale soft-deletes). */
+  list(filter?: { search?: string; tag?: string; groupId?: string; includeDeleted?: boolean }): ProfileListItem[] {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let joins = 'JOIN fingerprints f ON f.id = p.fingerprint_id';
 
+    if (!filter?.includeDeleted) {
+      conditions.push('p.deleted_at IS NULL');
+    }
     if (filter?.tag) {
       joins += ' JOIN profile_tags pt ON pt.profile_id = p.id JOIN tags t ON t.id = pt.tag_id';
       conditions.push('t.name = ?');
@@ -192,7 +198,30 @@ export class ProfileRepository {
     }
   }
 
-  delete(id: string): void {
+  /** Marks a profile deleted without removing the row — ProfileManager.delete()
+   * schedules the real (hard) removal after an undo window; see hardDelete(). */
+  softDelete(id: string): void {
+    this.db.prepare('UPDATE profiles SET deleted_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+  }
+
+  /** Reverses softDelete() — the profile reappears in list()'s default (non-
+   * includeDeleted) results immediately. */
+  restoreDeleted(id: string): void {
+    this.db.prepare('UPDATE profiles SET deleted_at = NULL WHERE id = ?').run(id);
+  }
+
+  /** Actual, irreversible row removal — only ever called once a soft-deleted
+   * profile's undo window has elapsed. */
+  hardDelete(id: string): void {
     this.db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
+  }
+
+  /** Soft-deleted profiles whose undo window has already elapsed — used once
+   * at startup to finish hard-deleting anything an in-memory ProfileManager
+   * timer never got to fire for (app closed/crashed inside the undo window). */
+  listStaleDeleted(cutoffIso: string): Array<{ id: string }> {
+    return this.db.prepare('SELECT id FROM profiles WHERE deleted_at IS NOT NULL AND deleted_at <= ?').all(cutoffIso) as Array<{
+      id: string;
+    }>;
   }
 }

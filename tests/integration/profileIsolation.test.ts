@@ -68,13 +68,20 @@ describe('ProfileManager storage isolation', () => {
     expect(fs.existsSync(path.join(configClone.profilePath, 'browser-data', 'marker.txt'))).toBe(false);
   });
 
-  it('deleting a profile removes only that profile storage', () => {
+  it('deleting a profile soft-deletes it (storage untouched, undo window pending) without affecting other profiles', () => {
+    // delete() is now soft: the real (hard) removal is scheduled in the
+    // background after an undo window (see profileManager.ts's
+    // SOFT_DELETE_WINDOW_MS) rather than happening synchronously — full
+    // coverage of that timeout/undo behavior lives in
+    // tests/unit/profileSoftDelete.test.ts, which controls the window via
+    // PF_SOFT_DELETE_WINDOW_MS. This test stays scoped to storage isolation:
+    // deleting A must never touch B's storage, soft or hard.
     const a = manager.create({ name: 'A3' }, new FingerprintRepositoryHelper(db).id('a3'));
     const b = manager.create({ name: 'B3' }, new FingerprintRepositoryHelper(db).id('b3'));
 
     manager.delete(a.id);
 
-    expect(fs.existsSync(a.profilePath)).toBe(false);
+    expect(fs.existsSync(a.profilePath)).toBe(true);
     expect(fs.existsSync(b.profilePath)).toBe(true);
   });
 });

@@ -99,7 +99,7 @@ describe('repositories', () => {
     const a = profiles.create({ name: 'A', profilePath: '/tmp/a', fingerprintId: fpA.id, proxyId: null });
     const b = profiles.create({ name: 'B', profilePath: '/tmp/b', fingerprintId: fpB.id, proxyId: null });
 
-    profiles.delete(a.id);
+    profiles.hardDelete(a.id);
 
     expect(profiles.getById(a.id)).toBeNull();
     expect(profiles.getById(b.id)).not.toBeNull();

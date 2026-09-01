@@ -28,9 +28,15 @@ export interface BulkResult {
  * Orchestrates the full profile lifecycle: DB state + on-disk storage + OS
  * process + lock file all move together so they never drift out of sync.
  */
+/** How long a soft-deleted profile stays recoverable via restoreDeleted()
+ * before ProfileManager permanently removes it. Overridable for tests only
+ * (see PF_E2E_* convention) — never meant to be end-user configurable. */
+const SOFT_DELETE_WINDOW_MS = Number(process.env['PF_SOFT_DELETE_WINDOW_MS'] ?? 30_000);
+
 export class ProfileManager {
   private readonly running = new Map<string, ChildProcess>();
   private readonly lockManager = new LockManager();
+  private readonly pendingHardDeletes = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly profilesRoot: string,
@@ -39,7 +45,16 @@ export class ProfileManager {
     private readonly proxies: ProxyRepository,
     private readonly logs: ActivityLogRepository,
     private readonly dbPath: string,
-  ) {}
+  ) {
+    // Defensive cleanup for profiles whose undo window elapsed while the app
+    // wasn't running to fire the in-memory timer (closed/crashed mid-window) —
+    // without this they'd stay soft-deleted (invisible in the list, but still
+    // on disk) forever.
+    const cutoff = new Date(Date.now() - SOFT_DELETE_WINDOW_MS).toISOString();
+    for (const { id } of this.profiles.listStaleDeleted(cutoff)) {
+      this.hardDeletePermanently(id);
+    }
+  }
 
   create(input: ProfileCreateInput, fingerprintId: string): Profile {
     // profilePath is computed here, server-side, from a freshly generated ID —
@@ -215,12 +230,46 @@ export class ProfileManager {
     this.logs.record('PROFILE_UPDATED', id, `Cache cleared for "${profile.name}"`);
   }
 
+  /** Soft-deletes: the profile disappears from the default list immediately
+   * and stays fully recoverable via restoreDeleted() for SOFT_DELETE_WINDOW_MS,
+   * after which it's permanently removed (files included) in the background —
+   * same end state the old hard-delete-on-click behavior produced, just with
+   * an undo window in front of it. */
   delete(id: string): void {
     const profile = this.mustGet(id);
     if (this.running.has(id)) throw new Error('Stop the profile before deleting it');
-    deleteProfileStorage(this.profilesRoot, id);
-    this.profiles.delete(id);
+    this.profiles.softDelete(id);
     this.logs.record('PROFILE_DELETED', id, `Profile "${profile.name}" deleted`);
+    const timer = setTimeout(() => {
+      this.pendingHardDeletes.delete(id);
+      this.hardDeletePermanently(id);
+    }, SOFT_DELETE_WINDOW_MS);
+    timer.unref();
+    this.pendingHardDeletes.set(id, timer);
+  }
+
+  /** Reverses a pending delete() within its undo window. Throws if the window
+   * already elapsed (and the profile was hard-deleted) or the id never
+   * existed — nothing left to restore. */
+  restoreDeleted(id: string): Profile {
+    const timer = this.pendingHardDeletes.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingHardDeletes.delete(id);
+    }
+    this.profiles.restoreDeleted(id);
+    const profile = this.mustGet(id);
+    this.logs.record('PROFILE_DELETE_UNDONE', id, `Deletion of "${profile.name}" undone`);
+    return profile;
+  }
+
+  private hardDeletePermanently(id: string): void {
+    const profile = this.profiles.getById(id);
+    deleteProfileStorage(this.profilesRoot, id);
+    this.profiles.hardDelete(id);
+    if (profile) {
+      this.logs.record('PROFILE_DELETED', id, `Profile "${profile.name}" permanently removed`);
+    }
   }
 
   /** mode 'config' shares nothing but the fingerprint/proxy config; 'full' also
@@ -325,6 +374,12 @@ export class ProfileManager {
 
   bulkDelete(ids: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => this.delete(id));
+  }
+
+  bulkRestoreDeleted(ids: string[]): Promise<BulkResult> {
+    return this.bulkRun(ids, (id) => {
+      this.restoreDeleted(id);
+    });
   }
 
   bulkClone(ids: string[]): Promise<BulkResult> {

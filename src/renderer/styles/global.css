@@ -472,6 +472,49 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
 .banner-success { background: rgba(124, 179, 66, 0.1); border-color: var(--lime); color: var(--lime); }
 .banner-warn { background: rgba(210, 153, 34, 0.1); border-color: var(--warn); color: var(--warn); }
 
+/* ---------- Undo toast ---------- */
+.undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 12px 11px 16px;
+  background: var(--char-raised);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-input);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  min-width: 320px;
+}
+.undo-toast-message { font-size: 13px; color: var(--paper); flex: 1; }
+.undo-toast-actions { display: flex; align-items: center; gap: 6px; }
+.undo-toast-close {
+  background: none;
+  border: none;
+  color: var(--ash);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0;
+  border-radius: 6px;
+}
+.undo-toast-close:hover { color: var(--paper); background: var(--char-hi); }
+.undo-toast-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--lime);
+  border-radius: 0 0 0 var(--radius-input);
+  animation: undo-toast-countdown linear forwards;
+}
+@keyframes undo-toast-countdown {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 /* ---------- Bulk toolbar ---------- */
 .bulk-toolbar {
   display: flex;

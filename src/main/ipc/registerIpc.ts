@@ -71,6 +71,7 @@ export function registerIpc(deps: IpcDependencies): void {
   });
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
   handle('profiles:delete', (p) => deps.profileManager.delete(p.id));
+  handle('profiles:restoreDeleted', (p) => deps.profileManager.restoreDeleted(p.id));
   handle('profiles:start', (p) => deps.profileManager.start(p.id));
   handle('profiles:stop', (p) => deps.profileManager.stop(p.id));
   handle('profiles:restart', (p) => deps.profileManager.restart(p.id));
@@ -143,6 +144,7 @@ export function registerIpc(deps: IpcDependencies): void {
     return deps.profileManager.bulkRestart(p.ids, concurrency);
   });
   handle('profiles:bulkDelete', (p) => deps.profileManager.bulkDelete(p.ids));
+  handle('profiles:bulkRestoreDeleted', (p) => deps.profileManager.bulkRestoreDeleted(p.ids));
   handle('profiles:bulkClone', (p) => deps.profileManager.bulkClone(p.ids));
   handle('profiles:bulkBackup', (p) => deps.importExport.bulkBackup(p.ids));
   handle('profiles:bulkAssignProxy', (p) => deps.profileManager.bulkAssignProxy(p.ids, p.proxyId));

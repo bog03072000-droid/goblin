@@ -7,6 +7,7 @@ import { callApi } from '../services/api';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
 import { ProfileCreateModal } from '../components/ProfileCreateModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { UndoToast } from '../components/UndoToast';
 import { GroupsModal } from '../components/GroupsModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useProfileSelection, type BulkResult } from '../hooks/useProfileSelection';
@@ -43,8 +44,12 @@ export function ProfilesPage(): JSX.Element {
   const [bulkFailures, setBulkFailures] = useState<Array<{ id: string; name: string; message: string }>>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState<ProfileListItem | null>(null);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  // Soft-delete undo window (see profileManager.ts's SOFT_DELETE_WINDOW_MS,
+  // which this mirrors for the visible countdown — the actual undo cutoff is
+  // enforced by a main-process timer regardless of what happens to this toast).
+  const UNDO_WINDOW_MS = 30_000;
+  const [undoToast, setUndoToast] = useState<{ message: string; ids: string[]; bulk: boolean } | null>(null);
 
   const generalAction = useAsyncAction();
   const rowAction = useAsyncAction();
@@ -180,16 +185,64 @@ export function ProfilesPage(): JSX.Element {
   });
   const error = generalAction.error ?? rowAction.error ?? bulkAction.error ?? createAction.error ?? ioAction.error;
 
-  async function runAction(
-    id: string,
-    action: 'profiles:start' | 'profiles:stop' | 'profiles:restart' | 'profiles:delete',
-  ): Promise<void> {
+  async function runAction(id: string, action: 'profiles:start' | 'profiles:stop' | 'profiles:restart'): Promise<void> {
     setBusyId(id);
     await rowAction.run(async () => {
       await callApi(action, { id });
       await refresh();
     });
     setBusyId(null);
+  }
+
+  /** Soft-deletes immediately — no confirm dialog, since the Undo toast below
+   * is the safety net now (a single profile is cheap to restore, unlike a
+   * bulk selection — see confirmBulkDelete, which still confirms). */
+  async function deleteOne(p: ProfileListItem): Promise<void> {
+    setBusyId(p.id);
+    await rowAction.run(async () => {
+      await callApi('profiles:delete', { id: p.id });
+      await refresh();
+      setUndoToast({ message: t('profiles.msg.deleted', { name: p.name }), ids: [p.id], bulk: false });
+    });
+    setBusyId(null);
+  }
+
+  async function bulkDeleteWithUndo(): Promise<void> {
+    setConfirmBulkDelete(false);
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    await bulkAction.run(async () => {
+      const result = await callApi<'profiles:bulkDelete', BulkResult>('profiles:bulkDelete', { ids });
+      reportBulkResult(
+        t('profiles.bulk.resultSummary', { succeeded: result.succeeded.length, failed: result.failed.length }),
+        result,
+      );
+      setSelected(new Set());
+      await refresh();
+      if (result.succeeded.length > 0) {
+        setUndoToast({
+          message: t('profiles.bulk.msg.deleted', { count: result.succeeded.length }),
+          ids: result.succeeded,
+          bulk: true,
+        });
+      }
+    });
+  }
+
+  async function undoDelete(): Promise<void> {
+    if (!undoToast) return;
+    const { ids, bulk: isBulk } = undoToast;
+    setUndoToast(null);
+    await generalAction.run(async () => {
+      if (isBulk) {
+        await callApi('profiles:bulkRestoreDeleted', { ids });
+        setInfo(t('profiles.bulk.msg.deleteRestored', { count: ids.length }));
+      } else {
+        await callApi('profiles:restoreDeleted', { id: ids[0]! });
+        setInfo(t('profiles.msg.deleteRestored'));
+      }
+      await refresh();
+    });
   }
 
   async function cloneOne(p: Profile): Promise<void> {
@@ -327,7 +380,7 @@ export function ProfilesPage(): JSX.Element {
           onClone={(p) => void cloneOne(p)}
           onExport={(id) => void exportConfig(id)}
           onBackup={(id) => void backupOne(id)}
-          onDeleteRequest={setConfirmDeleteProfile}
+          onDeleteRequest={(p) => void deleteOne(p)}
         />
       </div>
       {showCreateModal && (
@@ -355,27 +408,20 @@ export function ProfilesPage(): JSX.Element {
           }}
         />
       )}
-      {confirmDeleteProfile && (
-        <ConfirmDialog
-          message={t('profiles.confirmDelete', { name: confirmDeleteProfile.name })}
-          confirmLabel={t('profiles.action.delete')}
-          onCancel={() => setConfirmDeleteProfile(null)}
-          onConfirm={() => {
-            const id = confirmDeleteProfile.id;
-            setConfirmDeleteProfile(null);
-            void runAction(id, 'profiles:delete');
-          }}
-        />
-      )}
       {confirmBulkDelete && (
         <ConfirmDialog
           message={t('profiles.bulk.confirmDelete', { count: selected.size })}
           confirmLabel={t('profiles.bulk.delete')}
           onCancel={() => setConfirmBulkDelete(false)}
-          onConfirm={() => {
-            setConfirmBulkDelete(false);
-            void bulk('profiles:bulkDelete');
-          }}
+          onConfirm={() => void bulkDeleteWithUndo()}
+        />
+      )}
+      {undoToast && (
+        <UndoToast
+          message={undoToast.message}
+          durationMs={UNDO_WINDOW_MS}
+          onUndo={() => void undoDelete()}
+          onDismiss={() => setUndoToast(null)}
         />
       )}
       {showGroupsModal && (

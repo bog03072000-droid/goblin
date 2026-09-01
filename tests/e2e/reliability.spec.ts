@@ -39,8 +39,10 @@ test('deleting a running profile is blocked with a clear message, not silently i
   await row.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
+  // A single delete no longer confirms first (soft-delete + Undo toast is
+  // the safety net now — see profileSoftDelete.spec.ts), so this click goes
+  // straight to the backend guard being tested here.
   await row.getByRole('button', { name: 'Delete' }).click();
-  await window.locator('.modal-panel').getByRole('button', { name: 'Delete', exact: true }).click();
 
   // A real, human-readable failure banner — not a raw stack trace, not a
   // silent no-op, and critically: the profile is still there afterwards.
@@ -53,7 +55,6 @@ test('deleting a running profile is blocked with a clear message, not silently i
 
   // Now that it's stopped, the exact same action succeeds.
   await row.getByRole('button', { name: 'Delete' }).click();
-  await window.locator('.modal-panel').getByRole('button', { name: 'Delete', exact: true }).click();
   await expect(window.locator('td', { hasText: 'E2E Running Delete Profile' })).toHaveCount(0, { timeout: 15_000 });
 });
 
