@@ -63,6 +63,36 @@ test('creating a profile with group/proxy/tags set inline applies them immediate
   await expect(row.locator('.tag', { hasText: 'fresh' })).toBeVisible();
 });
 
+test('editing a proxy changes it in place, no delete+recreate needed', async () => {
+  await window.getByText('Proxies', { exact: true }).click();
+  await window.getByPlaceholder('Name', { exact: true }).fill('Editable Proxy');
+  await window.getByPlaceholder('Host').fill('127.0.0.1');
+  await window.getByPlaceholder('Port').fill('9001');
+  await window.getByPlaceholder('Username').fill('original-user');
+  await window.getByRole('button', { name: 'Add Proxy' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'Editable Proxy' }) });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  await row.getByRole('button', { name: 'Edit', exact: true }).click();
+  const modal = window.locator('.modal-panel');
+  await expect(modal.getByText('Edit proxy')).toBeVisible();
+  await modal.getByLabel('Host').fill('10.0.0.9');
+  await modal.getByLabel('Port').fill('9002');
+  await modal.getByLabel('Username').fill('updated-user');
+  await modal.getByRole('button', { name: 'Save', exact: true }).click();
+
+  // Same row (same proxy id) — the edit modified it in place, not delete+recreate.
+  await expect(row.locator('td', { hasText: '10.0.0.9' })).toBeVisible({ timeout: 10_000 });
+  await expect(row.locator('td', { hasText: '9002' })).toBeVisible();
+  await expect(row.locator('td', { hasText: 'updated-user' })).toBeVisible();
+  await expect(window.locator('td', { hasText: 'Editable Proxy' })).toHaveCount(1);
+
+  // Every later test in this file assumes it starts on the Profiles page
+  // (this file's own tests are sequential in one shared app/window — see
+  // the module comment).
+  await window.getByText('Profiles', { exact: true }).click();
+});
+
 test('filter by proxy narrows the list to only profiles using that proxy', async () => {
   await window.getByPlaceholder('New profile name').fill('No Proxy Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();

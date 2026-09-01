@@ -38,6 +38,35 @@ describe('repositories', () => {
     expect(repo.getPassword(created.id)).toBe('super-secret');
   });
 
+  it('proxy repository update() changes fields in place without requiring delete+recreate', () => {
+    const repo = new ProxyRepository(db);
+    const created = repo.create({
+      name: 'original-name',
+      protocol: 'http',
+      host: '127.0.0.1',
+      port: 8080,
+      username: 'user',
+      password: 'original-secret',
+    });
+
+    // Updating unrelated fields (name/host/port) with no `password` key in
+    // the patch must leave the existing encrypted password untouched — this
+    // is what lets the renderer's edit form omit the password field
+    // entirely when the user doesn't want to change it.
+    const renamed = repo.update(created.id, { name: 'renamed', host: '10.0.0.5', port: 9090 });
+    expect(renamed.name).toBe('renamed');
+    expect(renamed.host).toBe('10.0.0.5');
+    expect(renamed.port).toBe(9090);
+    expect(repo.getPassword(created.id)).toBe('original-secret');
+
+    // Passing an explicit new password re-encrypts and replaces it.
+    repo.update(created.id, { password: 'new-secret' });
+    expect(repo.getPassword(created.id)).toBe('new-secret');
+
+    // Same id, not a new row — update() is genuinely in-place.
+    expect(repo.list()).toHaveLength(1);
+  });
+
   it('profile repository stores tags and filters by them', () => {
     const fingerprints = new FingerprintRepository(db);
     const profiles = new ProfileRepository(db);

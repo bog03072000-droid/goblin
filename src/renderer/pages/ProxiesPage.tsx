@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EditProxyModal } from '../components/EditProxyModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
 
@@ -11,6 +12,7 @@ export function ProxiesPage(): JSX.Element {
   const [results, setResults] = useState<Record<string, ProxyTestResult>>({});
   const [form, setForm] = useState({ name: '', protocol: 'http' as ProxyProtocol, host: '', port: 8080, username: '', password: '' });
   const [confirmDeleteProxy, setConfirmDeleteProxy] = useState<ProxyRecord | null>(null);
+  const [editingProxy, setEditingProxy] = useState<ProxyRecord | null>(null);
   const { error, run } = useAsyncAction();
 
   async function refresh(): Promise<void> {
@@ -118,6 +120,7 @@ export function ProxiesPage(): JSX.Element {
                 </td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>{t('proxy.test')}</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingProxy(p)}>{t('proxy.edit')}</button>
                   <button className="btn btn-danger-ghost btn-sm" onClick={() => setConfirmDeleteProxy(p)}>{t('proxy.delete')}</button>
                 </td>
               </tr>
@@ -144,6 +147,9 @@ export function ProxiesPage(): JSX.Element {
             void remove(id);
           }}
         />
+      )}
+      {editingProxy && (
+        <EditProxyModal proxy={editingProxy} onClose={() => setEditingProxy(null)} onSaved={() => void refresh()} />
       )}
     </>
   );
