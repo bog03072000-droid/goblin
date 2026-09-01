@@ -43,17 +43,23 @@ import path from 'node:path';
  * stage: ~19.4GB free of ~32.6GB total, well above the ~3.7GB seen during
  * the original incident) comfortably supports a more meaningful
  * `PROFILE_COUNT` than 2 — raised to 10, which real-machine numbers below
- * confirm starts/stops cleanly with room to spare. Still well short of the
- * originally-requested 20/50/100 tiers — those remain untested real-browser
- * scale, reported honestly as a known gap rather than extrapolated.
- * `ProfileManager.bulkStart`/`bulkStop`'s chunking loop and per-item
- * try/catch have no profile-count-dependent branching in the code itself,
- * so correctness at this scale generalizes — only the *absolute*
- * timing/memory numbers at 20/50/100 remain unmeasured.
+ * confirm starts/stops cleanly with room to spare.
+ *
+ * LATER STAGE: `PROFILE_COUNT` is now overridable via
+ * `PF_LOAD_TEST_PROFILE_COUNT` (default stays 10 for routine runs — real
+ * Chromium instances at 100 profiles take ~10 minutes total, too slow for
+ * this to be the default every CI/local run pays). Actually run, in real
+ * stages, at 20 / 50 / 100 — see `tests/performance/LOAD_TEST_BULKSTART_RAW.md`
+ * for the full real numbers and a written analysis of two genuine
+ * degradation trends found between 50 and 100 (RAM headroom compressing,
+ * startup time scaling super-linearly at low concurrency). All three tiers
+ * passed with 0 failures and 0 orphan processes; 100 was where the
+ * degradation trend became clear enough to stop climbing further on a
+ * shared development machine, not a tier the app itself failed at.
  */
-test.setTimeout(180_000);
+test.setTimeout(600_000);
 
-const PROFILE_COUNT = 10;
+const PROFILE_COUNT = Number(process.env.PF_LOAD_TEST_PROFILE_COUNT ?? 10);
 const CONCURRENCY_VALUES = [2, 4, 8] as const;
 
 let app: ElectronApplication;
@@ -85,7 +91,11 @@ function freeMemoryMb(): number {
   }
 }
 
-test.beforeAll(async () => {
+// Playwright requires the first beforeAll argument to be the object-
+// destructuring fixtures pattern, even when no fixture is actually used.
+// eslint-disable-next-line no-empty-pattern
+test.beforeAll(async ({}, testInfo) => {
+  testInfo.setTimeout(600_000);
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-load-bulkstart-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
@@ -104,7 +114,7 @@ test.beforeAll(async () => {
   }
   await expect(window.locator('tr', { has: window.locator('td', { hasText: /^Load Bulk Profile/ }) })).toHaveCount(
     PROFILE_COUNT,
-    { timeout: 60_000 },
+    { timeout: 180_000 },
   );
 
   // Priming step, not a real measurement: settings.maxConcurrentLaunches
@@ -137,7 +147,7 @@ const reportLines: string[] = [
   '',
   `Generated: ${new Date().toISOString()}`,
   '',
-  `Profile count: ${PROFILE_COUNT} (see this file's own module comment for why 50/100 real-simultaneous-browser tiers were not run in this environment)`,
+  `Profile count: ${PROFILE_COUNT} (override with PF_LOAD_TEST_PROFILE_COUNT; see tests/performance/LOAD_TEST_BULKSTART_RAW.md for the consolidated 20/50/100 real-run results and this file's own module comment for history)`,
   '',
   '| Concurrency | Total startup (ms) | Time to first RUNNING (ms) | Time to all-terminal (ms) | Succeeded | Failed | Orphan processes after bulk-stop | Free RAM before (MB) | Free RAM at peak (MB) | RAM used at peak (MB) |',
   '|---|---|---|---|---|---|---|---|---|---|',
@@ -190,7 +200,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
             if (anyRunning && firstRunningAt === null) firstRunningAt = performance.now();
             return anyRunning;
           },
-          { timeout: 90_000, intervals: [100, 250, 500] },
+          { timeout: 240_000, intervals: [100, 250, 500] },
         )
         .toBe(true);
     })();
@@ -199,7 +209,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
     // Wait for the bulk Start action itself to finish (selection clears on
     // completion — see concurrentStartup.spec.ts for why this matters:
     // clicking Stop before this resolves hits a still-disabled button).
-    await expect(window.locator('.bulk-toolbar')).toBeHidden({ timeout: 90_000 });
+    await expect(window.locator('.bulk-toolbar')).toBeHidden({ timeout: 240_000 });
     const totalStartupMs = performance.now() - t0;
 
     const tTerminalStart = performance.now();
@@ -209,7 +219,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
           const statuses = await rows.evaluateAll((els) => els.map((r) => r.getAttribute('data-status')));
           return statuses.every((s) => s === 'RUNNING' || s === 'ERROR' || s === 'CRASHED');
         },
-        { timeout: 120_000, intervals: [250, 500, 1_000] },
+        { timeout: 300_000, intervals: [250, 500, 1_000] },
       )
       .toBe(true);
     const timeToAllTerminalMs = totalStartupMs + (performance.now() - tTerminalStart);
@@ -250,7 +260,7 @@ for (const concurrency of CONCURRENCY_VALUES) {
           const statuses = await rows.evaluateAll((els) => els.map((r) => r.getAttribute('data-status')));
           return statuses.every((s) => s === 'STOPPED' || s === 'ERROR' || s === 'CRASHED');
         },
-        { timeout: 120_000, intervals: [250, 500, 1_000] },
+        { timeout: 300_000, intervals: [250, 500, 1_000] },
       )
       .toBe(true);
 
@@ -294,7 +304,15 @@ test('write the bulk start/stop load-test report', () => {
     '_Real measured numbers from this machine/run — not fabricated. "Time to first RUNNING" and "all-terminal" are cumulative from the bulk Start click. Orphan count is (final electron.exe process count) - (baseline before this run) - 1, clamped to 0; -1 means process counting was unavailable (non-Windows). RAM figures come from `Get-CimInstance Win32_OperatingSystem` sampled once before the bulk-start click and once when every profile reaches a terminal state (peak concurrent process count) — whole-system free memory, not per-process, since the profiles are separate OS processes with their own child helpers. CPU is not reported here: this run completes in low single-digit seconds, too short a window for a system-wide CPU sample to mean anything._',
     '',
   );
-  fs.writeFileSync(path.join(__dirname, '..', 'performance', 'LOAD_TEST_BULKSTART_RAW.md'), reportLines.join('\n'), 'utf-8');
+  // Only overwrite the committed report file on a deliberate, explicitly-
+  // sized run (PF_LOAD_TEST_PROFILE_COUNT set) — this file also holds a
+  // hand-written 20/50/100 consolidated report (see
+  // tests/performance/LOAD_TEST_BULKSTART_RAW.md) that a routine default
+  // (PROFILE_COUNT=10) run as part of the full E2E suite should not
+  // silently clobber. The numbers are still logged either way.
+  if (process.env.PF_LOAD_TEST_PROFILE_COUNT) {
+    fs.writeFileSync(path.join(__dirname, '..', 'performance', 'LOAD_TEST_BULKSTART_RAW.md'), reportLines.join('\n'), 'utf-8');
+  }
   // eslint-disable-next-line no-console
   console.log('\n' + reportLines.join('\n'));
 });
