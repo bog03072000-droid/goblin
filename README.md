@@ -11,6 +11,15 @@ QA/testing tool: separate cookie jars, separate storage, separate configured
 browser identity per profile — nothing more, nothing less. See
 [SECURITY.md](SECURITY.md) for what is and isn't implemented.
 
+**Windows-only, v0.1.** Every build, install path, and E2E-tested workflow
+in this project so far targets Windows 10/11 specifically (see the NSIS-only
+`build.win` config in `package.json`, and the win32-specific process/RAM
+measurement code throughout `tests/`) — this is a stated current-scope
+limit, not a silent gap discovered later. Electron itself supports macOS and
+Linux, so cross-platform packaging is plausible future work, but nothing
+here has been built, packaged, or tested on either, and no version claims
+otherwise.
+
 ## What it does today
 
 **Profiles**
