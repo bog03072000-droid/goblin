@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — audit remediation: fingerprint default, proxy edit, logs, design, CSP, refactor
+
+- WebGL vendor/renderer spoofing now defaults to on for new profiles (was
+  the single largest practical detection gap).
+- Fixed `loadTestBulkStartStop.spec.ts` flakiness (two real test bugs, not
+  memory pressure as previously assumed) and raised it to 10 profiles with
+  real RAM data.
+- Added proxy editing (`EditProxyModal.tsx`) — no more delete-and-recreate.
+- Logs page: search, event-type/profile filters, cursor pagination,
+  opt-in live-tail.
+- Design: filled in missing icons across Proxies/Settings/Downloads/
+  ConfirmDialog; self-hosted Poppins/Inter/Space Mono instead of Google Fonts.
+- Removed `unsafe-inline` from `style-src` in both CSPs.
+- Split `ProfilesPage.tsx` and `profileWindowEntry.ts` into focused
+  modules/hooks (each now under 400 lines).
+
 ## Unreleased — final technical hardening: WebGL enabled-mode E2E, fonts re-investigation, documentation refresh
 
 - Added the missing enabled-mode E2E test for WebGL vendor/renderer
