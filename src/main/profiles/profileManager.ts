@@ -37,6 +37,9 @@ export class ProfileManager {
   private readonly running = new Map<string, ChildProcess>();
   private readonly lockManager = new LockManager();
   private readonly pendingHardDeletes = new Map<string, NodeJS.Timeout>();
+  /** ids with a stop() currently in flight — lets the exit handler tell a
+   * requested stop apart from a genuinely unexpected crash. See stop(). */
+  private readonly stopping = new Set<string>();
 
   constructor(
     private readonly profilesRoot: string,
@@ -154,20 +157,39 @@ export class ProfileManager {
       log.error(`[profile:start] child process error for profile ${id}`, err);
     });
 
-    child.on('exit', (code) => {
+    const startedAt = Date.now();
+    child.on('exit', (code, signal) => {
       this.running.delete(id);
       this.lockManager.release(profile.profilePath);
-      const crashed = code !== 0 && code !== null;
+      // A stop() the app itself requested is never a crash, no matter what
+      // exit code the OS reports for it — root-caused via real repro (see
+      // resourceManagement.spec.ts's history and the exit-code/signal log
+      // this handler writes below): stopping a profile very soon after
+      // starting it (e.g. restart() immediately followed by stop(), which
+      // this app's own status flip to RUNNING happens synchronously on
+      // spawn, before Chromium has actually finished booting, invites) can
+      // make Windows report an abnormal exit code (observed: 0xFFFF7003,
+      // i.e. -36861) for what is, from the user's perspective, an entirely
+      // ordinary intentional stop — TerminateProcess/app.quit() racing a
+      // still-initializing Chromium sub-process tree, not an application
+      // fault. Treating any requested-stop exit as CRASHED regardless of
+      // code alarmed users with a red status for something they explicitly
+      // clicked. A genuine unexpected crash (this flag false) is still
+      // graded on its exit code exactly as before.
+      const requestedStop = this.stopping.has(id);
+      const crashed = !requestedStop && code !== 0 && code !== null;
       this.profiles.updateStatus(id, crashed ? 'CRASHED' : 'STOPPED');
+      const aliveMs = Date.now() - startedAt;
+      const context = `code=${code} signal=${signal ?? 'null'} requestedStop=${requestedStop} aliveMs=${aliveMs}`;
       this.logs.record(
         crashed ? 'PROFILE_CRASHED' : 'PROFILE_STOPPED',
         id,
-        `Profile "${profile.name}" exited with code ${code}`,
+        `Profile "${profile.name}" exited (${context})`,
       );
       if (crashed) {
-        log.warn(`[profile:crash] "${profile.name}" (${id}) exited with code ${code}`);
+        log.warn(`[profile:crash] "${profile.name}" (${id}) exited unexpectedly: ${context}`);
       } else {
-        log.info(`[profile:stop] "${profile.name}" (${id}) stopped`);
+        log.info(`[profile:stop] "${profile.name}" (${id}) stopped: ${context}`);
       }
     });
 
@@ -186,27 +208,32 @@ export class ProfileManager {
     this.profiles.updateStatus(id, 'STOPPING');
     const child = this.running.get(id);
     if (child) {
-      await new Promise<void>((resolve) => {
-        child.once('exit', () => resolve());
-        // A graceful `app.quit()` request first: on Windows, child.kill()
-        // maps directly to TerminateProcess, which cuts the process off
-        // mid-flight — Chromium's cookie/localStorage backing stores commit
-        // to disk on a periodic/batched schedule, not synchronously on every
-        // write, so a hard kill can silently lose whatever hadn't been
-        // flushed yet (found via a real cross-restart cookie-persistence
-        // test, not a hypothetical). `app.quit()` runs Electron/Chromium's
-        // normal shutdown path, which flushes those stores first. Only if
-        // the process doesn't exit on its own in time does this fall back
-        // to the hard kill, so a genuinely hung process still gets torn down.
-        if (child.channel) {
-          child.send('graceful-quit');
-          setTimeout(() => {
-            if (this.running.get(id) === child) child.kill();
-          }, 3_000).unref();
-        } else {
-          child.kill();
-        }
-      });
+      this.stopping.add(id);
+      try {
+        await new Promise<void>((resolve) => {
+          child.once('exit', () => resolve());
+          // A graceful `app.quit()` request first: on Windows, child.kill()
+          // maps directly to TerminateProcess, which cuts the process off
+          // mid-flight — Chromium's cookie/localStorage backing stores commit
+          // to disk on a periodic/batched schedule, not synchronously on every
+          // write, so a hard kill can silently lose whatever hadn't been
+          // flushed yet (found via a real cross-restart cookie-persistence
+          // test, not a hypothetical). `app.quit()` runs Electron/Chromium's
+          // normal shutdown path, which flushes those stores first. Only if
+          // the process doesn't exit on its own in time does this fall back
+          // to the hard kill, so a genuinely hung process still gets torn down.
+          if (child.channel) {
+            child.send('graceful-quit');
+            setTimeout(() => {
+              if (this.running.get(id) === child) child.kill();
+            }, 3_000).unref();
+          } else {
+            child.kill();
+          }
+        });
+      } finally {
+        this.stopping.delete(id);
+      }
     } else {
       // No tracked process (e.g. app restarted) — just clear stale DB/lock state.
       this.lockManager.release(profile.profilePath);

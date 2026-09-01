@@ -97,6 +97,25 @@ describe('ProfileManager error handling', () => {
     expect(manager.isRunning(profile.id)).toBe(false);
   });
 
+  it('an exit with no stop() in flight and a nonzero code is a genuine crash', () => {
+    const profile = makeProfile('Real Crash');
+    manager.start(profile.id);
+    lastChild.emit('exit', 1, null);
+    expect(profiles.getById(profile.id)!.status).toBe('CRASHED');
+  });
+
+  it('an exit while stop() is in flight is classified STOPPED even with an abnormal nonzero exit code — root cause of the resourceManagement.spec.ts CRASHED flake: stopping a profile very soon after starting it can make Windows report a nonzero exit code (observed: 4294930435 / 0xFFFF7003) for an entirely ordinary, requested stop, not a real crash', async () => {
+    const profile = makeProfile('Stop Race');
+    manager.start(profile.id);
+    const stopPromise = manager.stop(profile.id);
+    // kill() is mocked (see FakeChildProcess) and never emits on its own —
+    // simulate the real OS-level exit callback stop() is waiting on, with
+    // the same kind of abnormal code seen in the real repro.
+    lastChild.emit('exit', 4294930435, null);
+    await stopPromise;
+    expect(profiles.getById(profile.id)!.status).toBe('STOPPED');
+  });
+
   it('a synchronous throw from launchProfileProcess marks the profile ERROR and rethrows', () => {
     vi.mocked(launchProfileProcess).mockImplementationOnce(() => {
       throw new Error('spawn ENOENT');
