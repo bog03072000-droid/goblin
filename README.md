@@ -152,6 +152,20 @@ property-by-property reality matrix (what's genuinely applied to the running
 browser vs. stored-and-validated only), including a final summary table of
 every supported field's actual enforcement status.
 
+## Design
+
+The UI is dark-only, by design, not an unfinished light theme. A profile
+manager like this one is a tool people keep open for long sessions
+alongside many other windows — a dark surface consistent with the app's own
+branding (`src/renderer/styles/global.css`'s custom palette, Goblin's own
+icon/logo work) was chosen deliberately over building and maintaining a
+second full palette for a use case (extended desktop-app sessions) where
+dark is already the common default across comparable tools. If light-theme
+support becomes a real user request, it's a matter of adding a
+`prefers-color-scheme: light` token set to the existing CSS variable
+structure — the styling is already token-based, not hardcoded per
+component — rather than a rewrite.
+
 ## Known limitations (current build)
 
 - **Fonts**: `fontsMode: 'restricted'` (opt-in, off by default) blocks
