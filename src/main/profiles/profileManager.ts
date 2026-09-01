@@ -357,18 +357,21 @@ export class ProfileManager {
     return { succeeded, failed };
   }
 
-  /** Launches profiles in small chunks (never all at once) so bulk-starting
-   * dozens of stored profiles doesn't try to spin up dozens of Chromium
-   * processes in the same instant — stored profiles never need to run
-   * simultaneously at scale, only a handful at a time in practice. */
-  async bulkStart(ids: string[], concurrency = 4): Promise<BulkResult> {
+  /** Runs `action` over `ids` in small chunks of `concurrency`, pausing
+   * 250ms between chunks — shared by bulkStart/bulkRestart so bulk-launching
+   * dozens of stored profiles never tries to spin up dozens of real Chromium
+   * processes in the same instant. Was two nearly-identical copies of this
+   * exact loop (one per caller) before being extracted here. */
+  private async runChunked(
+    ids: string[],
+    concurrency: number,
+    action: (id: string) => void | Promise<void>,
+  ): Promise<BulkResult> {
     const succeeded: string[] = [];
     const failed: Array<{ id: string; message: string }> = [];
     for (let i = 0; i < ids.length; i += concurrency) {
       const chunk = ids.slice(i, i + concurrency);
-      const result = await this.bulkRun(chunk, (id) => {
-        this.start(id);
-      });
+      const result = await this.bulkRun(chunk, action);
       succeeded.push(...result.succeeded);
       failed.push(...result.failed);
       if (i + concurrency < ids.length) {
@@ -376,6 +379,12 @@ export class ProfileManager {
       }
     }
     return { succeeded, failed };
+  }
+
+  bulkStart(ids: string[], concurrency = 4): Promise<BulkResult> {
+    return this.runChunked(ids, concurrency, (id) => {
+      this.start(id);
+    });
   }
 
   bulkStop(ids: string[]): Promise<BulkResult> {
@@ -384,19 +393,8 @@ export class ProfileManager {
 
   /** Same chunked-with-a-pause shape as bulkStart, for the same reason: a
    * restart re-launches a real Chromium process per profile. */
-  async bulkRestart(ids: string[], concurrency = 4): Promise<BulkResult> {
-    const succeeded: string[] = [];
-    const failed: Array<{ id: string; message: string }> = [];
-    for (let i = 0; i < ids.length; i += concurrency) {
-      const chunk = ids.slice(i, i + concurrency);
-      const result = await this.bulkRun(chunk, (id) => this.restart(id).then(() => undefined));
-      succeeded.push(...result.succeeded);
-      failed.push(...result.failed);
-      if (i + concurrency < ids.length) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-      }
-    }
-    return { succeeded, failed };
+  bulkRestart(ids: string[], concurrency = 4): Promise<BulkResult> {
+    return this.runChunked(ids, concurrency, (id) => this.restart(id).then(() => undefined));
   }
 
   bulkDelete(ids: string[]): Promise<BulkResult> {
