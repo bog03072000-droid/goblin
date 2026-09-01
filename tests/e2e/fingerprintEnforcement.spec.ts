@@ -1,7 +1,9 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, _electron as electron, chromium, type ElectronApplication, type Page, type Browser } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 /**
  * The core verification the fingerprint audit demands: does the browser
@@ -18,21 +20,30 @@ import path from 'node:path';
  */
 test.setTimeout(90_000);
 
+const REMOTE_DEBUG_PORT = 9349;
+
 let app: ElectronApplication;
 let window: Page;
 let userDataDir: string;
+let cdp: Browser | undefined;
 
 test.beforeAll(async () => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-fp-'));
   app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir}`],
-    env: { ...process.env, PF_E2E_AUTO_DIAGNOSTICS: '1', PF_E2E_LOCALE: 'en' },
+    env: {
+      ...process.env,
+      PF_E2E_AUTO_DIAGNOSTICS: '1',
+      PF_E2E_LOCALE: 'en',
+      PF_E2E_REMOTE_DEBUG_PORT: String(REMOTE_DEBUG_PORT),
+    },
   });
   window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
 });
 
 test.afterAll(async () => {
+  await cdp?.close();
   await app.close();
   fs.rmSync(userDataDir, { recursive: true, force: true });
 });
@@ -214,4 +225,150 @@ test('webglSpoofingMode "spoof" actually overrides the observed vendor/renderer,
 
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});
+
+/**
+ * Registers a real Service Worker against a real, same-origin http(s) URL
+ * — exactly CreepJS's own technique (`navigator.serviceWorker.register('./creep.js')`,
+ * confirmed by reading its actual source) — and reads WebGL vendor/renderer
+ * from inside that worker via `OffscreenCanvas`, the same path CreepJS's own
+ * `getWebglData()` uses. A local fixture stands in for the real internet
+ * dependency `creepjsBenchmark.spec.ts` needs (see that file's own comment
+ * on why *that* test stays network-dependent by design; this one doesn't
+ * need to be, since the point here is proving the code path, not scoring
+ * against a real detector).
+ */
+function startServiceWorkerFixtureServer(): Promise<{ server: http.Server; port: number }> {
+  const pageHtml = `<!doctype html><html><body><script>
+    window.__swResult = null;
+    navigator.serviceWorker.register('/sw.js').then(async (reg) => {
+      await navigator.serviceWorker.ready;
+      const channel = new MessageChannel();
+      channel.port1.onmessage = (e) => { window.__swResult = e.data; };
+      (reg.active || reg.waiting || reg.installing).postMessage('go', [channel.port2]);
+    }).catch((err) => { window.__swResult = { error: String(err) }; });
+  </script></body></html>`;
+  const swJs = `self.addEventListener('message', (event) => {
+    try {
+      var canvas = new OffscreenCanvas(256, 256);
+      var gl = canvas.getContext('webgl');
+      var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      var vendor = ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no-extension';
+      var renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no-extension';
+      event.ports[0].postMessage({ vendor: vendor, renderer: renderer });
+    } catch (e) {
+      event.ports[0].postMessage({ error: String(e) });
+    }
+  });`;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      res.end(pageHtml);
+    } else if (req.url === '/sw.js') {
+      res.writeHead(200, { 'content-type': 'application/javascript' });
+      res.end(swJs);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: (server.address() as AddressInfo).port }));
+  });
+}
+
+async function connectToShellAt(port: number): Promise<Page> {
+  let lastErr: unknown;
+  for (let i = 0; i < 30; i++) {
+    try {
+      const client = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+      for (const ctx of client.contexts()) {
+        for (const page of ctx.pages()) {
+          if (page.url().includes('browser-shell.html')) {
+            cdp = client;
+            return page;
+          }
+        }
+      }
+      await client.close();
+    } catch (err) {
+      lastErr = err;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`Could not find browser-shell.html page via CDP: ${String(lastErr)}`);
+}
+
+test('honest gap, verified in this test suite (not just an external capture someone has to notice): WebGL vendor/renderer spoofing does not reach a real Service Worker registered against a real http(s) script — same root cause as the documented Service Worker gap above, confirmed to leak the real GPU here too', async () => {
+  const { server, port } = await startServiceWorkerFixtureServer();
+  try {
+    // dirsBefore must be captured BEFORE profile creation, not just before
+    // Start — the profile's storage directory is created at profiles:create
+    // time, not at start time, so a snapshot taken any later would already
+    // include it and never see it as "new".
+    const profilesRoot = path.join(userDataDir, 'profiles');
+    fs.mkdirSync(profilesRoot, { recursive: true });
+    const dirsBefore = new Set(fs.readdirSync(profilesRoot));
+
+    await window.getByText('Profiles', { exact: true }).click();
+    await window.getByPlaceholder('New profile name').fill('E2E SW WebGL Leak Profile');
+    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+    const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E SW WebGL Leak Profile' }) });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // Default is webglSpoofingMode: 'spoof' since the fingerprint-default
+    // stage — no manual toggle needed, this profile is spoofed like any
+    // other new profile a real user would create.
+    await row.getByRole('button', { name: 'Start', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+    const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
+    await expect.poll(() => newDirs().length, { timeout: 30_000 }).toBeGreaterThan(0);
+    const profileDir = newDirs()[0]!;
+    // This profile launches with PF_E2E_AUTO_DIAGNOSTICS=1 like every other
+    // profile in this file, so it auto-navigates to the diagnostics page and
+    // writes fingerprint-snapshot.json once that page's own checks finish —
+    // not instantly on RUNNING, so wait for the file before reading it
+    // (same pattern the first test in this file uses).
+    const snapshotPath = path.join(profilesRoot, profileDir, 'fingerprint-snapshot.json');
+    await expect.poll(() => fs.existsSync(snapshotPath), { timeout: 30_000 }).toBe(true);
+    const configuredWebglVendor = readSnapshotFrom(profileDir).configured['webglVendor'];
+    const configuredWebglRenderer = readSnapshotFrom(profileDir).configured['webglRenderer'];
+
+    const shell = await connectToShellAt(REMOTE_DEBUG_PORT);
+    const address = shell.locator('#address');
+    await address.fill(`http://127.0.0.1:${port}/`);
+    await address.press('Enter');
+    await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${port}`), { timeout: 15_000 });
+
+    const webview = shell.locator('webview').first();
+    await webview.waitFor({ state: 'attached', timeout: 15_000 });
+
+    let swResult: { vendor?: string; renderer?: string; error?: string } | null = null;
+    for (let i = 0; i < 20; i++) {
+      swResult = (await webview.evaluate((el) =>
+        (el as unknown as { executeJavaScript: (s: string) => Promise<unknown> }).executeJavaScript('window.__swResult'),
+      )) as typeof swResult;
+      if (swResult) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // The honest assertion: the Service Worker's own WebGL read is NOT the
+    // configured spoofed value — it's the real host GPU, exactly like the
+    // navigator-field leak documented above for the same root cause. If
+    // this ever starts passing (observed === configured), that means the
+    // Service Worker gap has actually been closed — update this test (and
+    // FINGERPRINT_AUDIT.md's Service Worker section) to assert the
+    // opposite, rather than leaving a now-stale "known gap" assertion in
+    // place.
+    expect(swResult).toBeTruthy();
+    expect(swResult?.error).toBeUndefined();
+    expect(swResult?.vendor).not.toBe(configuredWebglVendor);
+    expect(swResult?.renderer).not.toBe(configuredWebglRenderer);
+
+    await row.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+  } finally {
+    server.close();
+  }
 });

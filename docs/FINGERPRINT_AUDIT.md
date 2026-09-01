@@ -45,7 +45,7 @@ never a mocked browser, never a hand-edited diagnostics page.
 | Device Memory | Yes | Yes, always | Yes | No CDP method exists for this (Finding 3) — a JS-level `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument`, applied unconditionally. |
 | Canvas | Yes | Yes, on by default (`canvasMode: 'noise'`) | Yes | Seeded per-profile noise (±1 on RGB channels) on `toDataURL()`/`getImageData()` — same-content-same-profile is byte-deterministic (tested), different profiles diverge on identical content (tested). |
 | Audio | Yes | Yes, on by default (`audioMode: 'noise'`) | Partial | Seeded per-profile noise on `AudioBuffer.getChannelData()` — override-installed is directly verified; the noise's numeric effect isn't independently re-derived by the test (would require re-implementing the seeded-PRNG math in the test itself, not currently done). |
-| WebGL (vendor/renderer) | Yes | **On by default since this audit stage** (`webglSpoofingMode: 'spoof'`), still a per-profile opt-out toggle | Yes — **both states** | Off (opted out): honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On (default): `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content. |
+| WebGL (vendor/renderer) | Yes | **On by default since this audit stage** (`webglSpoofingMode: 'spoof'`), still a per-profile opt-out toggle | Yes on the main document/dedicated/shared Worker — **confirmed NOT reached inside a Service Worker** (see §Service Workers' later-stage addendum: a real CreepJS run leaks the true GPU through this exact path despite spoofing being on) | Off (opted out): honestly reports the real GPU/ANGLE string (asserted `NOT_IMPLEMENTED`, never a coincidental false PASS). On (default): `getParameter()` override on both `WebGL(2)RenderingContext.prototype`, intercepting only `UNMASKED_VENDOR_WEBGL`/`UNMASKED_RENDERER_WEBGL` — verified this stage to (a) actually apply the configured strings and (b) leave an unrelated real capability (`MAX_TEXTURE_SIZE`) unaffected, i.e. WebGL keeps working normally for real content, and (c) does **not** apply inside a Service Worker, root-caused and documented below rather than left as a silent gap. |
 | Media Devices | Yes | Opt-in, off by default (`mediaDevicesMode: 'real'`) | Yes | Off: real device enumeration (verified empirically: real inputs/outputs, not fabricated). On: `enumerateDevices()` returns a seeded synthetic list structurally distinguishable as fake by the diagnostics page's own check — not just trusting the mode flag. |
 | Fonts | Yes | Opt-in, off by default (`fontsMode: 'system'`); **partial even when on** | Yes | On: blocks `document.fonts.check()` and the Local Font Access API only. Does **not** block CSS-fallback-width-measurement font detection — re-investigated this stage (see §Fonts below), no clean fix exists without a Chromium patch or breaking real page layout; kept as-is and documented rather than silently claimed as full coverage. |
 
@@ -67,8 +67,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | devicePixelRatio | ✅ (`deviceScaleFactor`) | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setDeviceMetricsOverride({deviceScaleFactor})` | **A** |
 | hardwareConcurrency | ✅ | ✅ | ✅ real value | ✅ | ✅ | CDP `Emulation.setHardwareConcurrencyOverride` | **A** |
 | deviceMemory | ✅ | ✅ (unconditional) | ✅ configured value | ✅ (range only) | ✅ (asserts PASS) | `Navigator.prototype.deviceMemory` getter override, injected via CDP `Page.addScriptToEvaluateOnNewDocument` — see Finding 6 | **A** |
-| WebGL vendor | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value only if opted out | ✅ (plausibility only) | ✅ **both states** (off: asserts NOT_IMPLEMENTED; on/default: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — on by default, see §WebGL spoofing | **B** by default (→ **C** if a user opts out) |
-| WebGL renderer | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value only if opted out | ✅ (Apple-only-on-macOS check) | ✅ **both states** (same test as vendor) | same as WebGL vendor | **B** by default (→ **C** if a user opts out) |
+| WebGL vendor | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (see §Service Workers' later-stage addendum — confirmed leak path, not theoretical) | ✅ (plausibility only) | ✅ **both states on the main document** (off: asserts NOT_IMPLEMENTED; on/default: asserts PASS with a matching value, plus a real WebGL capability read to confirm compatibility); ✅ **Service Worker case added later this stage** (asserts the real, unpatched value — an honest NOT_IMPLEMENTED-style expectation, not a false PASS) | `getParameter()` override on `WebGL(2)RenderingContext.prototype`, same injection mechanism — on by default, see §WebGL spoofing; reaches dedicated/shared Workers via the same propagation as navigator fields, does **not** reach Service Workers, see §Service Workers | **B** on the main document/dedicated/shared Worker by default (→ **C** if opted out); **D** (not implemented, now proven not just assumed) specifically for the Service Worker path |
+| WebGL renderer | ✅ | on by default (`webglSpoofingMode`, default `spoof` since this stage), per-profile opt-out | real GPU value if opted out **or if read from inside a real Service Worker** (same confirmed leak path as WebGL vendor) | ✅ (Apple-only-on-macOS check) | ✅ **both states on the main document** (same test as vendor); ✅ **Service Worker case added later this stage** | same as WebGL vendor | same grading as WebGL vendor |
 | Canvas | ✅ (`canvasMode`, default `noise`) | ✅ | ✅ deterministic per-profile noise | schema only | ✅ (asserts APPLIED + determinism, cross-profile difference) | seeded noise on `toDataURL()`/`getImageData()`, injected via CDP main-world script — see §Canvas (implemented) | **B** |
 | AudioContext | ✅ (`audioMode`, default `noise`) | ✅ | not read back numerically by diagnostics (override presence checked instead) | schema only | ✅ (asserts APPLIED — override installed) | seeded noise on `AudioBuffer.prototype.getChannelData`, same injection mechanism — see §Audio (implemented) | **B** |
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
@@ -555,6 +555,91 @@ documented, verified gap — with the exact failure captured, the alternatives
 considered, and the reasoning for not pursuing each recorded here — rather
 than silently claimed as covered or force-fixed at the cost of core
 browsing reliability.
+
+**Later stage — discovered a wider blast radius than originally scoped, and
+a real gap between what the internal E2E test proves and what an external
+detector actually sees.** The WebGL section of `fingerprintEnforcement.spec.ts`
+(the `webglSpoofingMode "spoof" actually overrides the observed
+vendor/renderer` test) passes, and correctly so — it proves the
+`getParameter()` override mechanism itself works once installed, verified
+directly against the diagnostics page's own WebGL context. What it does
+**not** prove, and what nothing in this project's test suite checked until
+this stage, is that the override actually gets *installed* in every context
+a real external site might read a WebGL fingerprint from. It does not: a
+live CreepJS run (with `webglSpoofingMode: 'spoof'` configured and the
+diagnostics test above green) still reports this machine's **real** GPU in
+CreepJS's own `WebGL` section — a full profile-vs-real mismatch, not a
+partial one — across every capture in `docs/creepjs-results/` taken after
+the WebGL-default-on stage.
+
+Root-caused via direct instrumentation, not inferred: temporarily added a
+`fetch()` beacon to a local diagnostic HTTP server inside both the
+`navigator.serviceWorker.register` wrapper's success/fallback branches and
+`patchWebGL()`'s `patch()`/`getParameter` calls (reverted immediately after
+capturing the evidence — never shipped; the captured log is preserved at
+`docs/investigation-logs/2026-09-01-webgl-serviceworker-instrumentation.log`),
+then ran the real `creepjsBenchmark.spec.ts` against the instrumented build.
+The log shows `patchWebGL-ran` and `getParameter-called` firing *only* with
+`scope=MainDocument` — never once in a worker scope — and, at the exact
+moment CreepJS's own report would have been populated, two `fallback-real`
+entries with this literal captured error:
+```
+TypeError: Failed to register a ServiceWorker: The URL protocol of the
+script ('blob:https://abrahamjuliot.github.io/044bba02-23b0-41db-9b13-37e0c12a56e3')
+is not supported.
+```
+This is the *identical* restriction already documented above, just
+triggered by a different caller: CreepJS's own worker-scope probe registers
+its Service Worker against a real, same-origin `./creep.js` URL (confirmed
+by reading CreepJS's own source at `creep.js` — `getServiceWorker()` calls
+`navigator.serviceWorker.register('./creep.js')` directly, never a `blob:`
+URL of its own), which this project's wrapper intercepts, tries to
+re-register as a `blob:` URL carrying the spoofing prefix, gets rejected by
+the same Chromium restriction, and correctly falls back to registering
+CreepJS's real, *completely unpatched* script — inside which CreepJS then
+also creates an `OffscreenCanvas` and reads its WebGL vendor/renderer
+(`getWebglData()`, called from `getWorkerData()`, both defined and executed
+entirely within the worker-scope code CreepJS ships as part of the very
+script that just got registered unpatched). The WebGL leak was never a bug
+in the `getParameter()` override logic itself — that logic is correct and
+does apply, confirmed by the same log, whenever it actually runs on the main
+document — it's a **downstream consequence of the exact same Service Worker
+gap** already documented above, just reaching a second, previously-unnoticed
+report section (`WebGL`) in addition to the already-known one (`Worker`).
+
+Whether patching `WebGLRenderingContext.prototype`/`WebGL2RenderingContext.prototype`
+inside a Service/Shared/Dedicated Worker's own global is *technically*
+possible was already answered by this same section above for the
+navigator-field case: dedicated/shared Worker propagation already works
+(the `wrapWorkerCtor` mechanism installs this exact same core script,
+WebGL patch included, inside every dedicated/shared Worker verified
+directly earlier this stage) — the wrapper already generalizes to WebGL
+with no extra work needed there. The one path that doesn't and structurally
+can't, without the same disproportionate architecture change already
+rejected (three alternatives evaluated and declined above), is Service
+Worker specifically. No new fix avenue was found by re-examining this from
+the WebGL angle — the conclusion is the same, now confirmed to cover more
+ground than previously known.
+
+**The methodological gap this exposes, and why it matters going forward:**
+`fingerprintEnforcement.spec.ts` only ever drives the diagnostics page
+directly — it never registers a real Service Worker, dedicated Worker, or
+`OffscreenCanvas` against any test fixture, so a reader seeing that suite
+fully green had no signal that a real external site's Service-Worker-based
+probe would see something different. A "verified" grade in the reality
+matrix above means *the override mechanism works when installed*, not *this
+mechanism reaches every code path an external site might use to ask* — for
+any field whose only enforcement is a JS-level override rather than a
+CDP domain applied at the process/session level, these are genuinely
+different claims, and this stage is the first time the difference produced
+a real, previously-uncaught leak. `creepjsBenchmark.spec.ts` remains the
+project's only test that would ever have caught this in the first
+place — deliberately unasserted (see its own module comment: no fixed
+"correct" score to assert against) — which is why this stage adds a new,
+narrow, real-Service-Worker-registration case directly to
+`fingerprintEnforcement.spec.ts` itself (see below), so this specific class
+of gap shows up as a **failing** internal test the next time it regresses,
+not just as an unasserted external capture someone has to notice by eye.
 
 **CreepJS raw numbers, before and after (see `docs/creepjs-results/` for the
 full unedited captures).** The `44% like headless` figure was unchanged
