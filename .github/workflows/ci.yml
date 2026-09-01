@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Fast, blocking gate: typecheck, lint, unit tests. Every dev-tested and
+  # E2E-tested workflow in this project has so far only run on Windows (see
+  # the win32-specific process-counting code in tests/performance/ and
+  # tests/e2e/loadTest*.spec.ts, which degrade gracefully — returning -1 —
+  # on other platforms but were never exercised there), so this stays on
+  # windows-latest rather than assuming untested cross-platform CI behavior.
+  gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Rebuild native modules for Node ABI
+        run: npm run rebuild:node
+      - run: npm test
+
+  # Real Electron/Chromium E2E suite — blocking, since this is the only
+  # thing that actually exercises the packaged app's behavior end to end.
+  e2e:
+    needs: gate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+      - run: npm run build
+      - run: npm run test:e2e
+
+  # Load/performance suite — deliberately NOT in the `needs:` chain of
+  # anything, and not required for the workflow to pass (continue-on-error).
+  # These tests spawn real, simultaneous Electron/Chromium processes and
+  # measure real wall-clock time/RAM (see tests/performance/*_RAW.md) —
+  # absolute numbers are inherently sensitive to whatever CI runner
+  # happens to be free that day, so this job exists to catch REGRESSIONS
+  # and keep the *_RAW.md reports current, not to gate merges on a runner's
+  # instantaneous hardware. Low priority, but visible: failures show up as
+  # a red job in the checks list, not silently, even though they don't
+  # block anything.
+  performance:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+      - run: npm run build
+      - name: Vitest-based performance tests (tests/performance/*.test.ts)
+        run: npm run test:perf
+      - name: E2E load-test suite (tests/e2e/loadTest*.spec.ts)
+        run: npx playwright test tests/e2e/loadTestBulkStartStop.spec.ts tests/e2e/loadTestClone.spec.ts tests/e2e/loadTestIsolation.spec.ts tests/e2e/loadTestStability.spec.ts tests/e2e/loadTestUIResponsiveness.spec.ts
+      - name: Upload regenerated performance reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-reports
+          path: tests/performance/*_RAW.md
