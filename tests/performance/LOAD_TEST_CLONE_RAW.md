@@ -1,6 +1,6 @@
 # Load test — clone across multiple profiles (raw data)
 
-Generated: 2026-09-01T12:55:10.653Z
+Generated: 2026-09-01T13:04:59.059Z
 
 Pairs tested: 3 (real, sequential — one real browser running at a time)
 Overall result: PASS

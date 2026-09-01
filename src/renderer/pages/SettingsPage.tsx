@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck } from 'lucide-react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
@@ -37,10 +38,15 @@ export function SettingsPage(): JSX.Element {
   return (
     <div className="content" style={{ maxWidth: 560 }}>
       {error && <div className="banner banner-error">{error}</div>}
-      {saved && <div className="banner banner-success">{t('settings.saved')}</div>}
+      {saved && (
+        <div className="banner banner-success" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <CircleCheck size={14} strokeWidth={2.25} />
+          {t('settings.saved')}
+        </div>
+      )}
 
       <div className="panel">
-        <h3>{t('settings.title.language')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Languages size={16} strokeWidth={2.25} />{t('settings.title.language')}</h3>
         <label style={{ display: 'block', marginBottom: 8 }}>
           {t('settings.language.label')}
           <select
@@ -58,7 +64,7 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>{t('settings.title.performance')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Gauge size={16} strokeWidth={2.25} />{t('settings.title.performance')}</h3>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <input
             type="checkbox"
@@ -97,7 +103,7 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>{t('settings.title.storage')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><HardDrive size={16} strokeWidth={2.25} />{t('settings.title.storage')}</h3>
         <label style={{ display: 'block', marginBottom: 8 }}>
           {t('settings.cacheLimitMb')}
           <input
@@ -110,7 +116,7 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>{t('settings.title.general')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><SlidersHorizontal size={16} strokeWidth={2.25} />{t('settings.title.general')}</h3>
         <label style={{ display: 'block', marginBottom: 8 }}>
           {t('settings.startupBehavior')}
           <select
@@ -126,7 +132,7 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>{t('settings.title.logging')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ScrollText size={16} strokeWidth={2.25} />{t('settings.title.logging')}</h3>
         <label style={{ display: 'block', marginBottom: 8 }}>
           {t('settings.logRetentionDays')}
           <input
@@ -139,7 +145,7 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       <div className="panel">
-        <h3>{t('settings.title.help')}</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Keyboard size={16} strokeWidth={2.25} />{t('settings.title.help')}</h3>
         <table>
           <tbody>
             {(

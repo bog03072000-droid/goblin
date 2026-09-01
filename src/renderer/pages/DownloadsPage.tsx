@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FolderOpen, FolderSearch, RotateCcw, Trash2 } from 'lucide-react';
 import type { DownloadWithStatus } from '@shared/schemas/download';
 import type { Profile } from '@shared/schemas/profile';
 import { callApi } from '../services/api';
@@ -126,17 +127,21 @@ export function DownloadsPage(): JSX.Element {
                     {!d.missing && d.state === 'completed' && (
                       <>
                         <button className="btn btn-ghost btn-sm" onClick={() => void handleOpen(d.id)}>
+                          <FolderOpen size={13} strokeWidth={2.25} />
                           {t('downloads.action.open')}
                         </button>
                         <button className="btn btn-ghost btn-sm" onClick={() => void handleShow(d.id)}>
+                          <FolderSearch size={13} strokeWidth={2.25} />
                           {t('downloads.action.showInFolder')}
                         </button>
                       </>
                     )}
                     <button className="btn btn-ghost btn-sm" onClick={() => void handleRedownload(d.id)}>
+                      <RotateCcw size={13} strokeWidth={2.25} />
                       {t('downloads.action.redownload')}
                     </button>
                     <button className="btn btn-danger-ghost btn-sm" onClick={() => void handleDelete(d.id)}>
+                      <Trash2 size={13} strokeWidth={2.25} />
                       {t('downloads.action.delete')}
                     </button>
                   </div>

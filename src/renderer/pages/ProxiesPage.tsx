@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PlugZap, Wifi, Pencil, Trash2 } from 'lucide-react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -81,6 +82,7 @@ export function ProxiesPage(): JSX.Element {
           onChange={(e) => setForm({ ...form, password: e.target.value })}
         />
         <button className="btn btn-primary" onClick={() => void createProxy()}>
+          <PlugZap size={14} strokeWidth={2.25} />
           {t('proxy.create')}
         </button>
       </div>
@@ -119,9 +121,18 @@ export function ProxiesPage(): JSX.Element {
                   )}
                 </td>
                 <td>
-                  <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>{t('proxy.test')}</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingProxy(p)}>{t('proxy.edit')}</button>
-                  <button className="btn btn-danger-ghost btn-sm" onClick={() => setConfirmDeleteProxy(p)}>{t('proxy.delete')}</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>
+                    <Wifi size={13} strokeWidth={2.25} />
+                    {t('proxy.test')}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingProxy(p)}>
+                    <Pencil size={13} strokeWidth={2.25} />
+                    {t('proxy.edit')}
+                  </button>
+                  <button className="btn btn-danger-ghost btn-sm" onClick={() => setConfirmDeleteProxy(p)}>
+                    <Trash2 size={13} strokeWidth={2.25} />
+                    {t('proxy.delete')}
+                  </button>
                 </td>
               </tr>
             ))}
