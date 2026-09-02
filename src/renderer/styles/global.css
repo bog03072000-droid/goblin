@@ -631,7 +631,14 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
 .inline-flex { display: inline-flex; }
 .bulk-failure-list { margin: 6px 0 0; padding-left: 18px; }
 
-.settings-content { max-width: 560px; }
+/* Centered, not just width-capped — a bare max-width on a block element
+   inside a flex:1 .content still sits flush left with empty space on the
+   right, which is what actually happened here (confirmed against the
+   pre-CSP-conversion inline style: `style={{ maxWidth: 560 }}` alone,
+   never centered — this is a real fix, not a regression from that
+   conversion). 640px keeps every settings card comfortably readable
+   without stretching across a wide window. */
+.settings-content { max-width: 640px; margin: 0 auto; }
 .field-narrow { display: block; margin-bottom: 4px; }
 .field-input-160 { display: block; width: 160px; margin-top: 4px; }
 .field-input-220 { display: block; width: 220px; margin-top: 4px; }
