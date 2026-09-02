@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck } from 'lucide-react';
+import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck, ShieldAlert } from 'lucide-react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
@@ -9,12 +9,18 @@ export function SettingsPage(): JSX.Element {
   const { t, locale, setLocale } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [encryptionAvailable, setEncryptionAvailable] = useState(true);
   const { error, run } = useAsyncAction();
 
   useEffect(() => {
     void run(async () => {
       const s = await callApi<'settings:get', Settings>('settings:get', {});
       setSettings(s);
+      const encStatus = await callApi<'security:credentialEncryptionStatus', { available: boolean }>(
+        'security:credentialEncryptionStatus',
+        {},
+      );
+      setEncryptionAvailable(encStatus.available);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -42,6 +48,12 @@ export function SettingsPage(): JSX.Element {
         <div className="banner banner-success fp-heading">
           <CircleCheck size={14} strokeWidth={2.25} />
           {t('settings.saved')}
+        </div>
+      )}
+      {!encryptionAvailable && (
+        <div className="banner banner-warn fp-heading" title={t('settings.encryptionWarning.tooltip')}>
+          <ShieldAlert size={14} strokeWidth={2.25} />
+          {t('settings.encryptionWarning')}
         </div>
       )}
 

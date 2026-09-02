@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron';
+import { ipcMain, safeStorage, shell } from 'electron';
 import fs from 'node:fs';
 import { log } from '../logger';
 import { IpcRequestSchemas, type IpcChannel } from '../../shared/ipc/contracts';
@@ -187,6 +187,14 @@ export function registerIpc(deps: IpcDependencies): void {
 
   handle('settings:get', () => deps.settings.getAll());
   handle('settings:update', (p) => deps.settings.update(p));
+
+  // Surfaces credentialVault's plaintext fallback to the UI (Settings page
+  // banner) rather than leaving it a code-only, docs-only "known limitation"
+  // — a user whose proxy passwords are silently stored unencrypted should be
+  // told, not just have it noted in SECURITY.md. See credentialVault.ts.
+  handle('security:credentialEncryptionStatus', () => ({
+    available: safeStorage.isEncryptionAvailable(),
+  }));
 
   // `missing`/`profileName` are computed here rather than stored, so a
   // profile rename is always reflected and a file deleted outside the app

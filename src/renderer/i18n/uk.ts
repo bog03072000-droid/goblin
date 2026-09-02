@@ -291,6 +291,10 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.language.en': 'English',
   'settings.theme.note': 'Світлої теми поки немає — темний інтерфейс це свідомий вибір дизайну, а не відсутня функція. Див. розділ Design у README.',
   'settings.saved': 'Збережено. Деякі налаштування (апаратне прискорення) набудуть чинності після перезапуску.',
+  'settings.encryptionWarning':
+    'Шифрування облікових даних на рівні ОС недоступне на цій машині — паролі проксі зберігаються у форматі з plaintext-міткою, а не зашифровані.',
+  'settings.encryptionWarning.tooltip':
+    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) повідомив, що недоступний. Це рідкісний випадок, зазвичай специфічний для цієї машини чи сесії — див. розділ Credential storage у SECURITY.md.",
 
   'downloads.searchPlaceholder': 'Пошук за назвою файлу...',
   'downloads.filter.allProfiles': 'Усі профілі',

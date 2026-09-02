@@ -289,6 +289,10 @@ const en = {
   'settings.language.en': 'English',
   'settings.theme.note': "There's no light theme yet — the dark interface is a deliberate design choice, not a missing feature. See the README's Design section.",
   'settings.saved': 'Saved. Some settings (hardware acceleration) take effect on next launch.',
+  'settings.encryptionWarning':
+    'OS-level credential encryption is unavailable on this machine — proxy passwords are being stored in a plaintext-marked format instead, not encrypted.',
+  'settings.encryptionWarning.tooltip':
+    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) reported it isn't available. This is rare and usually specific to this machine or session — see SECURITY.md's Credential storage section.",
 
   'downloads.searchPlaceholder': 'Search by filename...',
   'downloads.filter.allProfiles': 'All profiles',

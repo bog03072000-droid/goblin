@@ -84,9 +84,14 @@ display, or export.
 
 **Known limitation:** if OS-level encryption is unavailable (rare, e.g. some
 headless/CI environments), the vault falls back to a clearly-prefixed
-plaintext encoding rather than silently pretending to encrypt. This is a
-documented degraded mode, not a hidden one — `decryptSecret` detects and
-handles both cases.
+plaintext encoding rather than silently pretending to encrypt.
+`decryptSecret` detects and handles both cases. This used to be a
+code-and-docs-only "known limitation" with nothing surfacing it to an
+actual user — the Settings page now checks `safeStorage.isEncryptionAvailable()`
+(via the `security:credentialEncryptionStatus` IPC channel) on load and
+shows a visible warning banner whenever the app is running in this
+degraded mode, so a user whose proxy passwords are unencrypted is actually
+told, not just able to read about it here.
 
 ## Logging
 

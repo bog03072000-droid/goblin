@@ -104,6 +104,8 @@ export const IpcRequestSchemas = {
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,
 
+  'security:credentialEncryptionStatus': z.object({}),
+
   'downloads:list': z.object({
     profileId: z.string().uuid().optional(),
     search: z.string().optional(),
