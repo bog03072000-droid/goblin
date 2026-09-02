@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — GoblinAnty rebrand, experimental macOS packaging
+
+- Application renamed from **Goblin** to **GoblinAnty** throughout the UI
+  (window titles, sidebar brand, file-dialog filter names), `package.json`
+  (`productName`, `author`, `nsis.shortcutName`), and documentation. The
+  npm `name` field (`profileforge`) and `build.appId`
+  (`com.profileforge.app`) are deliberately left unchanged, same as the
+  ProfileForge → Goblin rebrand before it — these are internal technical
+  identifiers, not user-facing branding, and churning them on every
+  cosmetic rename risks breaking installed-app update matching for no
+  benefit. `build.publish.repo` (`goblin`) is also left unchanged — tied to
+  the actual GitHub repository name, out of scope for a local rename.
+  Icon assets themselves are untouched, only the text name changed.
+- Added `build.mac` to `package.json` (zip target, unsigned) alongside the
+  existing `build.win`. Actually ran `npm run package:mac` on this Windows
+  machine to verify it — it fails immediately with "Build for macOS is
+  supported only on macOS": electron-builder refuses macOS packaging from
+  any non-macOS host categorically, regardless of target format. The
+  config exists and is valid for whoever has real macOS hardware or a
+  macOS CI runner to actually build and test with; nothing has been
+  produced or verified beyond that here. See README's "Build a macOS
+  package" section.
+
 ## Unreleased — audit remediation: fingerprint default, proxy edit, logs, design, CSP, refactor
 
 - WebGL vendor/renderer spoofing now defaults to on for new profiles (was

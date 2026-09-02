@@ -1,24 +1,32 @@
-# Goblin
+# GoblinAnty
 
 A multi-profile Chromium browser for managing many persistent, isolated browser
 profiles from one desktop app — proxy per profile, coherent per-profile browser
 identity configuration, groups/tags, downloads history, ZIP backup/restore,
 and diagnostics.
 
-**Goblin does not claim to guarantee anonymity, undetectability, or the
+**GoblinAnty does not claim to guarantee anonymity, undetectability, or the
 bypass of any anti-abuse or anti-bot system.** It is a profile-isolation and
 QA/testing tool: separate cookie jars, separate storage, separate configured
 browser identity per profile — nothing more, nothing less. See
 [SECURITY.md](SECURITY.md) for what is and isn't implemented.
 
-**Windows-only, v0.1.** Every build, install path, and E2E-tested workflow
-in this project so far targets Windows 10/11 specifically (see the NSIS-only
-`build.win` config in `package.json`, and the win32-specific process/RAM
-measurement code throughout `tests/`) — this is a stated current-scope
-limit, not a silent gap discovered later. Electron itself supports macOS and
-Linux, so cross-platform packaging is plausible future work, but nothing
-here has been built, packaged, or tested on either, and no version claims
-otherwise.
+**Windows-verified, macOS-experimental (and currently unbuildable from
+here), v0.1.** Every install path, E2E-tested workflow, and manual smoke
+test in this project so far targets Windows 10/11 specifically (see the
+win32-specific process/RAM measurement code throughout `tests/`) — that
+remains the only platform this app is actually verified on.
+`package.json`'s `build.mac` config (added this stage, `zip` target,
+unsigned) is present and its JSON is valid, but **`electron-builder --mac`
+was actually run from this Windows environment and refused outright**:
+`⨯ Build for macOS is supported only on macOS, please see
+https://electron.build/multi-platform-build` — confirmed directly, not
+assumed; electron-builder blocks macOS packaging from any non-macOS host
+categorically, regardless of target format (`zip` included, not just
+`dmg`). The config exists and is ready for whoever has real macOS hardware
+or a macOS CI runner to try — it has never actually produced a build, let
+alone been launched or clicked through. Linux is not targeted at all — no
+`build.linux` config, no plan to add one.
 
 ## What it does today
 
@@ -122,12 +130,31 @@ npm run rebuild:electron && npm run dev:electron
 npm run package
 ```
 
-Produces `release/Goblin Setup <version>.exe` (NSIS, per-user install by
-default, user can change the install directory). Output goes to `release/`.
-Application data (profiles, the SQLite database) lives in the OS user-data
-directory (`%APPDATA%/Goblin`), never inside the install directory, so
-uninstalling the app does not delete profile data unless the user explicitly
-removes that folder.
+Produces `release/GoblinAnty Setup <version>.exe` (NSIS, per-user install by
+default, user can change the install directory). Output goes to `release/`
+— the single shared output directory for every platform this project
+packages, never mixed with the `dist-electron/`/`dist-renderer/` build
+output or any other working files. Application data (profiles, the SQLite
+database) lives in the OS user-data directory (`%APPDATA%/GoblinAnty`),
+never inside the install directory, so uninstalling the app does not delete
+profile data unless the user explicitly removes that folder.
+
+## Build a macOS package (config only — cannot run from this environment)
+
+```bash
+npm run package:mac
+```
+
+`build.mac` in `package.json` is configured (`zip` target, unsigned via
+`identity: null`, since there's no Apple Developer identity available
+here) and its JSON is valid. That's the extent of what's actually been
+verified: running this command on this Windows machine fails immediately
+with `Build for macOS is supported only on macOS` — electron-builder
+refuses macOS packaging from any non-macOS host, confirmed directly, not
+assumed. The config is ready for someone with real macOS hardware (or a
+macOS CI runner) to run this same command and continue from there — it has
+never actually produced a `.zip`, let alone been launched or clicked
+through.
 
 ## Profile storage
 
@@ -166,7 +193,7 @@ every supported field's actual enforcement status.
 The UI is dark-only, by design, not an unfinished light theme. A profile
 manager like this one is a tool people keep open for long sessions
 alongside many other windows — a dark surface consistent with the app's own
-branding (`src/renderer/styles/global.css`'s custom palette, Goblin's own
+branding (`src/renderer/styles/global.css`'s custom palette, GoblinAnty's own
 icon/logo work) was chosen deliberately over building and maintaining a
 second full palette for a use case (extended desktop-app sessions) where
 dark is already the common default across comparable tools. If light-theme

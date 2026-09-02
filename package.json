@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "package": "npm run build && electron-builder",
+    "package:mac": "npm run build && electron-builder --mac",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3"
   },
