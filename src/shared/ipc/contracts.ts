@@ -24,6 +24,8 @@ export const IpcRequestSchemas = {
   'profiles:get': z.object({ id: ProfileIdSchema }),
   'profiles:create': ProfileCreateInputSchema,
   'profiles:update': ProfileUpdateInputSchema,
+  'profiles:getAutomationToken': z.object({ id: ProfileIdSchema }),
+  'profiles:regenerateAutomationToken': z.object({ id: ProfileIdSchema }),
   'profiles:delete': z.object({ id: ProfileIdSchema }),
   'profiles:restoreDeleted': z.object({ id: ProfileIdSchema }),
   'profiles:start': z.object({ id: ProfileIdSchema }),

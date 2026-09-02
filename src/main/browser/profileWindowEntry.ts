@@ -6,6 +6,7 @@ import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript
 import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
+import { findFreePort, startAutomationProxy } from './automationProxy';
 
 const BROWSER_START_URL = 'https://www.google.com';
 
@@ -29,6 +30,7 @@ export function runProfileWindowProcess(): void {
   const credentials = readStdinCredentials();
   args.proxyUsername = credentials.proxyUsername;
   args.proxyPassword = credentials.proxyPassword;
+  const automationToken = credentials.automationToken;
 
   // Requested by ProfileManager.stop() (see its comment for why): app.quit()
   // runs Electron/Chromium's normal shutdown sequence, which flushes the
@@ -53,11 +55,31 @@ export function runProfileWindowProcess(): void {
   // the profile window is a separate OS process Playwright's electron.launch()
   // has no handle on, so an E2E test that needs to drive its actual tab bar
   // opts into a CDP port here and connects via chromium.connectOverCDP().
-  // Never set in a normal launch.
+  // Never set in a normal launch. Mutually exclusive with the real automation
+  // port below — tests never set both.
   const e2eDebugPort = process.env['PF_E2E_REMOTE_DEBUG_PORT'];
-  if (e2eDebugPort) {
-    app.commandLine.appendSwitch('remote-debugging-port', e2eDebugPort);
-  }
+
+  // `--remote-debugging-port` must be set before Electron's internal 'ready'
+  // fires, but finding a free port is genuinely async (a real listen()/
+  // close() round trip) — so this is kicked off as the very first thing in
+  // the process, before any other async work, to minimize the window before
+  // Chromium's own (much slower) bootstrap reaches the point of locking in
+  // switches. The real internal CDP port this reserves is never told to
+  // anything but startAutomationProxy() below — see automationProxy.ts's own
+  // module comment for why raw CDP can't be given a token directly and needs
+  // an authenticating proxy in front of it instead.
+  const automationInternalPort: Promise<number | null> = (async () => {
+    if (e2eDebugPort) {
+      app.commandLine.appendSwitch('remote-debugging-port', e2eDebugPort);
+      return null;
+    }
+    if (args.automationPort && automationToken) {
+      const internalPort = await findFreePort();
+      app.commandLine.appendSwitch('remote-debugging-port', String(internalPort));
+      return internalPort;
+    }
+    return null;
+  })();
 
   app.on('login', (event, _webContents, _details, authInfo, callback) => {
     if (authInfo.isProxy && args.proxyUsername && args.proxyPassword) {
@@ -67,6 +89,21 @@ export function runProfileWindowProcess(): void {
   });
 
   app.whenReady().then(async () => {
+    if (args.automationPort && automationToken) {
+      const internalPort = await automationInternalPort;
+      if (internalPort) {
+        try {
+          await startAutomationProxy({ port: args.automationPort, internalPort, token: automationToken });
+        } catch (err) {
+          // Most likely EADDRINUSE (another already-running profile claimed
+          // this port, or something else on the machine did) — the profile
+          // itself still starts normally, just without automation access,
+          // rather than failing the whole launch over an optional feature.
+          console.error('[ProfileForge] failed to start automation proxy:', err);
+        }
+      }
+    }
+
     const partition = `persist:${args.profileId}`;
     const ses = session.fromPartition(partition, { cache: true });
     if (args.proxyRules) {

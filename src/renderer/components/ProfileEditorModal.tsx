@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
+import type { Settings } from '@shared/schemas/settings';
 import type {
   Fingerprint,
   FingerprintInput,
@@ -53,6 +54,8 @@ export function ProfileEditorModal({
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
   const [fieldOptions, setFieldOptions] = useState<FingerprintOptionsResponse | null>(null);
   const [overrides, setOverrides] = useState<FieldOverrides>({});
+  const [automationToken, setAutomationToken] = useState<string | null>(null);
+  const [defaultAutomationPort, setDefaultAutomationPort] = useState<number | null>(null);
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
   // modal (or the Reset button) can act on them instead of silently
@@ -76,7 +79,8 @@ export function ProfileEditorModal({
   const saveAction = useAsyncAction();
   const miscAction = useAsyncAction();
   const spoofingAction = useAsyncAction();
-  const error = loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error;
+  const automationAction = useAsyncAction();
+  const error = loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error ?? automationAction.error;
 
   async function load(): Promise<void> {
     await loadAction.run(async () => {
@@ -107,6 +111,42 @@ export function ProfileEditorModal({
       setProxies(proxyList);
       setGroups(groupList);
       setFieldOptions(options);
+      const tokenResult = await callApi<'profiles:getAutomationToken', { token: string | null }>(
+        'profiles:getAutomationToken',
+        { id: profileId },
+      );
+      setAutomationToken(tokenResult.token);
+      const settings = await callApi<'settings:get', Settings>('settings:get', {});
+      setDefaultAutomationPort(settings.defaultAutomationPort);
+    });
+  }
+
+  /** Toggling automation on generates a token the first time (none exists
+   * yet for a profile that never had it enabled); toggling off just flips
+   * the flag and clears the displayed token — the encrypted token itself
+   * stays in the database so re-enabling later doesn't silently rotate it
+   * out from under an already-configured external automation client. */
+  async function saveAutomation(patch: { automationEnabled?: boolean; automationPort?: number | null }): Promise<void> {
+    await automationAction.run(async () => {
+      const updated = await callApi<'profiles:update', Profile>('profiles:update', { id: profileId, ...patch });
+      setProfile(updated);
+      if (patch.automationEnabled === true && !automationToken) {
+        const generated = await callApi<'profiles:regenerateAutomationToken', { token: string }>(
+          'profiles:regenerateAutomationToken',
+          { id: profileId },
+        );
+        setAutomationToken(generated.token);
+      }
+    });
+  }
+
+  async function regenerateAutomationToken(): Promise<void> {
+    await automationAction.run(async () => {
+      const result = await callApi<'profiles:regenerateAutomationToken', { token: string }>(
+        'profiles:regenerateAutomationToken',
+        { id: profileId },
+      );
+      setAutomationToken(result.token);
     });
   }
 
@@ -360,7 +400,16 @@ export function ProfileEditorModal({
             <StorageTab profilePath={profile.profilePath} onClearCache={() => void clearCache()} />
           )}
 
-          {profile && tab === 'advanced' && <AdvancedTab profile={profile} />}
+          {profile && tab === 'advanced' && (
+            <AdvancedTab
+              profile={profile}
+              automationToken={automationToken}
+              defaultAutomationPort={defaultAutomationPort}
+              automationSaving={automationAction.pending}
+              onSaveAutomation={(patch) => void saveAutomation(patch)}
+              onRegenerateToken={() => void regenerateAutomationToken()}
+            />
+          )}
         </div>
       </div>
       {confirmClose && (

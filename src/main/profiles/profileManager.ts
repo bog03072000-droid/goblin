@@ -135,6 +135,14 @@ export class ProfileManager {
     const proxy = effectiveProxyId ? this.proxies.getById(effectiveProxyId) : null;
     const proxyPassword = effectiveProxyId ? this.proxies.getPassword(effectiveProxyId) : null;
 
+    // getAutomationToken() returns null if automation was never enabled for
+    // this profile (no token generated yet) — automationEnabled alone
+    // without a token can't happen through the normal update() flow (see
+    // registerIpc.ts's regenerateAutomationToken), but this stays a safe
+    // no-automation fallback either way rather than launching with a port
+    // and no way to authenticate against it.
+    const automationToken = profile.automationEnabled ? this.profiles.getAutomationToken(id) : null;
+
     // Guards against exactly the drift the fingerprint audit found: an
     // Electron/Chromium upgrade silently making an old profile's claimed
     // browser version wrong. Never blocks the launch — just surfaces it.
@@ -155,6 +163,8 @@ export class ProfileManager {
         proxyPassword,
         dbPath: this.dbPath,
         initialUrl: opts?.initialUrl,
+        automationPort: profile.automationEnabled ? profile.automationPort : null,
+        automationToken,
       });
     } catch (err) {
       this.profiles.updateStatus(id, 'ERROR');

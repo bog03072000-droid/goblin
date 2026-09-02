@@ -196,6 +196,70 @@ property-by-property reality matrix (what's genuinely applied to the running
 browser vs. stored-and-validated only), including a final summary table of
 every supported field's actual enforcement status.
 
+## Automation
+
+Any profile can expose a token-gated Chrome DevTools Protocol (CDP) endpoint
+while it's running, so it can be driven directly by Puppeteer, Playwright,
+Selenium, or any raw CDP client — not just through the app's own UI. Off by
+default; enable it per profile in the profile editor's **Advanced** tab.
+
+**Why a proxy, not the raw port.** Chromium's native `--remote-debugging-port`
+has no authentication anywhere in the protocol — the plain HTTP endpoints
+(`/json/version`, `/json/list`) and the CDP WebSocket itself accept commands
+from anyone who can reach them, no token or handshake possible. So this
+feature does not expose that port directly. Instead, `--remote-debugging-port`
+is bound to a random internal port never told to anything but this app's own
+proxy (`src/main/browser/automationProxy.ts`), and the port you actually
+configure is a small reverse proxy in front of it: it validates a token on
+every HTTP request and on the WebSocket upgrade, and only then forwards
+traffic to the real internal port. The JSON discovery endpoints are rewritten
+so their `webSocketDebuggerUrl` points back through the proxy (token
+attached), which is why `puppeteer.connect({ browserURL })`'s normal
+auto-discovery flow works with zero special-casing on the client side.
+
+Both the proxy and the real internal CDP port are bound to `127.0.0.1` only
+— never reachable from the network, only from this machine. The token is the
+second layer: without it, a local process still can't do anything with the
+port, matching the requirement that a wrong or missing token gets a real
+`401`, not just an unenforced convention.
+
+**Enabling it**: Advanced tab → check "Enable automation access" → set a
+port → copy the generated token. Each profile that has automation enabled
+needs its own free port if you plan to run more than one of them
+simultaneously — the app doesn't reserve or deduplicate ports across
+profiles for you, since it can't know in advance which profiles you'll
+actually run together. Settings has a "Default automation port" field that
+only pre-fills the suggestion when you first enable it on a profile; it
+isn't enforced or unique.
+
+**Connecting with Puppeteer:**
+
+```js
+const puppeteer = require('puppeteer-core');
+
+const browser = await puppeteer.connect({
+  browserURL: 'http://127.0.0.1:<port>?token=<token>',
+});
+const [page] = await browser.pages();
+console.log(await page.evaluate(() => navigator.userAgent));
+```
+
+**Connecting with Playwright** (via `connectOverCDP`, which also just
+fetches `/json/version` first):
+
+```js
+const { chromium } = require('playwright');
+
+const browser = await chromium.connectOverCDP(
+  'http://127.0.0.1:<port>?token=<token>',
+);
+```
+
+**Treat the token like a password.** Anyone with it and local access to this
+machine can fully control that profile — read cookies, run arbitrary
+JavaScript on any open page, see everything the profile does. Regenerating
+it (same Advanced tab) immediately invalidates the old one.
+
 ## Design
 
 The UI is dark-only, by design, not an unfinished light theme. A profile

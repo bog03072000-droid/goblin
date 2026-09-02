@@ -229,6 +229,20 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.advanced.updated': 'Оновлено',
   'editor.advanced.lastStarted': 'Останній запуск',
   'editor.advanced.lastStopped': 'Остання зупинка',
+  'editor.advanced.automation.title': 'Автоматизація',
+  'editor.advanced.automation.hint':
+    "Підключіть Puppeteer, Playwright або будь-який клієнт Chrome DevTools Protocol напряму до цього профілю, поки він працює. Вимкнено за замовчуванням — увімкнення відкриває локальний порт із захистом токеном.",
+  'editor.advanced.automation.enable': 'Увімкнути доступ для автоматизації',
+  'editor.advanced.automation.port': 'Порт (лише 127.0.0.1)',
+  'editor.advanced.automation.token': 'Токен доступу',
+  'editor.advanced.automation.copyToken': 'Скопіювати токен у буфер обміну',
+  'editor.advanced.automation.regenerate': 'Оновити',
+  'editor.advanced.automation.regenerateHint': 'Генерує новий токен і одразу анулює старий.',
+  'editor.advanced.automation.snippetHint': 'Приклад підключення Puppeteer:',
+  'editor.advanced.automation.warning':
+    'Будь-хто з цим токеном і локальним доступом до цієї машини може повністю керувати цим профілем браузера — читати cookies, виконувати JavaScript на будь-якій відкритій сторінці і бачити все, що там відбувається. Ставтеся до нього як до пароля.',
+  'common.copy': 'Копіювати',
+  'common.copied': 'Скопійовано',
 
   'proxy.title': 'Проксі',
   'proxy.namePlaceholder': 'Назва',
@@ -265,6 +279,10 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.title.performance': 'Продуктивність',
   'settings.title.storage': 'Сховище',
   'settings.title.general': 'Загальні',
+  'settings.title.automation': 'Автоматизація',
+  'settings.defaultAutomationPort': 'Порт автоматизації за замовчуванням',
+  'settings.defaultAutomationPort.hint':
+    "Пропонований початковий порт, коли ви вперше вмикаєте автоматизацію для профілю (вкладка Advanced) — лише зручність, не резервується і не гарантує унікальність. Кожному профілю все одно потрібен власний вільний порт, якщо кілька профілів з увімкненою автоматизацією працюють одночасно.",
   'settings.title.logging': 'Журналювання',
   'settings.title.language': 'Мова',
   'settings.title.help': 'Клавіатурні скорочення',

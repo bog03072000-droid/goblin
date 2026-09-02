@@ -18,6 +18,13 @@ export interface LaunchParams {
   /** Used by the Downloads page's "Re-download" action to navigate straight
    * at a specific URL instead of the normal start page. */
   initialUrl?: string;
+  /** Not secret — safe as a plain CLI arg (see automationToken below, which
+   * is not). Null/undefined when automation is disabled for this profile. */
+  automationPort?: number | null;
+  /** A secret, like proxyPassword — passed via stdin below, never as a CLI
+   * arg or env var (both stay readable by any other process on this machine
+   * for the child's whole lifetime; see the stdin-write comment below). */
+  automationToken?: string | null;
 }
 
 /**
@@ -83,6 +90,10 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
     args.push(`--navigate-to=${params.initialUrl}`);
   }
 
+  if (params.automationPort) {
+    args.push(`--automation-port=${params.automationPort}`);
+  }
+
   if (params.proxy) {
     // Chromium's --proxy-server/session.setProxy syntax treats a
     // "<scheme>=host:port" rule as applying ONLY to requests of that
@@ -132,6 +143,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
     JSON.stringify({
       proxyUsername: params.proxy?.username ?? null,
       proxyPassword: params.proxyPassword ?? null,
+      automationToken: params.automationToken ?? null,
     }) + '\n',
   );
   child.stdin?.end();

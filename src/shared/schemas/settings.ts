@@ -22,6 +22,12 @@ export const SettingsSchema = z.object({
   // deltas start shrinking for diminishing time gains; see the same file
   // for the full 2/4/8 comparison at each tier.
   maxConcurrentLaunches: z.number().int().min(1).max(20).default(4),
+  // Pure UI convenience: pre-fills the port field when a user first enables
+  // automation on a profile (see AdvancedTab.tsx). Not enforced or unique —
+  // each profile still needs its own actual port if run simultaneously with
+  // others that also have automation enabled; the app can't know that in
+  // advance, so this stays a suggestion, not a reservation.
+  defaultAutomationPort: z.number().int().min(1024).max(65535).nullable().default(null),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

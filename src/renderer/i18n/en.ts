@@ -227,6 +227,20 @@ const en = {
   'editor.advanced.updated': 'Updated',
   'editor.advanced.lastStarted': 'Last Started',
   'editor.advanced.lastStopped': 'Last Stopped',
+  'editor.advanced.automation.title': 'Automation',
+  'editor.advanced.automation.hint':
+    'Connect Puppeteer, Playwright, or any raw Chrome DevTools Protocol client directly to this profile while it runs. Off by default — enabling opens a local, token-gated port.',
+  'editor.advanced.automation.enable': 'Enable automation access',
+  'editor.advanced.automation.port': 'Port (127.0.0.1 only)',
+  'editor.advanced.automation.token': 'Access token',
+  'editor.advanced.automation.copyToken': 'Copy the token to your clipboard',
+  'editor.advanced.automation.regenerate': 'Regenerate',
+  'editor.advanced.automation.regenerateHint': 'Generates a new token and invalidates the old one immediately.',
+  'editor.advanced.automation.snippetHint': 'Puppeteer connection example:',
+  'editor.advanced.automation.warning':
+    'Anyone with this token and local access to this machine can fully control this browser profile — read cookies, run JavaScript on any open page, and see everything it does. Treat it like a password.',
+  'common.copy': 'Copy',
+  'common.copied': 'Copied',
 
   'proxy.title': 'Proxies',
   'proxy.namePlaceholder': 'Name',
@@ -263,6 +277,10 @@ const en = {
   'settings.title.performance': 'Performance',
   'settings.title.storage': 'Storage',
   'settings.title.general': 'General',
+  'settings.title.automation': 'Automation',
+  'settings.defaultAutomationPort': 'Default automation port',
+  'settings.defaultAutomationPort.hint':
+    "Suggested starting port when you first enable automation on a profile (Advanced tab) — a convenience only, not reserved or unique. Each profile still needs its own free port if you run several with automation enabled at the same time.",
   'settings.title.logging': 'Logging',
   'settings.title.language': 'Language',
   'settings.title.help': 'Keyboard Shortcuts',

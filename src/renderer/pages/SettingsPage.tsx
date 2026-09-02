@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck, ShieldAlert } from 'lucide-react';
+import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck, ShieldAlert, ShieldCheck } from 'lucide-react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
@@ -142,6 +142,22 @@ export function SettingsPage(): JSX.Element {
             <option value="lastSession">{t('settings.startupBehavior.lastSession')}</option>
           </select>
         </label>
+      </div>
+
+      <div className="panel">
+        <h3 className="fp-heading"><ShieldCheck size={16} strokeWidth={2.25} />{t('settings.title.automation')}</h3>
+        <label className="field field-narrow">
+          {t('settings.defaultAutomationPort')}
+          <input
+            className="mono field-input-160"
+            type="number"
+            min={1024}
+            max={65535}
+            value={settings.defaultAutomationPort ?? ''}
+            onChange={(e) => void save({ defaultAutomationPort: e.target.value ? Number(e.target.value) : null })}
+          />
+        </label>
+        <p className="text-dim text-xs mb-0">{t('settings.defaultAutomationPort.hint')}</p>
       </div>
 
       <div className="panel">

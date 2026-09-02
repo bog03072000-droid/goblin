@@ -14,6 +14,9 @@ export interface ProfileWindowArgs {
   fingerprintConfig: Record<string, unknown>;
   dbPath: string | null;
   navigateTo: string | null;
+  /** Not secret (unlike the token) — the port a client connects to, safe as
+   * a plain CLI arg. Null when automation is disabled for this profile. */
+  automationPort: number | null;
 }
 
 /** Same logic main.ts uses for the manager process — recomputed here rather
@@ -72,6 +75,11 @@ export function parseArgs(argv: string[]): ProfileWindowArgs {
     fingerprintConfig,
     dbPath: get('db-path'),
     navigateTo: get('navigate-to'),
+    automationPort: (() => {
+      const raw = get('automation-port');
+      const parsed = raw ? Number(raw) : NaN;
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    })(),
   };
 }
 
@@ -98,13 +106,25 @@ export function parseArgs(argv: string[]): ProfileWindowArgs {
  * --profile-window ...` run from a real terminal (dev debugging only; every
  * real launch goes through browserLauncher.ts's piped spawn) would
  * otherwise block here waiting for a human to type EOF. */
-export function readStdinCredentials(): { proxyUsername: string | null; proxyPassword: string | null } {
-  if (process.stdin.isTTY) return { proxyUsername: null, proxyPassword: null };
+export function readStdinCredentials(): {
+  proxyUsername: string | null;
+  proxyPassword: string | null;
+  automationToken: string | null;
+} {
+  if (process.stdin.isTTY) return { proxyUsername: null, proxyPassword: null, automationToken: null };
   try {
     const raw = fs.readFileSync(0, 'utf-8').split('\n')[0] ?? '';
-    const parsed = JSON.parse(raw) as { proxyUsername?: string | null; proxyPassword?: string | null };
-    return { proxyUsername: parsed.proxyUsername ?? null, proxyPassword: parsed.proxyPassword ?? null };
+    const parsed = JSON.parse(raw) as {
+      proxyUsername?: string | null;
+      proxyPassword?: string | null;
+      automationToken?: string | null;
+    };
+    return {
+      proxyUsername: parsed.proxyUsername ?? null,
+      proxyPassword: parsed.proxyPassword ?? null,
+      automationToken: parsed.automationToken ?? null,
+    };
   } catch {
-    return { proxyUsername: null, proxyPassword: null };
+    return { proxyUsername: null, proxyPassword: null, automationToken: null };
   }
 }

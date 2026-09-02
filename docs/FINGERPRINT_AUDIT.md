@@ -76,6 +76,30 @@ only trusting the random seed:
   real browser process (that's determined by the Reality matrix and
   Findings sections that follow, unchanged by this feature).
 
+## Automation API and CDP detectability (new this stage)
+
+The new opt-in per-profile automation feature (`src/main/browser/automationProxy.ts`,
+Advanced tab) puts a token-gated proxy in front of Chromium's own
+`--remote-debugging-port`, off by default. Two points worth being explicit
+about rather than leaving implicit:
+
+- **This does not change a profile's fingerprint when automation is off**
+  (the default for every profile unless a user explicitly enables it) —
+  `--remote-debugging-port` is never set for a profile that hasn't turned
+  this on, same as before this feature existed.
+- **When a user does enable it and drives the browser over CDP through it**,
+  that session is now genuinely CDP-automated — the same real, well-known
+  detection surface any Puppeteer/Playwright/Selenium-driven Chromium
+  session already has (e.g. `Runtime.enable`'s own observable side effects,
+  which is how several public anti-bot detectors flag CDP automation
+  regardless of which tool sits on top of it). This isn't a gap this
+  feature introduces or could plausibly close — it's an inherent property
+  of driving a real browser over CDP at all, orthogonal to everything else
+  in this document about navigator/canvas/WebGL spoofing. A user turning
+  this on for a given profile is trading that detectability for genuine
+  programmatic control, and should know that's the trade, not be told it's
+  free.
+
 ## Classification key
 
 - **A** — Actually applied and verified by the E2E test reading the real browser.

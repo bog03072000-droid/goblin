@@ -33,6 +33,14 @@ export const ProfileSchema = z.object({
   updatedAt: z.string(),
   lastStartedAt: z.string().nullable(),
   lastStoppedAt: z.string().nullable(),
+  // The automation token itself is never part of this object (same posture
+  // as a proxy's password) — see profiles:getAutomationToken. `automationPort`
+  // must be unique across profiles the user runs simultaneously (each is a
+  // separate OS process binding its own localhost port); the app doesn't
+  // enforce that at save time, since it can't know which OTHER profiles will
+  // actually be running at the same time as this one.
+  automationEnabled: z.boolean(),
+  automationPort: z.number().int().min(1024).max(65535).nullable(),
 });
 export type Profile = z.infer<typeof ProfileSchema>;
 
@@ -66,5 +74,7 @@ export const ProfileUpdateInputSchema = z.object({
   proxyId: z.string().uuid().nullable().optional(),
   groupId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string().min(1).max(60)).optional(),
+  automationEnabled: z.boolean().optional(),
+  automationPort: z.number().int().min(1024).max(65535).nullable().optional(),
 });
 export type ProfileUpdateInput = z.infer<typeof ProfileUpdateInputSchema>;

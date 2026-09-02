@@ -71,6 +71,8 @@ export function registerIpc(deps: IpcDependencies): void {
     return deps.profileManager.create(p, fingerprint.id);
   });
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
+  handle('profiles:getAutomationToken', (p) => ({ token: deps.profiles.getAutomationToken(p.id) }));
+  handle('profiles:regenerateAutomationToken', (p) => ({ token: deps.profiles.regenerateAutomationToken(p.id) }));
   handle('profiles:delete', (p) => deps.profileManager.delete(p.id));
   handle('profiles:restoreDeleted', (p) => deps.profileManager.restoreDeleted(p.id));
   handle('profiles:start', (p) => deps.profileManager.start(p.id));

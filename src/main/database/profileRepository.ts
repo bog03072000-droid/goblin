@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import type { Profile, ProfileListItem, ProfileStatus } from '../../shared/schemas/profile';
+import { encryptSecret, decryptSecret } from '../security/credentialVault';
 
 interface ProfileRow {
   id: string;
@@ -16,6 +17,9 @@ interface ProfileRow {
   last_started_at: string | null;
   last_stopped_at: string | null;
   deleted_at: string | null;
+  automation_enabled: number;
+  automation_port: number | null;
+  automation_token_encrypted: Buffer | null;
 }
 
 interface ProfileListRow extends ProfileRow {
@@ -64,6 +68,8 @@ export class ProfileRepository {
       updatedAt: row.updated_at,
       lastStartedAt: row.last_started_at,
       lastStoppedAt: row.last_stopped_at,
+      automationEnabled: Boolean(row.automation_enabled),
+      automationPort: row.automation_port,
     };
   }
 
@@ -152,6 +158,8 @@ export class ProfileRepository {
       proxyId: string | null;
       groupId: string | null;
       tags: string[];
+      automationEnabled: boolean;
+      automationPort: number | null;
     }>,
   ): Profile {
     const existing = this.getById(id);
@@ -159,7 +167,8 @@ export class ProfileRepository {
     const update = this.db.transaction(() => {
       this.db
         .prepare(
-          `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, group_id=@groupId, updated_at=@updatedAt WHERE id=@id`,
+          `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, group_id=@groupId,
+           automation_enabled=@automationEnabled, automation_port=@automationPort, updated_at=@updatedAt WHERE id=@id`,
         )
         .run({
           id,
@@ -167,12 +176,40 @@ export class ProfileRepository {
           description: patch.description ?? existing.description,
           proxyId: patch.proxyId !== undefined ? patch.proxyId : existing.proxyId,
           groupId: patch.groupId !== undefined ? patch.groupId : existing.groupId,
+          automationEnabled: (patch.automationEnabled ?? existing.automationEnabled) ? 1 : 0,
+          automationPort: patch.automationPort !== undefined ? patch.automationPort : existing.automationPort,
           updatedAt: new Date().toISOString(),
         });
       if (patch.tags) this.setTags(id, patch.tags);
     });
     update();
     return this.getById(id)!;
+  }
+
+  /** The automation token is never part of the plain Profile object returned
+   * by getById()/list() (same posture as a proxy's password) — only this
+   * dedicated method decrypts and returns it, for the Advanced tab's
+   * "copy token" action and for ProfileManager to hand to the child process
+   * on start(). Returns null if automation was never enabled for this
+   * profile (no token generated yet). */
+  getAutomationToken(id: string): string | null {
+    const row = this.db.prepare('SELECT automation_token_encrypted FROM profiles WHERE id = ?').get(id) as
+      | { automation_token_encrypted: Buffer | null }
+      | undefined;
+    if (!row?.automation_token_encrypted) return null;
+    return decryptSecret(row.automation_token_encrypted);
+  }
+
+  /** Generates and stores a fresh token, invalidating any previous one —
+   * used both the first time automation is enabled and for an explicit
+   * "Regenerate token" action (e.g. if a token may have leaked). */
+  regenerateAutomationToken(id: string): string {
+    const token = randomUUID() + randomUUID(); // 72 hex chars, not guessable
+    const encrypted = encryptSecret(token);
+    this.db
+      .prepare('UPDATE profiles SET automation_token_encrypted = ?, updated_at = ? WHERE id = ?')
+      .run(encrypted, new Date().toISOString(), id);
+    return token;
   }
 
   /** Internal invariant setter — profile_path is computed by ProfileManager from a
