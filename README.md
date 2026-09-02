@@ -177,6 +177,17 @@ component — rather than a rewrite.
 
 ## Known limitations (current build)
 
+- **Fingerprint spoofing does not reach Service Workers.** Navigator fields,
+  canvas/audio noise, and WebGL vendor/renderer are genuinely applied and
+  E2E-verified for the main document and every dedicated/shared Worker, but
+  not inside a Service Worker's own global scope — a real gap that a
+  Service-Worker-based fingerprint probe (CreepJS reads part of its report
+  this way) can see through, observing this machine's real GPU/navigator
+  values instead of the configured ones. This is a known, permanent
+  limitation of the current architecture, not an oversight — three separate
+  fix attempts were built and reverted after each broke authenticated proxy
+  support. See [docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md) for
+  the full investigation.
 - **Fonts**: `fontsMode: 'restricted'` (opt-in, off by default) blocks
   `document.fonts.check()` and the Local Font Access API, but not the more
   common CSS-fallback-width-measurement font-detection technique — that

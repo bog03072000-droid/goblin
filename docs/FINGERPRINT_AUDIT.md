@@ -1,5 +1,22 @@
 # Fingerprint Reality Audit
 
+> **Status: known limitation, by design decision — not planned for v0.1-0.2.**
+> Spoofing (navigator fields, canvas/audio noise, WebGL vendor/renderer) is
+> genuinely applied and E2E-verified for the main document and every
+> dedicated/shared Worker. It does **not** reach a Service Worker's own
+> global scope — a real, reproducible gap that lets a Service-Worker-based
+> fingerprint probe (this is exactly how CreepJS reads part of its report)
+> see this machine's real GPU and real navigator values instead of the
+> configured ones. Three independent, concrete fix attempts were built,
+> tested against a real proxy-authentication regression, and reverted —
+> the technical path that closes this gap breaks authenticated proxy
+> support, which is core functionality, not a trade this project makes.
+> This is a final decision, not an open investigation: see **"Confirmed,
+> real, honest limitation: Service Workers"** and **"Third and final
+> attempt"** below (§CDP footprint reduction + Worker/SharedWorker
+> propagation fix) for the full technical history if you need it — most
+> readers won't.
+
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
 browser process and reads its actual `navigator`/`screen`/`Intl`/WebGL/
