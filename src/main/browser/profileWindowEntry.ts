@@ -179,6 +179,21 @@ export function runProfileWindowProcess(): void {
         ? diagnosticsUrl
         : (process.env['PF_E2E_PROXY_TEST_URL'] ?? args.navigateTo ?? BROWSER_START_URL);
 
+    // Keyed by webContents.id (the renderer reads its own tab's id via the
+    // <webview> element's getWebContentsId() and passes it back on
+    // 'pf:navigate' — see browserShellPreload.ts's pfNav bridge and its
+    // comment for why explicit navigation is routed through here rather than
+    // the <webview> tag's `src` attribute). Entries are removed on
+    // 'destroyed' so closing tabs doesn't leak references.
+    const webviewsById = new Map<number, Electron.WebContents>();
+    ipcMain.on('pf:navigate', (_event, webContentsId: number, url: string) => {
+      const target = webviewsById.get(webContentsId);
+      if (!target) return;
+      let normalized = String(url).trim();
+      if (!/^[a-zA-Z]+:\/\//.test(normalized)) normalized = 'https://' + normalized;
+      void target.loadURL(normalized);
+    });
+
     // The webview starts at about:blank (see browser-shell.html); once Electron
     // attaches its guest WebContents here, the CDP fingerprint overrides are
     // applied and ONLY THEN does the real navigation start — so the very first
@@ -186,6 +201,9 @@ export function runProfileWindowProcess(): void {
     // instead of racing a reload against them.
     win.webContents.on('did-attach-webview', (_event, webviewContents) => {
       applyWebrtcPolicy(webviewContents, webrtcMode);
+
+      webviewsById.set(webviewContents.id, webviewContents);
+      webviewContents.once('destroyed', () => webviewsById.delete(webviewContents.id));
 
       // Real, reproducible race found via a live CI E2E failure (not a test
       // flake): enforceFingerprint's CDP round trip below is async, and if a

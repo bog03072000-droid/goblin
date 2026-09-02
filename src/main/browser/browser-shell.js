@@ -107,9 +107,14 @@ function activeTab() {
 }
 
 function navigateTab(tab, url) {
-  let target = url.trim();
-  if (!/^[a-zA-Z]+:\/\//.test(target)) target = 'https://' + target;
-  tab.webview.setAttribute('src', target);
+  // Routed through the main process (window.pfNav, see
+  // browserShellPreload.ts) rather than the <webview> tag's `src` attribute
+  // — attribute-based navigation goes through the webview guest-bridge's own
+  // internal IPC hop, whose latency under load raced (non-deterministically)
+  // against the main process's own loadURL() call for the default start
+  // page. A real, reproducible CI-only failure, not a hypothetical one — see
+  // profileWindowEntry.ts's did-attach-webview comment.
+  window.pfNav.navigate(tab.webview.getWebContentsId(), url);
 }
 
 function navigate(url) {
