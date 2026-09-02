@@ -56,6 +56,9 @@ const en = {
   'profiles.group.newNamePlaceholder': 'New group name',
   'profiles.group.empty': 'No groups yet. Create one above.',
   'profiles.group.confirmDelete': 'Delete group "{name}"? Profiles in it will become ungrouped.',
+  'profiles.group.proxyPool': 'Proxy pool',
+  'profiles.group.proxyPoolHint':
+    'A profile in this group with no proxy of its own gets assigned one from this pool, round-robin, fresh on every start — a direct per-profile proxy assignment always wins over this.',
   'profiles.group.assign': 'Move to group…',
   'profiles.group.ungrouped': 'Ungrouped',
   'profiles.sort.name': 'Sort: Name',

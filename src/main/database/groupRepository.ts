@@ -63,4 +63,51 @@ export class GroupRepository {
   delete(id: string): void {
     this.db.prepare('DELETE FROM groups WHERE id = ?').run(id);
   }
+
+  /** Ordered proxy ids in this group's rotation pool — used by
+   * ProfileManager.start() when a profile has no proxy of its own assigned
+   * (see pickNextPoolProxy()). Empty means no pool configured; profiles in
+   * that group with no direct proxy assignment simply run unproxied, same
+   * as today. */
+  getProxyPool(groupId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT proxy_id FROM group_proxy_pool WHERE group_id = ? ORDER BY position')
+      .all(groupId) as Array<{ proxy_id: string }>;
+    return rows.map((r) => r.proxy_id);
+  }
+
+  /** Replaces the whole pool in one transaction — the renderer always sends
+   * the complete desired list (a multi-select), never a delta. */
+  setProxyPool(groupId: string, proxyIds: string[]): void {
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM group_proxy_pool WHERE group_id = ?').run(groupId);
+      const insert = this.db.prepare(
+        'INSERT INTO group_proxy_pool (group_id, proxy_id, position) VALUES (?, ?, ?)',
+      );
+      proxyIds.forEach((proxyId, i) => insert.run(groupId, proxyId, i));
+    });
+    tx();
+  }
+
+  /** Advances and returns this group's rotation cursor (0-based, wraps at
+   * `poolSize`) — one DB round-trip does both, so two profiles in the same
+   * group starting back-to-back never get handed the same cursor value. */
+  private advanceRotationCursor(groupId: string, poolSize: number): number {
+    const row = this.db.prepare('SELECT proxy_rotation_cursor FROM groups WHERE id = ?').get(groupId) as
+      | { proxy_rotation_cursor: number }
+      | undefined;
+    const current = row?.proxy_rotation_cursor ?? 0;
+    const next = (current + 1) % poolSize;
+    this.db.prepare('UPDATE groups SET proxy_rotation_cursor = ? WHERE id = ?').run(next, groupId);
+    return current % poolSize;
+  }
+
+  /** Round-robin: each call hands out the next proxy id in the group's pool,
+   * wrapping around. Returns null if the group has no pool configured. */
+  pickNextPoolProxy(groupId: string): string | null {
+    const pool = this.getProxyPool(groupId);
+    if (pool.length === 0) return null;
+    const index = this.advanceRotationCursor(groupId, pool.length);
+    return pool[index]!;
+  }
 }

@@ -427,6 +427,7 @@ export function ProfilesPage(): JSX.Element {
       {showGroupsModal && (
         <GroupsModal
           groups={groups}
+          proxies={proxies}
           onCreate={(name) => void createGroup(name)}
           onRename={(g, name) => void renameGroup(g, name)}
           onDelete={(g) => void deleteGroup(g)}

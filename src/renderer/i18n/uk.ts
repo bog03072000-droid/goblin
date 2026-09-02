@@ -58,6 +58,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.group.newNamePlaceholder': 'Назва нової групи',
   'profiles.group.empty': 'Груп ще немає. Створіть першу вище.',
   'profiles.group.confirmDelete': 'Видалити групу "{name}"? Профілі в ній стануть без групи.',
+  'profiles.group.proxyPool': 'Пул проксі',
+  'profiles.group.proxyPoolHint':
+    'Профіль у цій групі без власного проксі отримає один з цього пулу — по черзі, заново при кожному запуску. Прямо призначений проксі на профілі завжди має пріоритет над цим.',
   'profiles.group.assign': 'Перемістити в групу…',
   'profiles.group.ungrouped': 'Без групи',
   'profiles.sort.name': 'Сортування: Назва',

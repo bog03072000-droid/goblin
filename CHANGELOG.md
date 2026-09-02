@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — proxy rotation pool per group
+
+- Groups can now carry a proxy rotation pool (migration 007:
+  `group_proxy_pool`, plus a `proxy_rotation_cursor` column on `groups`).
+  `ProfileManager.start()` picks the next proxy in a group's pool,
+  round-robin, for any profile in that group with no proxy of its own -
+  picked fresh on every start, never persisted onto the profile, so
+  restarting genuinely rotates. A profile's own direct proxy assignment
+  always wins over the pool, unconditionally. Managed from the "Proxy
+  pool" button on each group row in the Manage Groups modal.
+  `GroupRepository`/`ProfileManager` now take an optional `groups`
+  dependency - existing callers/tests that omit it keep working exactly
+  as before (grouped, proxy-less profiles just run unproxied).
+
 ## Unreleased — GoblinAnty rebrand, experimental macOS packaging
 
 - Application renamed from **Goblin** to **GoblinAnty** throughout the UI

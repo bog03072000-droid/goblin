@@ -85,6 +85,8 @@ export const IpcRequestSchemas = {
   'groups:create': GroupCreateInputSchema,
   'groups:rename': GroupRenameInputSchema,
   'groups:delete': GroupDeleteInputSchema,
+  'groups:getProxyPool': z.object({ groupId: z.string().uuid() }),
+  'groups:setProxyPool': z.object({ groupId: z.string().uuid(), proxyIds: z.array(z.string().uuid()) }),
 
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,

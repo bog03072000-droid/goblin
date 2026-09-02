@@ -78,9 +78,9 @@ function runManagerProcess(): void {
     const logs = new ActivityLogRepository(db);
     const templates = new TemplateRepository(db);
     templates.seedBuiltins();
-    const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs, dbPath);
-    const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
     const groups = new GroupRepository(db);
+    const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs, dbPath, groups);
+    const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
     const downloads = new DownloadRepository(db);
 
     // Runs for the lifetime of the app (its own interval is .unref()'d, so

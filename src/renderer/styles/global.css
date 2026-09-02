@@ -662,6 +662,13 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
 .group-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--stroke); }
 .group-name { flex: 1; font-size: 13px; }
 .group-count { color: var(--ash-dim); font-size: 11px; }
+.group-proxy-pool {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 12px 8px;
+  border-bottom: 1px solid var(--stroke);
+}
 
 .modal-panel-lg { width: 640px; max-height: 80vh; display: flex; flex-direction: column; }
 .modal-tabs-header { display: flex; border-bottom: 1px solid var(--stroke); align-items: center; }

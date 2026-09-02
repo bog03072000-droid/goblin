@@ -6,6 +6,7 @@ import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
 import type { ProxyRepository } from '../database/proxyRepository';
 import type { ActivityLogRepository } from '../database/activityLogRepository';
+import type { GroupRepository } from '../database/groupRepository';
 import { log } from '../logger';
 import { LockManager } from './lockManager';
 import { launchProfileProcess } from '../browser/browserLauncher';
@@ -48,6 +49,11 @@ export class ProfileManager {
     private readonly proxies: ProxyRepository,
     private readonly logs: ActivityLogRepository,
     private readonly dbPath: string,
+    /** Optional: only proxy rotation (see start()) depends on this. Existing
+     * callers/tests that don't care about rotation can omit it entirely —
+     * a profile with no direct proxy assignment just runs unproxied, same
+     * as before this existed. */
+    private readonly groups?: GroupRepository,
   ) {
     // Defensive cleanup for profiles whose undo window elapsed while the app
     // wasn't running to fire the in-memory timer (closed/crashed mid-window) —
@@ -108,8 +114,26 @@ export class ProfileManager {
 
     const fingerprint = this.fingerprints.getById(profile.fingerprintId);
     if (!fingerprint) throw new Error('Profile fingerprint is missing');
-    const proxy = profile.proxyId ? this.proxies.getById(profile.proxyId) : null;
-    const proxyPassword = profile.proxyId ? this.proxies.getPassword(profile.proxyId) : null;
+
+    // Rotation only ever applies when the profile itself has NO directly
+    // assigned proxy — an explicit per-profile assignment always wins and is
+    // never second-guessed by a group's pool. Picked fresh on every start(),
+    // not persisted onto the profile, so restarting a profile can genuinely
+    // rotate it to the next proxy in the pool rather than sticking forever.
+    let effectiveProxyId = profile.proxyId;
+    if (!effectiveProxyId && profile.groupId && this.groups) {
+      const picked = this.groups.pickNextPoolProxy(profile.groupId);
+      if (picked) {
+        effectiveProxyId = picked;
+        this.logs.record(
+          'PROXY_ASSIGNED',
+          id,
+          `Rotation pool assigned proxy for this session (profile has no fixed proxy)`,
+        );
+      }
+    }
+    const proxy = effectiveProxyId ? this.proxies.getById(effectiveProxyId) : null;
+    const proxyPassword = effectiveProxyId ? this.proxies.getPassword(effectiveProxyId) : null;
 
     // Guards against exactly the drift the fingerprint audit found: an
     // Electron/Chromium upgrade silently making an old profile's claimed

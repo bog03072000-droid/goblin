@@ -176,6 +176,14 @@ assignment is completely independent — verified end-to-end in
 `tests/e2e/proxyIsolation.spec.ts` (three profiles, three different
 configurations, each proven to use only its own).
 
+A **group** can also carry a proxy rotation pool (Manage Groups → "Proxy
+pool" on a group), independent of any single profile's own assignment. A
+profile with no proxy of its own that belongs to such a group gets handed
+the next proxy in the pool, round-robin, freshly on every start — never
+persisted onto the profile, so restarting it can genuinely rotate to the
+next one. A profile's own direct proxy assignment always takes priority
+over its group's pool, unconditionally.
+
 ## Fingerprint architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md#fingerprint-engine). The generator picks

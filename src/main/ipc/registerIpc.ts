@@ -161,6 +161,8 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('groups:create', (p) => deps.groups.create(p.name));
   handle('groups:rename', (p) => deps.groups.rename(p.id, p.name));
   handle('groups:delete', (p) => deps.groups.delete(p.id));
+  handle('groups:getProxyPool', (p) => deps.groups.getProxyPool(p.groupId));
+  handle('groups:setProxyPool', (p) => deps.groups.setProxyPool(p.groupId, p.proxyIds));
 
   handle('settings:get', () => deps.settings.getAll());
   handle('settings:update', (p) => deps.settings.update(p));
