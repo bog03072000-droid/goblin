@@ -53,125 +53,137 @@ function FieldOverridesPicker({
       <h4 className="fp-heading">{t('editor.fingerprint.picker.title')}</h4>
       <p className="text-dim text-xs mt-0">{t('editor.fingerprint.picker.hint')}</p>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.os')}
-        <select
-          value={overrides.os ?? AUTO}
-          onChange={(e) => {
-            const next = e.target.value as Os | '';
-            // Changing OS invalidates any osVersion/GPU override that
-            // belonged to the previous OS — clearing them back to Auto
-            // rather than silently keeping a now-foreign value around.
-            onChange({ ...overrides, os: next || undefined, osVersion: undefined, webglVendor: undefined, webglRenderer: undefined });
-          }}
-        >
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {fieldOptions.platforms.map((p) => (
-            <option key={p.os} value={p.os}>
-              {p.os === 'windows' ? 'Windows' : p.os === 'macos' ? 'macOS' : 'Linux'}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="fp-picker-group">
+        <h5 className="fp-picker-group-title">{t('editor.fingerprint.picker.group.platform')}</h5>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.osVersion')}
-        <select value={overrides.osVersion ?? AUTO} onChange={(e) => set('osVersion', e.target.value || undefined)}>
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {platformOptions.osVersions.map((v) => (
-            <option key={v} value={v}>
-              {v}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.os')}
+          <select
+            value={overrides.os ?? AUTO}
+            onChange={(e) => {
+              const next = e.target.value as Os | '';
+              // Changing OS invalidates any osVersion/GPU override that
+              // belonged to the previous OS — clearing them back to Auto
+              // rather than silently keeping a now-foreign value around.
+              onChange({ ...overrides, os: next || undefined, osVersion: undefined, webglVendor: undefined, webglRenderer: undefined });
+            }}
+          >
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {fieldOptions.platforms.map((p) => (
+              <option key={p.os} value={p.os}>
+                {p.os === 'windows' ? 'Windows' : p.os === 'macos' ? 'macOS' : 'Linux'}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <p className="text-dim text-xs mb-0">
-        {t('editor.fingerprint.picker.platformDerived', { platform: effectivePlatform })}
-      </p>
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.osVersion')}
+          <select value={overrides.osVersion ?? AUTO} onChange={(e) => set('osVersion', e.target.value || undefined)}>
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {platformOptions.osVersions.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.browserVersion')}
-        <select value={overrides.browserVersion ?? AUTO} onChange={(e) => set('browserVersion', e.target.value || undefined)}>
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {fieldOptions.browserVersions.map((v) => (
-            <option key={v} value={v}>
-              Chrome {v}
-            </option>
-          ))}
-        </select>
-      </label>
+        <p className="text-dim text-xs mb-0">
+          {t('editor.fingerprint.picker.platformDerived', { platform: effectivePlatform })}
+        </p>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.cpu')}
-        <select
-          value={overrides.hardwareConcurrency ?? AUTO}
-          onChange={(e) => set('hardwareConcurrency', e.target.value ? Number(e.target.value) : undefined)}
-        >
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {platformOptions.hardwareConcurrencyOptions.map((n) => (
-            <option key={n} value={n}>
-              {n} {t('editor.fingerprint.picker.cores')}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.browserVersion')}
+          <select value={overrides.browserVersion ?? AUTO} onChange={(e) => set('browserVersion', e.target.value || undefined)}>
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {fieldOptions.browserVersions.map((v) => (
+              <option key={v} value={v}>
+                Chrome {v}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.ram')}
-        <select
-          value={overrides.deviceMemory ?? AUTO}
-          onChange={(e) => set('deviceMemory', e.target.value ? Number(e.target.value) : undefined)}
-        >
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {platformOptions.deviceMemoryOptions.map((n) => (
-            <option key={n} value={n}>
-              {n} GB
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="fp-picker-group">
+        <h5 className="fp-picker-group-title">{t('editor.fingerprint.picker.group.hardware')}</h5>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.gpu')}
-        <select
-          value={overrides.webglVendor ?? AUTO}
-          onChange={(e) => {
-            const vendor = e.target.value || undefined;
-            const match = platformOptions.gpuOptions.find((g) => g.vendor === vendor);
-            onChange({ ...overrides, webglVendor: vendor, webglRenderer: match?.renderer });
-          }}
-        >
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {platformOptions.gpuOptions.map((g) => (
-            <option key={g.vendor} value={g.vendor}>
-              {g.renderer}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.cpu')}
+          <select
+            value={overrides.hardwareConcurrency ?? AUTO}
+            onChange={(e) => set('hardwareConcurrency', e.target.value ? Number(e.target.value) : undefined)}
+          >
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {platformOptions.hardwareConcurrencyOptions.map((n) => (
+              <option key={n} value={n}>
+                {n} {t('editor.fingerprint.picker.cores')}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <label className="field field-narrow">
-        {t('editor.fingerprint.picker.resolution')}
-        <select
-          value={overrides.screenWidth ? `${overrides.screenWidth}x${overrides.screenHeight}` : AUTO}
-          onChange={(e) => {
-            if (!e.target.value) {
-              onChange({ ...overrides, screenWidth: undefined, screenHeight: undefined });
-              return;
-            }
-            const [w, h] = e.target.value.split('x').map(Number);
-            onChange({ ...overrides, screenWidth: w, screenHeight: h });
-          }}
-        >
-          <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
-          {platformOptions.screens.map((s) => (
-            <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>
-              {s.width} x {s.height}
-            </option>
-          ))}
-        </select>
-      </label>
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.ram')}
+          <select
+            value={overrides.deviceMemory ?? AUTO}
+            onChange={(e) => set('deviceMemory', e.target.value ? Number(e.target.value) : undefined)}
+          >
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {platformOptions.deviceMemoryOptions.map((n) => (
+              <option key={n} value={n}>
+                {n} GB
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.gpu')}
+          <select
+            value={overrides.webglVendor ?? AUTO}
+            onChange={(e) => {
+              const vendor = e.target.value || undefined;
+              const match = platformOptions.gpuOptions.find((g) => g.vendor === vendor);
+              onChange({ ...overrides, webglVendor: vendor, webglRenderer: match?.renderer });
+            }}
+          >
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {platformOptions.gpuOptions.map((g) => (
+              <option key={g.vendor} value={g.vendor}>
+                {g.renderer}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="fp-picker-group">
+        <h5 className="fp-picker-group-title">{t('editor.fingerprint.picker.group.display')}</h5>
+
+        <label className="field field-narrow">
+          {t('editor.fingerprint.picker.resolution')}
+          <select
+            value={overrides.screenWidth ? `${overrides.screenWidth}x${overrides.screenHeight}` : AUTO}
+            onChange={(e) => {
+              if (!e.target.value) {
+                onChange({ ...overrides, screenWidth: undefined, screenHeight: undefined });
+                return;
+              }
+              const [w, h] = e.target.value.split('x').map(Number);
+              onChange({ ...overrides, screenWidth: w, screenHeight: h });
+            }}
+          >
+            <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
+            {platformOptions.screens.map((s) => (
+              <option key={`${s.width}x${s.height}`} value={`${s.width}x${s.height}`}>
+                {s.width} x {s.height}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }

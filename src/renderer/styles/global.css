@@ -646,6 +646,19 @@ tr:hover td { background: rgba(124, 179, 66, 0.05); }
 .banner-maxw440 { max-width: 440px; }
 .shortcut-key-col { width: 100px; }
 .fp-heading { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+/* Groups the explicit-selection picker's fields (Platform/Hardware/Display)
+   into visually separated subsections instead of one long vertical list —
+   a hairline rule between groups, no rule before the first. */
+.fp-picker-group { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.fp-picker-group:first-of-type { margin-top: 4px; padding-top: 0; border-top: none; }
+.fp-picker-group-title {
+  margin: 0 0 8px;
+  color: var(--ash-dim);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 
 .brand-logo { border-radius: 8px; }
 .update-banner { margin: 12px 20px 0; display: flex; align-items: center; gap: 12px; }
