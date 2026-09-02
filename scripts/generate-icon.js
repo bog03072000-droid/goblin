@@ -1,5 +1,5 @@
 // One-off (re-run manually if assets/goblin-logo.png changes) generator for
-// the app icon: rasterizes the official Goblin logo PNG to every size
+// the app icon: rasterizes the official GoblinAnty logo PNG to every size
 // Windows actually uses (taskbar, title bar, Explorer thumbnails, Alt-Tab),
 // then bundles those into a single multi-resolution .ico for electron-builder.
 // The source image itself is never redrawn or altered — only resized.

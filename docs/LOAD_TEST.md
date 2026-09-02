@@ -1,8 +1,8 @@
-# Goblin — Real-World Load Test
+# GoblinAnty — Real-World Load Test
 
 Generated: 2026-08-31
 
-This is a real, repeatable load/benchmark test of Goblin at 20 / 50 / 100 / 200
+This is a real, repeatable load/benchmark test of GoblinAnty at 20 / 50 / 100 / 200
 stored profiles, run against the actual product code (repositories,
 `ProfileManager`, the real Electron app, real Chromium child processes) —
 never a synthetic reimplementation. Per the brief this test was built
@@ -24,7 +24,7 @@ everything below:** each *running* profile costs **~5 real OS processes**
 machine's ambient free memory during testing (1–2 GB, shared with the
 user's other running applications — Chrome, Windows Defender, other Claude
 Code sessions, etc.), **more than ~2 real simultaneous browser processes
-reliably destabilizes this machine**, independent of anything in Goblin's
+reliably destabilizes this machine**, independent of anything in GoblinAnty's
 own code. See Test 2/3 below for the full, honest account.
 
 ---
@@ -137,7 +137,7 @@ growth, process leaks, locked directories, and DB/UI coherence. Source:
   runs.
 - **DB/UI coherence issue: no** — the profile row's identity and status
   were correct after every cycle.
-- Total `electron.exe` memory (RSS, summed across all Goblin-owned
+- Total `electron.exe` memory (RSS, summed across all GoblinAnty-owned
   processes) grew ~22–24 MB over 10 cycles per profile — consistent with
   normal Chromium/V8 warm-up caching, not a linear leak (the growth curve
   flattens by cycle 6–7, see the raw table).
@@ -175,7 +175,7 @@ This session attempted to find that controlled number empirically:
 1. **First attempt, 20 profiles simultaneously**: real measurement showed
    99 `electron.exe` processes and ~11.7 GB RAM in use, with this
    machine's free memory (only ~3.7–3.8 GB to start) dropping to **0.6 GB
-   free mid-batch**. This was a genuine near-incident — all Goblin
+   free mid-batch**. This was a genuine near-incident — all GoblinAnty
    processes were force-killed immediately rather than letting the test
    "pass" at the cost of destabilizing the whole machine. This produced the
    ~585 MB/profile real cost figure used throughout this report.
@@ -195,7 +195,7 @@ This session attempted to find that controlled number empirically:
    Electron) by running `vitest` and Playwright/Electron tests back-to-back
    without re-rebuilding between them — this is a **tooling artifact of
    this test session, not a product defect**, and does not affect
-   packaged, installed copies of Goblin (which are always built with the
+   packaged, installed copies of GoblinAnty (which are always built with the
    correct Electron ABI via the existing `npm run rebuild:electron` /
    `electron-builder install-app-deps` step). It was fixed (documented in
    this file's own test-writing notes) and confirmed NOT to be the cause of
@@ -207,7 +207,7 @@ This session attempted to find that controlled number empirically:
    profiles handles 200. What is NOT proven by this session is the
    *absolute timing* at 20/50/100 simultaneous real browsers, because this
    specific machine cannot safely sustain that many at once regardless of
-   Goblin's own code.
+   GoblinAnty's own code.
 
 **No fabricated numbers are reported for the 20/50/100 simultaneous-browser
 tiers** — they were not achieved. `tests/performance/LOAD_TEST_BULKSTART_RAW.md`
@@ -263,7 +263,7 @@ profiles" recommendation below.
 - **No other product-code defects were found.** Every genuine test failure
   this session traced back to either a test-authoring bug (fixed, listed
   above) or real, well-documented ambient memory pressure on this specific
-  test machine (Test 2/3, above) — not to incorrect behavior in Goblin's
+  test machine (Test 2/3, above) — not to incorrect behavior in GoblinAnty's
   own code.
 
 ## PASS / WARN / FAIL summary

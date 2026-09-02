@@ -167,7 +167,7 @@
 :root {
   color-scheme: dark;
 
-  /* Goblin design system tokens — single source of truth. */
+  /* GoblinAnty design system tokens — single source of truth. */
   --ink: #121412;
   --char: #1c1f1c;
   --char-raised: #23271f;

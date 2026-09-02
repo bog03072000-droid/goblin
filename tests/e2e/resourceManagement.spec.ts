@@ -31,7 +31,7 @@ function countElectronProcesses(): number {
     if (process.platform === 'win32') {
       // E2E tests always run against the dev-built Electron binary from
       // node_modules (electron.exe) via Playwright's electron.launch() —
-      // only a *packaged* build renames it to Goblin.exe, which isn't what
+      // only a *packaged* build renames it to GoblinAnty.exe, which isn't what
       // this test (or any other E2E test in this suite) launches.
       const out = execSync('tasklist /FI "IMAGENAME eq electron.exe" /FO CSV /NH', { encoding: 'utf-8' });
       if (out.includes('No tasks')) return 0;

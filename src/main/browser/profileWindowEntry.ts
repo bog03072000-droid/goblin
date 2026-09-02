@@ -114,7 +114,7 @@ export function runProfileWindowProcess(): void {
     const win = new BrowserWindow({
       width,
       height,
-      title: `Goblin — ${args.profileName}`,
+      title: `GoblinAnty — ${args.profileName}`,
       icon: path.join(__dirname, '..', '..', 'icon.png'),
       webPreferences: {
         preload: path.join(__dirname, 'browserShellPreload.js'),

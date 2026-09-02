@@ -2,7 +2,7 @@
 
 ## Scope and intent
 
-Goblin is a profile-isolation and browser-configuration tool for
+GoblinAnty is a profile-isolation and browser-configuration tool for
 legitimate use: QA/localization testing, development, and separating browser
 sessions. It does not implement, and will not implement, CAPTCHA/anti-bot
 bypass, authentication bypass, credential/cookie/token theft, or stealth

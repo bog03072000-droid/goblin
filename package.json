@@ -2,7 +2,7 @@
   "name": "profileforge",
   "version": "0.1.0",
   "description": "Multi-profile Chromium browser with persistent isolated profiles, proxy management, and coherent fingerprint configuration.",
-  "author": "Goblin",
+  "author": "GoblinAnty",
   "private": true,
   "main": "dist-electron/main/main.js",
   "type": "commonjs",
@@ -54,7 +54,7 @@
   },
   "build": {
     "appId": "com.profileforge.app",
-    "productName": "Goblin",
+    "productName": "GoblinAnty",
     "directories": {
       "output": "release"
     },
@@ -77,7 +77,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Goblin"
+      "shortcutName": "GoblinAnty"
+    },
+    "mac": {
+      "target": "zip",
+      "icon": "build/icon.png",
+      "identity": null,
+      "category": "public.app-category.utilities"
     },
     "publish": {
       "provider": "github",

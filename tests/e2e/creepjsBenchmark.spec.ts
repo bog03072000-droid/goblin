@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * Real-world fingerprint benchmark: starts one normal Goblin profile (same
+ * Real-world fingerprint benchmark: starts one normal GoblinAnty profile (same
  * create/start flow a real user goes through — no test-only shortcuts to
  * the fingerprint config itself) and points its real browser window at
  * https://abrahamjuliot.github.io/creepjs/, a public, well-known
@@ -82,7 +82,7 @@ async function execInWebview(webview: ReturnType<Page['locator']>, script: strin
   throw lastErr;
 }
 
-test('a real Goblin profile scanned by CreepJS — captures real, unedited results', async () => {
+test('a real GoblinAnty profile scanned by CreepJS — captures real, unedited results', async () => {
   await window.getByPlaceholder('New profile name').fill('CreepJS Benchmark Profile');
   await window.getByRole('button', { name: 'New Profile' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();

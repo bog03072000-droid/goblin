@@ -48,8 +48,8 @@ function AppShell(): JSX.Element {
     <>
       <div className="sidebar">
         <div className="sidebar-brand">
-          <img src={goblinLogo} alt="Goblin" width="28" height="28" className="brand-logo" />
-          <span className="sidebar-brand-name">Goblin</span>
+          <img src={goblinLogo} alt="GoblinAnty" width="28" height="28" className="brand-logo" />
+          <span className="sidebar-brand-name">GoblinAnty</span>
         </div>
         <div className={`sidebar-item ${page === 'profiles' ? 'active' : ''}`} onClick={() => setPage('profiles')}>
           <Users size={16} strokeWidth={2} />

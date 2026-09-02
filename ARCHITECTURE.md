@@ -2,7 +2,7 @@
 
 ## Process model
 
-Goblin runs as several separate OS processes, not one:
+GoblinAnty runs as several separate OS processes, not one:
 
 1. **Manager process** — the Electron app the user interacts with (profile
    list, proxy manager, groups, downloads history, logs, settings). Owns the

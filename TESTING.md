@@ -190,8 +190,8 @@ Honesty over appearance: these are real gaps, not implied coverage.
 
 - **Windows installer smoke test** via the actual NSIS installer UI
   (install → run → uninstall) — not automated. What *is* verified on every
-  release build: the packaged `win-unpacked/Goblin.exe` launches directly
-  and shows a window titled "Goblin" (a manual smoke test performed as part
+  release build: the packaged `win-unpacked/GoblinAnty.exe` launches directly
+  and shows a window titled "GoblinAnty" (a manual smoke test performed as part
   of the final build step, not a Playwright test).
 - Repeated start/stop cycling (many iterations against one profile, watching
   for orphan processes or memory growth) is exercised manually as part of
@@ -205,7 +205,7 @@ Honesty over appearance: these are real gaps, not implied coverage.
 ## Manual smoke test performed
 
 Beyond the automated E2E suite, the packaged application is also launched
-directly (`win-unpacked/Goblin.exe`, no Playwright) after each release build,
+directly (`win-unpacked/GoblinAnty.exe`, no Playwright) after each release build,
 confirming clean startup with no `NODE_MODULE_VERSION` mismatch, no
-missing-file errors, and a real "Goblin"-titled window — a quick manual
+missing-file errors, and a real "GoblinAnty"-titled window — a quick manual
 sanity check run before/after the fuller E2E suite, not a replacement for it.

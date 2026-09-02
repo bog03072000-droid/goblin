@@ -92,7 +92,7 @@ export class ImportExportService {
     const result = await dialog.showSaveDialog({
       title: 'Export Profile Configuration',
       defaultPath: `${profile.name}-config.json`,
-      filters: [{ name: 'Goblin Export', extensions: ['json'] }],
+      filters: [{ name: 'GoblinAnty Export', extensions: ['json'] }],
     });
     if (result.canceled || !result.filePath) return null;
 
@@ -110,7 +110,7 @@ export class ImportExportService {
     const result = await dialog.showSaveDialog({
       title: 'Export Full Profile',
       defaultPath: `${profile.name}.zip`,
-      filters: [{ name: 'Goblin Backup', extensions: ['zip'] }],
+      filters: [{ name: 'GoblinAnty Backup', extensions: ['zip'] }],
     });
     if (result.canceled || !result.filePath) return null;
 
@@ -137,7 +137,7 @@ export class ImportExportService {
     const result = await dialog.showSaveDialog({
       title: `Export ${profileIds.length} profile(s)`,
       defaultPath: `profileforge-export-${profileIds.length}-profiles.zip`,
-      filters: [{ name: 'Goblin Bulk Export', extensions: ['zip'] }],
+      filters: [{ name: 'GoblinAnty Bulk Export', extensions: ['zip'] }],
     });
     if (result.canceled || !result.filePath) return null;
 
@@ -212,7 +212,7 @@ export class ImportExportService {
       title: 'Restore Profile From Backup',
       defaultPath: backupsRoot,
       properties: ['openFile'],
-      filters: [{ name: 'Goblin Backup', extensions: ['zip'] }],
+      filters: [{ name: 'GoblinAnty Backup', extensions: ['zip'] }],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
 
@@ -239,7 +239,7 @@ export class ImportExportService {
       title: 'Import Profile(s)',
       properties: ['openFile', 'openDirectory', 'multiSelections'],
       filters: [
-        { name: 'Goblin Export', extensions: ['json', 'zip'] },
+        { name: 'GoblinAnty Export', extensions: ['json', 'zip'] },
         { name: 'All Files', extensions: ['*'] },
       ],
     });
@@ -292,7 +292,7 @@ export class ImportExportService {
       .map((e) => path.join(tempDir, e.name))
       .filter((dir) => fs.existsSync(path.join(dir, 'manifest.json')));
     if (subEntries.length === 0) {
-      throw new Error('Zip does not contain a recognizable Goblin export');
+      throw new Error('Zip does not contain a recognizable GoblinAnty export');
     }
     return subEntries;
   }
