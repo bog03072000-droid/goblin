@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
@@ -36,13 +36,31 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Rebuild native modules for Electron ABI
         run: npm run rebuild:electron
       - run: npm run build
       - run: npm run test:e2e
+      # GitHub's job-log download endpoint needs admin rights on the repo,
+      # even for a public one — confirmed directly (403 "Must have admin
+      # rights to Repository") while investigating this job's first-ever
+      # live failure. The Checks API's annotations are reachable without
+      # that, but only ever carry a generic "Process completed with exit
+      # code 1", not which test failed or why. Playwright already writes a
+      # per-failure error-context.md (and any trace/screenshot files) into
+      # test-results/ regardless of reporter verbosity — that's the actual
+      # gap: nothing preserved it past the job's own lifetime. Uploading it
+      # as an artifact makes a future failure inspectable (via the Actions
+      # UI or the artifacts API) without needing a token at all.
+      - name: Upload E2E failure diagnostics (error-context.md, traces, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-diagnostics
+          path: test-results/
+          retention-days: 7
 
   # Load/performance suite — deliberately NOT in the `needs:` chain of
   # anything, and not required for the workflow to pass (continue-on-error).
@@ -61,7 +79,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       # better-sqlite3 is ABI-locked to whichever runtime last rebuilt it
       # (plain Node vs. Electron's own Node build have different
