@@ -55,6 +55,18 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
     }),
   ).toString('base64');
 
+  // Tried and reverted (real measurement, not assumption): a set of
+  // Puppeteer/Playwright-style flags (--disable-background-networking,
+  // --disable-component-update, --disable-sync, --disable-features=
+  // Translate,OptimizationHints,MediaRouter, etc.) that skip Google-service
+  // integrations this app never uses, on the theory that they'd lower
+  // per-profile RAM at bulk-start scale. Measured against the real
+  // 20/50-profile baselines in LOAD_TEST_BULKSTART_RAW.md: results were
+  // mixed-to-worse, not better (50 profiles at maxConcurrentLaunches=4 used
+  // ~19% MORE peak RAM with the flags than without). Reverted rather than
+  // kept on a plausible-sounding but unproven theory — see this project's
+  // whole convention of measuring before claiming. Not worth re-attempting
+  // without a concrete, different hypothesis for why it would help.
   const args = [
     entryScript,
     '--profile-window',
