@@ -28,6 +28,54 @@ memory of how a similar feature worked in a different Electron version.
 Nothing here was verified by editing the diagnostic page to display what we
 wanted it to say.
 
+## Explicit field selection (new this stage)
+
+Fingerprint generation was always seed-based autogeneration picking one
+coherent "platform bundle" (OS + OS version + platform string + screen +
+CPU + RAM + GPU) as a unit from `PLATFORM_PROFILES`
+(`src/main/fingerprint/platformProfiles.ts`) — never mixing independently
+randomized fields, which is what keeps a generated fingerprint internally
+consistent. This stage adds an explicit, convenient UI for choosing
+individual fields within that same coherent-bundle constraint, instead of
+only trusting the random seed:
+
+- **OS**, **OS version**, **browser (Chrome) version**, **CPU core count**
+  (`hardwareConcurrency`), **RAM** (`deviceMemory`), **GPU vendor/renderer**,
+  and **screen resolution** are each selectable from a real, concrete list —
+  in `ProfileCreateModal.tsx` and `ProfileEditorModal.tsx`'s Fingerprint tab,
+  via the new `FieldOverridesPicker` in
+  `src/renderer/components/profileEditor/FingerprintTab.tsx`.
+- Every field defaults to **Auto** (the existing seed-based random pick);
+  switching to a concrete value overrides only that field.
+- Changing OS clears the OS-version and GPU overrides, since those belong to
+  the previous OS's option list — this is a UI convenience, not the actual
+  safety mechanism.
+- The actual coherence guarantee lives server-side in
+  `generateFingerprint()` (`src/main/fingerprint/generator.ts`): every
+  override is checked against the *resolved* platform's own real option
+  list (`platform.osVersions`, `platform.screens`,
+  `platform.hardwareConcurrencyOptions`, `platform.deviceMemoryOptions`,
+  `platform.gpuOptions`) before being applied. An override that doesn't
+  belong to the resolved OS — e.g. a stale UI selection from before an OS
+  switch, or any attempt to request an Apple GPU on a Windows profile — is
+  silently ignored and falls back to a random pick from that OS's own
+  options, rather than producing an incoherent fingerprint or throwing.
+  `browserVersion` is the one exception: it isn't tied to the OS bundle in
+  `PLATFORM_PROFILES` (the same Chrome versions are offered across every
+  OS), so any of `BROWSER_VERSIONS` is accepted for any OS.
+- New IPC channel `fingerprint:options` returns the real per-OS option
+  lists (`FingerprintOptionsResponse`, `src/shared/schemas/fingerprint.ts`)
+  so the UI never hardcodes a list that could drift from
+  `PLATFORM_PROFILES`. `fingerprint:generate` accepts the same override
+  fields as optional parameters.
+- Covered by `tests/unit/fingerprintGenerator.test.ts` (valid overrides
+  applied, foreign/invalid overrides ignored per field, and a
+  multi-field-override combination still passes `validateFingerprint()`).
+- This is a UI/ergonomics addition on top of the existing classification
+  below — it does not change which fields are actually enforced in the
+  real browser process (that's determined by the Reality matrix and
+  Findings sections that follow, unchanged by this feature).
+
 ## Classification key
 
 - **A** — Actually applied and verified by the E2E test reading the real browser.

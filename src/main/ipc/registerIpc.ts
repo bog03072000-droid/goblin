@@ -15,6 +15,7 @@ import type { ImportExportService } from '../profiles/importExport';
 import type { DownloadWithStatus } from '../../shared/schemas/download';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
+import { PLATFORM_PROFILES, BROWSER_VERSIONS } from '../fingerprint/platformProfiles';
 import { testProxyConnection } from '../proxy/proxyTester';
 
 export interface IpcDependencies {
@@ -83,10 +84,30 @@ export function registerIpc(deps: IpcDependencies): void {
     const template = p.templateId ? deps.templates.getById(p.templateId) : null;
     return generateFingerprint({
       seed: p.seed,
-      os: template?.definition.os,
+      os: p.os ?? template?.definition.os,
       locale: template?.definition.locale,
+      osVersion: p.osVersion,
+      browserVersion: p.browserVersion,
+      screenWidth: p.screenWidth,
+      screenHeight: p.screenHeight,
+      hardwareConcurrency: p.hardwareConcurrency,
+      deviceMemory: p.deviceMemory,
+      webglVendor: p.webglVendor,
+      webglRenderer: p.webglRenderer,
     });
   });
+  handle('fingerprint:options', () => ({
+    platforms: PLATFORM_PROFILES.map((profile) => ({
+      os: profile.os,
+      osVersions: profile.osVersions,
+      platform: profile.platform,
+      screens: profile.screens,
+      hardwareConcurrencyOptions: profile.hardwareConcurrencyOptions,
+      deviceMemoryOptions: profile.deviceMemoryOptions,
+      gpuOptions: profile.gpuOptions,
+    })),
+    browserVersions: BROWSER_VERSIONS,
+  }));
   handle('fingerprint:validate', (p) => validateFingerprint(p));
   handle('fingerprint:update', (p) => deps.fingerprints.update(p.id, p));
 

@@ -7,6 +7,21 @@ export interface GenerateFingerprintOptions {
   seed: string;
   os?: 'windows' | 'macos' | 'linux';
   locale?: string;
+  /** Explicit field overrides for the "choose instead of Auto" UI — each is
+   * validated to actually belong to the resolved platform bundle where that
+   * matters (osVersion/gpu/screen), so a caller can't request e.g. an Apple
+   * GPU on a Windows profile through this path; an override that doesn't
+   * belong to the resolved OS is silently ignored (falls back to a random
+   * pick from that OS's own options) rather than producing an incoherent
+   * fingerprint or throwing on a stale UI selection. */
+  osVersion?: string;
+  browserVersion?: string;
+  screenWidth?: number;
+  screenHeight?: number;
+  hardwareConcurrency?: number;
+  deviceMemory?: number;
+  webglVendor?: string;
+  webglRenderer?: string;
 }
 
 /**
@@ -27,17 +42,42 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     : LOCALE_PROFILES;
   const locale = pick(rng, localeCandidates.length ? localeCandidates : LOCALE_PROFILES);
 
-  const screen = pick(rng, platform.screens);
-  const gpu = pick(rng, platform.gpuOptions);
-  const hardwareConcurrency = pick(rng, platform.hardwareConcurrencyOptions);
-  const deviceMemory = pick(rng, platform.deviceMemoryOptions);
+  // Each override is validated against this resolved platform's own real
+  // option lists rather than trusted blindly — see the option's own comment
+  // on GenerateFingerprintOptions for why (never lets a stale/foreign UI
+  // selection produce an incoherent fingerprint).
+  const screenOverride =
+    options.screenWidth != null && options.screenHeight != null
+      ? platform.screens.find((s) => s.width === options.screenWidth && s.height === options.screenHeight)
+      : undefined;
+  const screen = screenOverride ?? pick(rng, platform.screens);
+
+  const gpuOverride =
+    options.webglVendor != null
+      ? platform.gpuOptions.find(
+          (g) => g.vendor === options.webglVendor && (options.webglRenderer == null || g.renderer === options.webglRenderer),
+        )
+      : undefined;
+  const gpu = gpuOverride ?? pick(rng, platform.gpuOptions);
+
+  const hardwareConcurrency =
+    options.hardwareConcurrency != null && platform.hardwareConcurrencyOptions.includes(options.hardwareConcurrency)
+      ? options.hardwareConcurrency
+      : pick(rng, platform.hardwareConcurrencyOptions);
+  const deviceMemory =
+    options.deviceMemory != null && platform.deviceMemoryOptions.includes(options.deviceMemory)
+      ? options.deviceMemory
+      : pick(rng, platform.deviceMemoryOptions);
+  const osVersion =
+    options.osVersion != null && platform.osVersions.includes(options.osVersion) ? options.osVersion : platform.osVersion;
+  const browserVersion = options.browserVersion ?? platform.browserVersion;
 
   return {
     name: `${platform.os}-${locale.locale}-${options.seed.slice(0, 8)}`,
     os: platform.os,
-    osVersion: platform.osVersion,
-    browserVersion: platform.browserVersion,
-    userAgent: buildUserAgent(platform),
+    osVersion,
+    browserVersion,
+    userAgent: buildUserAgent({ ...platform, browserVersion }),
     platform: platform.platform,
     locale: locale.locale,
     languages: locale.languages,

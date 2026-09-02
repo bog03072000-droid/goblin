@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
-import type { Fingerprint, FingerprintInput, FingerprintValidationResult } from '@shared/schemas/fingerprint';
+import type {
+  Fingerprint,
+  FingerprintInput,
+  FingerprintOptionsResponse,
+  FingerprintValidationResult,
+} from '@shared/schemas/fingerprint';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
-import { FingerprintTab, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
+import { FingerprintTab, type FieldOverrides, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
 import { ProxyTab } from './profileEditor/ProxyTab';
 import { StorageTab } from './profileEditor/StorageTab';
 import { AdvancedTab } from './profileEditor/AdvancedTab';
@@ -46,6 +51,8 @@ export function ProfileEditorModal({
   const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
+  const [fieldOptions, setFieldOptions] = useState<FingerprintOptionsResponse | null>(null);
+  const [overrides, setOverrides] = useState<FieldOverrides>({});
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
   // modal (or the Reset button) can act on them instead of silently
@@ -91,10 +98,15 @@ export function ProfileEditorModal({
       const fp = await callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId });
       setFingerprint(fp);
       if (fp) resetDraft(fp);
-      const proxyList = await callApi<'proxy:list', ProxyRecord[]>('proxy:list', {});
+      setOverrides({});
+      const [proxyList, groupList, options] = await Promise.all([
+        callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}),
+        callApi<'groups:list', Group[]>('groups:list', {}),
+        callApi<'fingerprint:options', FingerprintOptionsResponse>('fingerprint:options', {}),
+      ]);
       setProxies(proxyList);
-      const groupList = await callApi<'groups:list', Group[]>('groups:list', {});
       setGroups(groupList);
+      setFieldOptions(options);
     });
   }
 
@@ -189,12 +201,16 @@ export function ProfileEditorModal({
   }
 
   /** AUTO mode: regenerates a fresh coherent bundle from a new random seed and
-   * applies it to this profile's existing fingerprint row (same id). */
-  async function regenerateAuto(): Promise<void> {
+   * applies it to this profile's existing fingerprint row (same id). Any
+   * explicit field overrides (OS/CPU/GPU/etc. picked in the UI, distinct from
+   * `draft`'s free-text manual-mode fields) win over the random pick for
+   * that field — same merge the create-modal preview already uses. */
+  async function regenerateAuto(withOverrides: FieldOverrides = overrides): Promise<void> {
     if (!fingerprint) return;
     await miscAction.run(async () => {
       const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
         seed: `${profileId}-${Date.now()}`,
+        ...withOverrides,
       });
       const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
         id: fingerprint.id,
@@ -204,6 +220,15 @@ export function ProfileEditorModal({
       resetDraft(updated);
       await runValidate(updated);
     });
+  }
+
+  /** Applying a field override immediately regenerates+saves — there is no
+   * separate "preview vs. persist" step in AUTO mode here (unlike the
+   * create-modal's not-yet-persisted draft): "Regenerate" already writes
+   * straight through, so a field choice does the same. */
+  function onOverridesChange(next: FieldOverrides): void {
+    setOverrides(next);
+    void regenerateAuto(next);
   }
 
   async function runValidate(fpArg?: Fingerprint): Promise<void> {
@@ -321,6 +346,9 @@ export function ProfileEditorModal({
               onValidate={() => void runValidate()}
               onSaveManual={() => void saveManualFingerprint()}
               onUpdateSpoofing={(patch) => void updateSpoofing(patch)}
+              fieldOptions={fieldOptions}
+              overrides={overrides}
+              onOverridesChange={onOverridesChange}
             />
           )}
 

@@ -57,3 +57,23 @@ export interface FingerprintValidationResult {
   warnings: string[];
   errors: string[];
 }
+
+/** Real, selectable option lists per OS — backs the explicit
+ * OS/version/browser/CPU/RAM/GPU/resolution pickers in FingerprintTab.tsx.
+ * Served by `fingerprint:options` straight from platformProfiles.ts (the
+ * same data the generator itself picks from), so the UI can never offer a
+ * combination the generator wouldn't also produce. */
+export interface FingerprintPlatformOptions {
+  os: Os;
+  osVersions: string[];
+  platform: string;
+  screens: Array<{ width: number; height: number }>;
+  hardwareConcurrencyOptions: number[];
+  deviceMemoryOptions: number[];
+  gpuOptions: Array<{ vendor: string; renderer: string }>;
+}
+
+export interface FingerprintOptionsResponse {
+  platforms: FingerprintPlatformOptions[];
+  browserVersions: string[];
+}

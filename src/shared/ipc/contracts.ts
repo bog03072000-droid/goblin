@@ -4,7 +4,7 @@ import {
   ProfileUpdateInputSchema,
   ProfileIdSchema,
 } from '../schemas/profile';
-import { FingerprintInputSchema } from '../schemas/fingerprint';
+import { FingerprintInputSchema, OsSchema } from '../schemas/fingerprint';
 import { ProxyInputSchema } from '../schemas/proxy';
 import { SettingsUpdateSchema } from '../schemas/settings';
 import { GroupCreateInputSchema, GroupRenameInputSchema, GroupDeleteInputSchema } from '../schemas/group';
@@ -40,7 +40,20 @@ export const IpcRequestSchemas = {
   'fingerprint:generate': z.object({
     seed: z.string().min(1),
     templateId: z.string().optional(),
+    // Explicit "choose instead of Auto" overrides — see generator.ts's
+    // GenerateFingerprintOptions for how each is validated against the
+    // resolved platform's own real option lists rather than trusted as-is.
+    os: OsSchema.optional(),
+    osVersion: z.string().optional(),
+    browserVersion: z.string().optional(),
+    screenWidth: z.number().int().optional(),
+    screenHeight: z.number().int().optional(),
+    hardwareConcurrency: z.number().int().optional(),
+    deviceMemory: z.number().int().optional(),
+    webglVendor: z.string().optional(),
+    webglRenderer: z.string().optional(),
   }),
+  'fingerprint:options': z.object({}),
   'fingerprint:validate': FingerprintInputSchema,
   'fingerprint:update': z.object({ id: z.string().uuid() }).merge(FingerprintInputSchema.partial()),
 

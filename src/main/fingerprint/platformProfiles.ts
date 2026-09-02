@@ -8,7 +8,13 @@ import type { Os } from '../../shared/schemas/fingerprint';
  */
 export interface PlatformProfile {
   os: Os;
+  /** Kept for backward compatibility with anything reading a single
+   * osVersion off a generated fingerprint — always osVersions[0]. */
   osVersion: string;
+  /** Realistic, selectable OS versions for this platform — explicit UI
+   * choice picks one directly instead of the generator always defaulting
+   * to osVersions[0]. */
+  osVersions: string[];
   platform: string;
   browserVersion: string;
   screens: Array<{ width: number; height: number }>;
@@ -17,10 +23,16 @@ export interface PlatformProfile {
   gpuOptions: Array<{ vendor: string; renderer: string }>;
 }
 
+/** Chrome versions offered for explicit selection — shared across OSes
+ * (the browser version isn't OS-specific the way GPU/platform strings
+ * are). Kept in sync with browserCompatibility.ts's own notion of "current".*/
+export const BROWSER_VERSIONS: string[] = ['126.0.0.0', '127.0.0.0', '128.0.0.0'];
+
 export const PLATFORM_PROFILES: PlatformProfile[] = [
   {
     os: 'windows',
     osVersion: '10.0',
+    osVersions: ['10.0', '11.0'],
     platform: 'Win32',
     browserVersion: '128.0.0.0',
     screens: [
@@ -39,6 +51,7 @@ export const PLATFORM_PROFILES: PlatformProfile[] = [
   {
     os: 'macos',
     osVersion: '14.5',
+    osVersions: ['13.6', '14.5', '15.1'],
     platform: 'MacIntel',
     browserVersion: '128.0.0.0',
     screens: [
@@ -55,6 +68,7 @@ export const PLATFORM_PROFILES: PlatformProfile[] = [
   {
     os: 'linux',
     osVersion: 'x86_64',
+    osVersions: ['x86_64'],
     platform: 'Linux x86_64',
     browserVersion: '128.0.0.0',
     screens: [
