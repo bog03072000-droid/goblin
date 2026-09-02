@@ -42,7 +42,11 @@ jobs:
       - name: Rebuild native modules for Electron ABI
         run: npm run rebuild:electron
       - run: npm run build
-      - run: npm run test:e2e
+      - name: E2E suite (excludes loadTest*.spec.ts — those need a DB seeded
+          by the separate, non-blocking `performance` job; see playwright.config.ts)
+        run: npm run test:e2e
+        env:
+          PF_E2E_BLOCKING_GATE: '1'
       # GitHub's job-log download endpoint needs admin rights on the repo,
       # even for a public one — confirmed directly (403 "Must have admin
       # rights to Repository") while investigating this job's first-ever
