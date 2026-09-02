@@ -1,6 +1,6 @@
 {
   "name": "profileforge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multi-profile Chromium browser with persistent isolated profiles, proxy management, and coherent fingerprint configuration.",
   "author": "GoblinAnty",
   "private": true,
