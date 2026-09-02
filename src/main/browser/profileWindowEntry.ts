@@ -187,6 +187,21 @@ export function runProfileWindowProcess(): void {
     win.webContents.on('did-attach-webview', (_event, webviewContents) => {
       applyWebrtcPolicy(webviewContents, webrtcMode);
 
+      // Real, reproducible race found via a live CI E2E failure (not a test
+      // flake): enforceFingerprint's CDP round trip below is async, and if a
+      // real navigation (the address bar, "New Tab" duplicate flow, etc.)
+      // starts before it resolves, this handler's own deferred loadURL below
+      // used to fire afterward and silently overwrite that navigation back
+      // to the default start page. Invisible on a fast dev machine — the CDP
+      // round trip resolves before anyone could type a URL — but a slower CI
+      // runner widens that window enough to lose the race consistently.
+      // Tracking any non-blank did-start-navigation lets the deferred call
+      // step aside instead of clobbering whatever already started.
+      let explicitNavigationSeen = false;
+      webviewContents.on('did-start-navigation', (navEvent) => {
+        if (navEvent.url && navEvent.url !== 'about:blank') explicitNavigationSeen = true;
+      });
+
       const fp = args.fingerprintConfig;
       enforceFingerprint(webviewContents, {
         userAgent: args.userAgent,
@@ -201,7 +216,9 @@ export function runProfileWindowProcess(): void {
           console.error('[ProfileForge] fingerprint enforcement failed:', err);
         })
         .finally(() => {
-          void webviewContents.loadURL(autoNavigateTarget);
+          if (!explicitNavigationSeen) {
+            void webviewContents.loadURL(autoNavigateTarget);
+          }
         });
     });
 
