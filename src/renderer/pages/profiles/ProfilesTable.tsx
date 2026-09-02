@@ -1,5 +1,21 @@
 import { useState } from 'react';
-import { Play, Square, RotateCw, Pencil, Copy, FileDown, Archive, Trash2 } from 'lucide-react';
+import {
+  Play,
+  Square,
+  RotateCw,
+  Pencil,
+  Copy,
+  FileDown,
+  Archive,
+  Trash2,
+  CircleCheck,
+  CircleDot,
+  Circle,
+  CircleX,
+  CircleAlert,
+  Lock,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
@@ -15,6 +31,20 @@ const PILL_VARIANT: Record<ProfileStatus, string> = {
   CRASHED: 'danger',
   ERROR: 'danger',
   LOCKED: 'lock',
+};
+
+// Real icon per status, not just color — so the difference between e.g.
+// STARTING (transitioning) and CRASHED (both render with a "warn"-adjacent
+// hue on some monitors/color-vision settings) reads at a glance from shape
+// too, not color alone.
+const PILL_ICON: Record<ProfileStatus, LucideIcon> = {
+  RUNNING: CircleCheck,
+  STOPPED: Circle,
+  STARTING: CircleDot,
+  STOPPING: CircleDot,
+  CRASHED: CircleX,
+  ERROR: CircleAlert,
+  LOCKED: Lock,
 };
 
 export function ProfilesTable({
@@ -91,7 +121,13 @@ export function ProfilesTable({
               </td>
               <td>{p.name}</td>
               <td>
-                <span className={`pill ${PILL_VARIANT[p.status]}`}>{t(STATUS_LABEL_KEYS[p.status])}</span>
+                <span className={`pill ${PILL_VARIANT[p.status]}`}>
+                  {(() => {
+                    const StatusIcon = PILL_ICON[p.status];
+                    return <StatusIcon size={12} />;
+                  })()}
+                  {t(STATUS_LABEL_KEYS[p.status])}
+                </span>
               </td>
               <td className="capitalize">{p.os}</td>
               <td>Chrome {p.browserVersion.split('.')[0]}</td>
