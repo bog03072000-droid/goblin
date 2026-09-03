@@ -21,6 +21,8 @@ export function AdvancedTab({
   const { t } = useTranslation();
   const [portDraft, setPortDraft] = useState(String(profile.automationPort ?? defaultAutomationPort ?? ''));
   const [copied, setCopied] = useState<'port' | 'token' | 'snippet' | null>(null);
+  const portNum = Number(portDraft);
+  const portInvalid = portDraft.trim() !== '' && (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535);
 
   function copy(value: string, what: 'port' | 'token' | 'snippet'): void {
     void navigator.clipboard.writeText(value).then(() => {
@@ -75,7 +77,7 @@ export function AdvancedTab({
               checked={profile.automationEnabled}
               onChange={(e) => {
                 const enabled = e.target.checked;
-                const port = enabled ? (Number(portDraft) || defaultAutomationPort || null) : profile.automationPort;
+                const port = enabled ? ((!portInvalid && Number(portDraft)) || defaultAutomationPort || null) : profile.automationPort;
                 onSaveAutomation({ automationEnabled: enabled, automationPort: port });
               }}
             />
@@ -88,17 +90,19 @@ export function AdvancedTab({
             <label className="field field-narrow">
               {t('editor.advanced.automation.port')}
               <input
-                className="mono field-input-160"
+                className={portInvalid ? 'mono field-input-160 field-input-invalid' : 'mono field-input-160'}
                 type="number"
                 min={1024}
                 max={65535}
                 value={portDraft}
                 onChange={(e) => setPortDraft(e.target.value)}
                 onBlur={() => {
+                  if (portInvalid) return;
                   const port = Number(portDraft);
                   if (port && port !== profile.automationPort) onSaveAutomation({ automationPort: port });
                 }}
               />
+              {portInvalid && <p className="field-hint field-hint-error">{t('editor.advanced.automation.portInvalid')}</p>}
             </label>
 
             <label className="field">

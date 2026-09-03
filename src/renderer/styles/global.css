@@ -429,6 +429,13 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
   margin-top: 4px;
   margin-bottom: 0;
 }
+.field-hint-error {
+  color: var(--danger);
+}
+.field-input-invalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 1px var(--danger);
+}
 
 /* ---------- Status pills ---------- */
 .pill {

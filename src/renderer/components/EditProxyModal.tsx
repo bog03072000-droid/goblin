@@ -24,9 +24,10 @@ export function EditProxyModal({ proxy, onClose, onSaved }: { proxy: ProxyRecord
     password: '',
   });
   const { error, pending, run } = useAsyncAction();
+  const portInvalid = !Number.isInteger(form.port) || form.port < 1 || form.port > 65535;
 
   async function save(): Promise<void> {
-    if (!form.name.trim() || !form.host.trim()) return;
+    if (!form.name.trim() || !form.host.trim() || portInvalid) return;
     await run(async () => {
       await callApi('proxy:update', {
         id: proxy.id,
@@ -72,10 +73,13 @@ export function EditProxyModal({ proxy, onClose, onSaved }: { proxy: ProxyRecord
           {t('proxy.portPlaceholder')}
           <input
             type="number"
+            min={1}
+            max={65535}
             value={form.port}
             onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-            className="field-input"
+            className={portInvalid ? 'field-input field-input-invalid' : 'field-input'}
           />
+          {portInvalid && <p className="field-hint field-hint-error">{t('proxy.portInvalid')}</p>}
         </label>
         <label className="field">
           {t('proxy.usernamePlaceholder')}
@@ -96,7 +100,7 @@ export function EditProxyModal({ proxy, onClose, onSaved }: { proxy: ProxyRecord
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => void save()} disabled={pending}>
+          <button className="btn btn-primary btn-sm" onClick={() => void save()} disabled={pending || portInvalid}>
             {t('common.save')}
           </button>
         </div>

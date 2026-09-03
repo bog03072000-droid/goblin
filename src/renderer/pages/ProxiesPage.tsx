@@ -27,6 +27,7 @@ export function ProxiesPage(): JSX.Element {
   const [confirmDeleteProxy, setConfirmDeleteProxy] = useState<ProxyRecord | null>(null);
   const [editingProxy, setEditingProxy] = useState<ProxyRecord | null>(null);
   const { error, run } = useAsyncAction();
+  const portInvalid = !Number.isInteger(form.port) || form.port < 1 || form.port > 65535;
 
   async function refresh(): Promise<void> {
     await run(async () => {
@@ -40,7 +41,7 @@ export function ProxiesPage(): JSX.Element {
   }, []);
 
   async function createProxy(): Promise<void> {
-    if (!form.name.trim() || !form.host.trim()) return;
+    if (!form.name.trim() || !form.host.trim() || portInvalid) return;
     await run(async () => {
       await callApi('proxy:create', {
         name: form.name.trim(),
@@ -82,9 +83,12 @@ export function ProxiesPage(): JSX.Element {
         <input
           placeholder={t('proxy.portPlaceholder')}
           type="number"
+          min={1}
+          max={65535}
           value={form.port}
           onChange={(e) => setForm({ ...form, port: Number(e.target.value) })}
-          className="w-80"
+          className={portInvalid ? 'w-80 field-input-invalid' : 'w-80'}
+          title={portInvalid ? t('proxy.portInvalid') : undefined}
         />
         <input placeholder={t('proxy.usernamePlaceholder')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
         <input
@@ -93,13 +97,14 @@ export function ProxiesPage(): JSX.Element {
           value={form.password}
           onChange={(e) => setForm({ ...form, password: e.target.value })}
         />
-        <button className="btn btn-primary" onClick={() => void createProxy()}>
+        <button className="btn btn-primary" onClick={() => void createProxy()} disabled={portInvalid}>
           <PlugZap size={14} strokeWidth={2.25} />
           {t('proxy.create')}
         </button>
       </div>
       <div className="content">
         {error && <div className="banner banner-error">{error}</div>}
+        {portInvalid && <div className="banner banner-error">{t('proxy.portInvalid')}</div>}
         <div className="panel">
         <table>
           <thead>
