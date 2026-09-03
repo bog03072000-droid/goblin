@@ -30,6 +30,13 @@ describe('SettingsRepository', () => {
     expect(repo.getAll()).toEqual(updated);
   });
 
+  it('persists an explicit theme choice, defaulting to "system" when never set', () => {
+    expect(repo.getAll().theme).toBe('system');
+    const updated = repo.update({ theme: 'light' });
+    expect(updated.theme).toBe('light');
+    expect(repo.getAll().theme).toBe('light');
+  });
+
   it('does not let a corrupted individual key break reading the rest', () => {
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('cacheLimitMb', '{not-json');
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('autoCacheCleanup', 'true');

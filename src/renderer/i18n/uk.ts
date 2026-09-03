@@ -337,7 +337,10 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.language.label': 'Мова',
   'settings.language.uk': 'Українська',
   'settings.language.en': 'English',
-  'settings.theme.note': 'Світлої теми поки немає — темний інтерфейс це свідомий вибір дизайну, а не відсутня функція. Див. розділ Design у README.',
+  'settings.theme.label': 'Тема',
+  'settings.theme.system': 'Системна',
+  'settings.theme.light': 'Світла',
+  'settings.theme.dark': 'Темна',
   'settings.saved': 'Збережено. Деякі налаштування (апаратне прискорення) набудуть чинності після перезапуску.',
   'settings.encryptionWarning':
     'Шифрування облікових даних на рівні ОС недоступне на цій машині — паролі проксі зберігаються у форматі з plaintext-міткою, а не зашифровані.',

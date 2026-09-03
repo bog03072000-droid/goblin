@@ -4,6 +4,7 @@ import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, LOCALES, type Locale } from '../i18n';
+import { applyTheme } from '../theme';
 
 export function SettingsPage(): JSX.Element {
   const { t, locale, setLocale } = useTranslation();
@@ -37,6 +38,11 @@ export function SettingsPage(): JSX.Element {
   function changeLanguage(next: Locale): void {
     setLocale(next);
     void save({ language: next });
+  }
+
+  function changeTheme(next: Settings['theme']): void {
+    applyTheme(next);
+    void save({ theme: next });
   }
 
   if (!settings) return <div className="content">{t('common.loading')}</div>;
@@ -73,7 +79,18 @@ export function SettingsPage(): JSX.Element {
             ))}
           </select>
         </label>
-        <p className="text-dim text-xs mt-8 mb-0">{t('settings.theme.note')}</p>
+        <label className="field">
+          {t('settings.theme.label')}
+          <select
+            value={settings.theme}
+            onChange={(e) => changeTheme(e.target.value as Settings['theme'])}
+            className="field-input-220"
+          >
+            <option value="system">{t('settings.theme.system')}</option>
+            <option value="light">{t('settings.theme.light')}</option>
+            <option value="dark">{t('settings.theme.dark')}</option>
+          </select>
+        </label>
       </div>
 
       <div className="panel">

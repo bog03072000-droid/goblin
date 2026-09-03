@@ -335,7 +335,10 @@ const en = {
   'settings.language.label': 'Language',
   'settings.language.uk': 'Українська',
   'settings.language.en': 'English',
-  'settings.theme.note': "There's no light theme yet — the dark interface is a deliberate design choice, not a missing feature. See the README's Design section.",
+  'settings.theme.label': 'Theme',
+  'settings.theme.system': 'System',
+  'settings.theme.light': 'Light',
+  'settings.theme.dark': 'Dark',
   'settings.saved': 'Saved. Some settings (hardware acceleration) take effect on next launch.',
   'settings.encryptionWarning':
     'OS-level credential encryption is unavailable on this machine — proxy passwords are being stored in a plaintext-marked format instead, not encrypted.',

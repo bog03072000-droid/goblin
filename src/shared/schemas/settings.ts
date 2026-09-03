@@ -2,9 +2,15 @@ import { z } from 'zod';
 
 export const StartupBehaviorSchema = z.enum(['blank', 'lastSession', 'showProfileList']);
 export const LanguageSchema = z.enum(['uk', 'en']);
+// 'system' follows the OS's prefers-color-scheme automatically (App.tsx
+// leaves no [data-theme] attribute set, letting the CSS media query decide)
+// — 'light'/'dark' force an explicit choice regardless of the OS. See
+// global.css's :root[data-theme] blocks and README.md's Design section.
+export const ThemeSchema = z.enum(['system', 'light', 'dark']);
 
 export const SettingsSchema = z.object({
   language: LanguageSchema.default('uk'),
+  theme: ThemeSchema.default('system'),
   hardwareAcceleration: z.boolean().default(true),
   autoCacheCleanup: z.boolean().default(false),
   cacheLimitMb: z.number().int().min(50).max(20000).default(2000),

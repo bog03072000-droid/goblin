@@ -7,6 +7,7 @@ import { LogsPage } from './pages/LogsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { I18nProvider, useTranslation, DEFAULT_LOCALE, type Locale } from './i18n';
 import { callApi } from './services/api';
+import { applyTheme } from './theme';
 import type { Settings } from '@shared/schemas/settings';
 import goblinLogo from './assets/goblin-logo.png';
 
@@ -18,7 +19,10 @@ export function App(): JSX.Element | null {
   const [locale, setLocale] = useState<Locale | null>(null);
 
   useEffect(() => {
-    void callApi<'settings:get', Settings>('settings:get', {}).then((s) => setLocale(s.language));
+    void callApi<'settings:get', Settings>('settings:get', {}).then((s) => {
+      setLocale(s.language);
+      applyTheme(s.theme);
+    });
   }, []);
 
   if (locale === null) return null;

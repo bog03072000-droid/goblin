@@ -167,7 +167,14 @@
 :root {
   color-scheme: dark;
 
-  /* GoblinAnty design system tokens — single source of truth. */
+  /* GoblinAnty design system tokens — single source of truth. Dark is the
+   * default palette (bare :root, no media/attribute guard) since that's
+   * this app's own established identity — see README.md's Design section.
+   * --ink stays a fixed dark literal in EVERY theme (see .btn-primary
+   * below, which uses it as dark text on the bright lime button — that
+   * needs to stay dark regardless of the surrounding theme) — --bg is the
+   * separate, theme-varying page-background token body{} actually uses. */
+  --bg: #121412;
   --ink: #121412;
   --char: #1c1f1c;
   --char-raised: #23271f;
@@ -188,11 +195,57 @@
   --ease: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Light palette — sage-tinted neutrals (not neutral gray) so it still reads
+ * as GoblinAnty rather than a generic light-mode flip, keeping the same
+ * --lime brand accent (good contrast on both light and dark surfaces, so it
+ * needs no per-theme adjustment). Applied two ways: automatically when the
+ * OS prefers light AND the user hasn't explicitly forced dark (the
+ * :not([data-theme="dark"]) guard), or explicitly via the Settings theme
+ * picker (App.tsx sets [data-theme] on <html>; see settings.theme). */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f8f3;
+    --char: #ffffff;
+    --char-raised: #f0f3ec;
+    --char-hi: #e3ead9;
+    --stroke: #d3dbc8;
+    --paper: #1c1f1a;
+    --ash: #5b6355;
+    --ash-dim: #8a9280;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f8f3;
+  --char: #ffffff;
+  --char-raised: #f0f3ec;
+  --char-hi: #e3ead9;
+  --stroke: #d3dbc8;
+  --paper: #1c1f1a;
+  --ash: #5b6355;
+  --ash-dim: #8a9280;
+}
+/* Explicit dark selection always wins, even on a light-OS system — the bare
+ * :root above already provides these values, this exists so the override
+ * is complete/symmetric rather than relying on the media query's absence. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121412;
+  --char: #1c1f1c;
+  --char-raised: #23271f;
+  --char-hi: #2b3126;
+  --stroke: #343b30;
+  --paper: #f2f5ee;
+  --ash: #aab3a2;
+  --ash-dim: #7c8577;
+}
+
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--bg);
   color: var(--paper);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;

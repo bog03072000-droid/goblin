@@ -262,17 +262,20 @@ it (same Advanced tab) immediately invalidates the old one.
 
 ## Design
 
-The UI is dark-only, by design, not an unfinished light theme. A profile
-manager like this one is a tool people keep open for long sessions
-alongside many other windows — a dark surface consistent with the app's own
-branding (`src/renderer/styles/global.css`'s custom palette, GoblinAnty's own
-icon/logo work) was chosen deliberately over building and maintaining a
-second full palette for a use case (extended desktop-app sessions) where
-dark is already the common default across comparable tools. If light-theme
-support becomes a real user request, it's a matter of adding a
-`prefers-color-scheme: light` token set to the existing CSS variable
-structure — the styling is already token-based, not hardcoded per
-component — rather than a rewrite.
+Dark was the only theme through v0.1/v0.2 by deliberate choice, not an
+unfinished light theme — a profile manager like this one is a tool people
+keep open for long sessions alongside many other windows, and dark is
+already the common default across comparable tools. Light theme support
+was added once it became a real request: `src/renderer/styles/global.css`
+defines a second, sage-tinted (not neutral-gray) palette under the same
+custom-property structure the dark palette already used, applied either
+automatically (`prefers-color-scheme: light`) or via an explicit choice in
+Settings → Theme (`src/renderer/theme.ts` sets `[data-theme]` on the
+document root; `System`/`Light`/`Dark`, defaulting to `System`) — exactly
+the mechanism this section used to describe as the likely future path, not
+a rewrite. Component CSS itself needed no changes: every rule already read
+color through a token, never a hardcoded hex, which is what made this a
+palette addition instead of a redesign.
 
 ## Known limitations (current build)
 
