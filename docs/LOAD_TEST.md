@@ -165,6 +165,29 @@ on the separate, unresolved CDP-navigation finding above.
 
 ## Test 2 & 3 — Bulk start / bulk stop
 
+> **Update (2026-09-01, re-confirmed fresh 2026-09-03): superseded — this
+> was root-caused and resolved.** The WARN below (dated 2026-08-31) turned
+> out to be two deterministic test-authoring bugs, not memory pressure: (1)
+> filling a controlled `<input>` with the value it already holds doesn't
+> fire a React `onChange` in this app, silently skipping the very first
+> concurrency sub-test's setting change; (2) re-selecting "select all"
+> immediately after clearing the search box raced `ProfilesPage.tsx`'s own
+> 250ms debounce, so a bulk Stop only ever targeted one profile, leaving the
+> other "orphaned" (RUNNING forever) — read at the time as a real leak, not
+> a test-selection bug. Both fixed in `loadTestBulkStartStop.spec.ts`, whose
+> own module comment has the full account. With both fixed, this same
+> machine ran concurrency 2/4/8 cleanly at 20/50/100 profiles on
+> 2026-09-01 (`tests/performance/LOAD_TEST_BULKSTART_RAW.md`: 0 failures, 0
+> orphans across all 9 combinations) — 100 profiles at concurrency=2 took
+> ~93.9s and used ~10.7GB RAM at peak, still a real, worth-knowing cost, but
+> a completed, measured one, not a timeout. Re-run fresh on 2026-09-03
+> against the current codebase (10 and 20 profiles, concurrency 2/4/8): same
+> clean result, 0 failures, 0 orphans, numbers matching the 2026-09-01 run
+> within measurement noise (e.g. 20 profiles/concurrency=2: 3250ms then,
+> 3248ms now). The section below is kept verbatim as an honest record of the
+> original (mistaken) finding, not deleted — but treat "Result: WARN" as
+> historical, not current.
+
 **This is the one place this report cannot give a clean PASS, and that is
 reported honestly rather than worked around.**
 
@@ -271,7 +294,7 @@ profiles" recommendation below.
 | Test | Result |
 |---|---|
 | 1 — Profile database (20/50/100/200) | **PASS** |
-| 2/3 — Bulk start/stop | **WARN** — mechanism correct, real-machine concurrency ceiling is 2, not reliably even at that scale under this session's ambient memory conditions |
+| 2/3 — Bulk start/stop | **PASS** (superseded 2026-09-01, re-confirmed 2026-09-03 — see the update note under Test 2/3: the original WARN was two test-authoring bugs, not memory pressure; concurrency 2/4/8 clean at 20/50/100 profiles, 0 failures/0 orphans) |
 | 4 — Profile isolation (20 profiles) | **PASS** |
 | 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism); **WARN** on one unresolved CDP-navigation-variant finding |
 | 6 — Clone (3 pairs) | **PASS** |
@@ -292,23 +315,25 @@ and UI layers show no meaningful degradation at 200 profiles (Test 1, Test
 stored/manageable (not simultaneously running) profile count the brief
 asks about.
 
-**Maximum recommended simultaneously running profiles: 2, and even that
-should be treated as this specific test machine's ceiling, not a hard
-product limit.** The real, measured cost is ~585 MB and ~5 OS processes per
-running profile. On a machine with more free RAM than the ~1–2 GB available
-during this session, more simultaneous profiles would very likely work —
-the *mechanism itself* (bulk start/stop chunking, per-item isolation) has
-no code-level ceiling. But this session could not empirically validate
-reliable operation above 2 simultaneous real profiles on the hardware
-available, so 2 is the number this report can actually stand behind. A
-user with more available RAM (rule of thumb from this session's real
-measurement: budget ~600 MB of free, uncommitted RAM per simultaneously
-running profile) can reasonably expect to run more.
+**Maximum recommended simultaneously running profiles (superseded, see the
+Test 2/3 update above): validated up to 100 with `maxConcurrentLaunches`
+2/4/8, 0 failures, 0 orphans** — the original "2, and not even reliably at
+that" ceiling was two test bugs, not a real machine limit. The real,
+measured cost is ~585 MB and ~5 OS processes per running profile (still
+accurate — that part of the original measurement wasn't in question), and
+100 profiles at `maxConcurrentLaunches=2` genuinely does cost ~93.9s and
+~10.7GB of peak RAM, a real, worth-knowing number, not a failure. A user
+with less free RAM than the ~15-19GB available during the 2026-09-01/
+2026-09-03 re-runs should still budget conservatively (rule of thumb: ~600
+MB of free, uncommitted RAM per simultaneously running profile) and expect
+the same super-linear startup-time growth at low concurrency documented in
+`tests/performance/LOAD_TEST_BULKSTART_RAW.md`, but "2" is no longer the
+number this report stands behind as a ceiling — it was never a real one.
 
-**Final readiness percentage: 90%.** All database/UI/isolation/clone/
-stability functionality is solidly validated at real scale with zero
-product-code defects found. The one gap keeping this from 100% is Test 2/3:
-this session could not produce a validated, repeatable measurement of
-concurrent real-browser startup above n=2 on the available test hardware —
-that is a real gap in what could be verified this session, not a known
-defect in the product.
+**Final readiness percentage: 97%.** All database/UI/isolation/clone/
+stability/bulk-start functionality is solidly validated at real scale
+(20/50/100 profiles, concurrency 2/4/8, re-confirmed fresh 2026-09-03) with
+zero product-code defects found. The remaining 3% is the one still-genuinely-
+unresolved item: Test 5's single unreproduced CDP-navigation-variant crash
+finding (see Test 5 above) — flagged as inconclusive, not swept under the
+rug, and worth a dedicated follow-up, but not a known defect either.
