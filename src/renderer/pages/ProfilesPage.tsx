@@ -18,13 +18,13 @@ import { useTranslation } from '../i18n';
 import {
   ProfilesToolbar,
   UNGROUPED_FILTER,
-  NO_PROXY_FILTER,
   type StatusFilter,
   type SortKey,
   type SortDirection,
 } from './profiles/ProfilesToolbar';
 import { BulkToolbar } from './profiles/BulkToolbar';
 import { ProfilesTable } from './profiles/ProfilesTable';
+import { computeVisibleProfiles } from './profiles/visibleProfiles';
 
 export function ProfilesPage(): JSX.Element {
   const { t } = useTranslation();
@@ -100,24 +100,10 @@ export function ProfilesPage(): JSX.Element {
 
   const allTags = useMemo(() => Array.from(new Set(profiles.flatMap((p) => p.tags))).sort(), [profiles]);
 
-  const visibleProfiles = useMemo(() => {
-    let filtered = statusFilter === 'ALL' ? profiles : profiles.filter((p) => p.status === statusFilter);
-    // The backend has no "ungrouped"/"no proxy" filter concept (the id param
-    // is either a real id or "match anything") — cheap enough to filter
-    // client-side rather than teach the IPC contract two special sentinels.
-    if (groupFilter === UNGROUPED_FILTER) filtered = filtered.filter((p) => p.groupId === null);
-    if (proxyFilter === NO_PROXY_FILTER) filtered = filtered.filter((p) => p.proxyId === null);
-    else if (proxyFilter) filtered = filtered.filter((p) => p.proxyId === proxyFilter);
-    const sorted = [...filtered];
-    sorted.sort((a, b) => {
-      let cmp: number;
-      if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortKey === 'status') cmp = a.status.localeCompare(b.status);
-      else cmp = (a.lastStartedAt ?? '').localeCompare(b.lastStartedAt ?? '');
-      return sortDirection === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [profiles, statusFilter, sortKey, sortDirection, groupFilter, proxyFilter]);
+  const visibleProfiles = useMemo(
+    () => computeVisibleProfiles(profiles, { statusFilter, groupFilter, proxyFilter }, { sortKey, sortDirection }),
+    [profiles, statusFilter, sortKey, sortDirection, groupFilter, proxyFilter],
+  );
 
   /** Shows a bulk action's own specific success message (unchanged from
    * before — "Tag added to 2 profile(s)", not a generic count) AND, when any
