@@ -1,4 +1,4 @@
-import { ArrowUp, ArrowDown, FolderCog, ArrowLeftRight, UserPlus, Zap, Upload, ArchiveRestore, FileDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, FolderCog, ArrowLeftRight, UserPlus, SlidersHorizontal, Upload, ArchiveRestore, FileDown } from 'lucide-react';
 import type { ProfileStatus } from '@shared/schemas/profile';
 import type { Template } from '@shared/schemas/template';
 import type { Group } from '@shared/schemas/group';
@@ -201,18 +201,26 @@ export function ProfilesToolbar({
         value={newTags}
         onChange={(e) => onNewTagsChange(e.target.value)}
       />
+      {/* Primary/default action: creates a profile immediately with an
+          auto-generated fingerprint (the old "Quick create" behavior) — most
+          profile creation doesn't need per-field fingerprint/proxy tuning up
+          front, so that's now the one-click path under the familiar "New
+          Profile" label instead of a secondary button next to it. */}
       <button
-        className="btn btn-ghost"
+        className="btn btn-primary"
         onClick={onQuickCreate}
         disabled={quickCreatePending}
         title={t('profiles.quickCreate.hint')}
       >
-        <Zap size={14} strokeWidth={2.25} />
-        {t('profiles.quickCreate')}
-      </button>
-      <button className="btn btn-primary" onClick={onCreate}>
         <UserPlus size={14} strokeWidth={2.25} />
         {t('profiles.create')}
+      </button>
+      {/* Secondary action: the full multi-tab config modal (fingerprint
+          overrides, proxy assignment, manual mode) — nothing written until
+          its own "Create profile" confirms, same as before this swap. */}
+      <button className="btn btn-ghost" onClick={onCreate} title={t('profiles.customSetup.hint')}>
+        <SlidersHorizontal size={14} strokeWidth={2.25} />
+        {t('profiles.customSetup')}
       </button>
       <button className="btn btn-ghost" onClick={onImport}>
         <Upload size={14} strokeWidth={2.25} />

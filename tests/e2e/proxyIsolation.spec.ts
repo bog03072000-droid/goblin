@@ -72,7 +72,7 @@ test('three profiles with proxy A / proxy B / no proxy each use only their own c
 
     const createProfileWithProxy = async (name: string, proxyLabel: string | null): Promise<void> => {
       await window.getByPlaceholder('New profile name').fill(name);
-      await window.getByRole('button', { name: 'New Profile' }).click();
+      await window.getByRole('button', { name: 'Custom setup' }).click();
       await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
       const row = window.locator('tr', { has: window.locator('td', { hasText: name }) });
       await expect(row).toBeVisible({ timeout: 15_000 });

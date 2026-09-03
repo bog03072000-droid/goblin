@@ -103,7 +103,7 @@ test('the complete practical workflow: create, configure, browse, download, rest
     // --- Create profile with group assigned inline ---
     await window.getByPlaceholder('New profile name').fill('Flow Profile');
     await window.locator('select[title="Move to group…"]').selectOption({ label: 'Flow Group' });
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = window.locator('tr', { has: window.locator('td', { hasText: /^Flow Profile$/ }) });
     await expect(row).toBeVisible({ timeout: 15_000 });

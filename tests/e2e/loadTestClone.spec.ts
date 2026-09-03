@@ -115,7 +115,7 @@ for (let i = 0; i < PAIRS; i++) {
     await window.getByPlaceholder('New profile name').fill(name);
     await window.locator('select[title="Move to group…"]').selectOption({ label: `Load Clone Group ${i}` });
     await window.getByPlaceholder('Tags (comma-separated)').fill(`load-clone-tag-${i}`);
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const sourceRow = window.locator('tr', { has: window.locator('td', { hasText: new RegExp(`^${name}$`) }) });
     await expect(sourceRow).toBeVisible({ timeout: 15_000 });

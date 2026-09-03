@@ -62,7 +62,7 @@ async function connectToShell(): Promise<Page> {
 
 test('real multi-tab browser window: new/close/switch/duplicate tabs, navigation, devtools', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Tabs Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Tabs Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -190,7 +190,7 @@ async function setAndReadCookie(shell: Page, value: string | null): Promise<stri
 test('two profiles never share cookies — each gets its own real, isolated session partition', async () => {
   // Profile A: start, navigate, set a cookie.
   await window.getByPlaceholder('New profile name').fill('E2E Isolation Profile A');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const rowA = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Isolation Profile A' }) });
   await expect(rowA).toBeVisible({ timeout: 15_000 });
@@ -213,7 +213,7 @@ test('two profiles never share cookies — each gets its own real, isolated sess
   // Profile B: a completely different profile — same origin, fresh session
   // partition. If it can see Profile A's cookie, session isolation is broken.
   await window.getByPlaceholder('New profile name').fill('E2E Isolation Profile B');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const rowB = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Isolation Profile B' }) });
   await expect(rowB).toBeVisible({ timeout: 15_000 });

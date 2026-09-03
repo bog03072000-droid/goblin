@@ -109,7 +109,7 @@ test.beforeAll(async ({}, testInfo) => {
 
   for (let i = 0; i < PROFILE_COUNT; i++) {
     await window.getByPlaceholder('New profile name').fill(`Load Bulk Profile ${i}`);
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   }
   await expect(window.locator('tr', { has: window.locator('td', { hasText: /^Load Bulk Profile/ }) })).toHaveCount(

@@ -36,7 +36,7 @@ test.afterAll(async () => {
 
 test('cookie editor: gated while stopped, then real add/list/delete against a running profile session', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Cookie Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Cookie Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });

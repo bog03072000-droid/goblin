@@ -87,7 +87,7 @@ async function connectToShell(): Promise<Page> {
 
 test('a real download is detected, saved under the profile\'s own storage, and shown in the Downloads panel', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Downloads Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Downloads Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -128,7 +128,7 @@ test('the same completed download is persisted to SQLite and shows up in the man
   const dirsBefore = new Set(fs.readdirSync(profilesRoot));
 
   await window.getByPlaceholder('New profile name').fill('E2E Downloads History Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Downloads History Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });

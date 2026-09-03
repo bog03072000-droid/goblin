@@ -24,7 +24,7 @@ test.afterAll(async () => {
 
 test('groups can be created, a profile moved into one, renamed, filtered, and deleted — via a real modal, not prompt()', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Group Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Group Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -91,10 +91,10 @@ test('multiple selected profiles can be bulk-assigned to a group at once', async
   await expect(modal).toBeHidden();
 
   await window.getByPlaceholder('New profile name').fill('E2E Bulk Group Profile A');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await window.getByPlaceholder('New profile name').fill('E2E Bulk Group Profile B');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const rowA = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Bulk Group Profile A' }) });
   const rowB = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Bulk Group Profile B' }) });

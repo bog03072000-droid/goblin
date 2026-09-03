@@ -75,7 +75,7 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   const dirsBefore = new Set(fs.readdirSync(profilesRoot));
 
   await window.getByPlaceholder('New profile name').fill('E2E Fingerprint Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Fingerprint Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -157,7 +157,7 @@ test('canvas noise is profile-specific: two profiles reading identical content g
   const dirsBefore = new Set(fs.readdirSync(profilesRoot));
 
   await window.getByPlaceholder('New profile name').fill('E2E Fingerprint Profile 2');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Fingerprint Profile 2' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -188,7 +188,7 @@ test('webglSpoofingMode "spoof" actually overrides the observed vendor/renderer,
   const dirsBefore = new Set(fs.readdirSync(profilesRoot));
 
   await window.getByPlaceholder('New profile name').fill('E2E WebGL Spoof Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E WebGL Spoof Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -312,7 +312,7 @@ test('honest gap, verified in this test suite (not just an external capture some
 
     await window.getByText('Profiles', { exact: true }).click();
     await window.getByPlaceholder('New profile name').fill('E2E SW WebGL Leak Profile');
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E SW WebGL Leak Profile' }) });
     await expect(row).toBeVisible({ timeout: 15_000 });

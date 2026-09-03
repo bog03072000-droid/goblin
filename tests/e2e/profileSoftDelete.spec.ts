@@ -39,7 +39,7 @@ test.afterAll(async () => {
 async function createProfile(name: string): Promise<void> {
   await window.getByText('Profiles', { exact: true }).click();
   await window.getByPlaceholder('New profile name').fill(name);
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: name })).toBeVisible({ timeout: 10_000 });
 }

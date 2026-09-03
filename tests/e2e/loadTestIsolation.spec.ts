@@ -184,7 +184,7 @@ for (const [tierIdx, tier] of TIERS.entries()) {
 
       for (let i = 0; i < tier.size; i++) {
         await window.getByPlaceholder('New profile name').fill(`Isolation Profile ${tierStartIndex + i}`);
-        await window.getByRole('button', { name: 'New Profile' }).click();
+        await window.getByRole('button', { name: 'Custom setup' }).click();
         await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
       }
       await expect(

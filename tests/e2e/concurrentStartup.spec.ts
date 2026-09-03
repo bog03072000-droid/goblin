@@ -45,7 +45,7 @@ test(`bulk-starting ${PROFILE_COUNT} profiles with maxConcurrentLaunches=${CONCU
 
   for (let i = 0; i < PROFILE_COUNT; i++) {
     await window.getByPlaceholder('New profile name').fill(`Concurrency Profile ${i}`);
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   }
   await expect(window.locator('tr', { has: window.locator('td', { hasText: /^Concurrency Profile/ }) })).toHaveCount(

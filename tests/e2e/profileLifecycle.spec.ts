@@ -42,7 +42,7 @@ test('manager window loads the Profiles page with an empty list', async () => {
 
 test('creating a profile adds it to the list with STOPPED status', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile One');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile One' })).toBeVisible({ timeout: 15_000 });
   await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Profile One' }) })).toHaveAttribute(
@@ -53,7 +53,7 @@ test('creating a profile adds it to the list with STOPPED status', async () => {
 
 test('Quick create adds a profile immediately, with no modal', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Quick Profile');
-  await window.getByRole('button', { name: 'Quick create' }).click();
+  await window.getByRole('button', { name: 'New Profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Quick Profile' })).toBeVisible({ timeout: 15_000 });
   await expect(window.locator('tr', { has: window.locator('td', { hasText: 'E2E Quick Profile' }) })).toHaveAttribute(
     'data-status',
@@ -66,14 +66,14 @@ test('Quick create adds a profile immediately, with no modal', async () => {
 test('Quick create with an empty name falls back to an auto-generated one', async () => {
   await window.getByPlaceholder('New profile name').fill('');
   const rowsBefore = await window.locator('tbody tr').count();
-  await window.getByRole('button', { name: 'Quick create' }).click();
+  await window.getByRole('button', { name: 'New Profile' }).click();
   await expect.poll(() => window.locator('tbody tr').count()).toBeGreaterThan(rowsBefore);
   await expect(window.locator('.modal-panel')).toHaveCount(0);
 });
 
 test('search filters the profile list', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Profile Two');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: 'E2E Profile Two' })).toBeVisible({ timeout: 15_000 });
 

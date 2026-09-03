@@ -24,7 +24,7 @@ test('a profile, its configuration, and its storage all survive closing and reop
     await window.waitForLoadState('domcontentloaded');
 
     await window.getByPlaceholder('New profile name').fill('Persistent Profile');
-    await window.getByRole('button', { name: 'New Profile' }).click();
+    await window.getByRole('button', { name: 'Custom setup' }).click();
     await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
     const row = () => window.locator('tr', { has: window.locator('td', { hasText: 'Persistent Profile' }) });
     await expect(row()).toBeVisible({ timeout: 15_000 });

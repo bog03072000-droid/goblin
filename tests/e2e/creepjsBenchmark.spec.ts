@@ -84,7 +84,7 @@ async function execInWebview(webview: ReturnType<Page['locator']>, script: strin
 
 test('a real GoblinAnty profile scanned by CreepJS — captures real, unedited results', async () => {
   await window.getByPlaceholder('New profile name').fill('CreepJS Benchmark Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'CreepJS Benchmark Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });

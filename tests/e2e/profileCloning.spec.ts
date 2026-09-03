@@ -96,7 +96,7 @@ test('cloning a profile copies its config (proxy/group/tags/fingerprint identity
   await window.locator('select[title="Move to group…"]').selectOption({ label: 'Clone Test Group' });
   await window.locator('select[title="Proxy"]').selectOption({ label: 'Clone Test Proxy' });
   await window.getByPlaceholder('Tags (comma-separated)').fill('clone-tag');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   // Exact match: "Clone Source" is also a substring of "Clone Source
   // (clone)", which a plain substring hasText filter would match too once

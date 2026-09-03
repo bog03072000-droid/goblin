@@ -52,7 +52,7 @@ test('creating a profile with group/proxy/tags set inline applies them immediate
   await window.locator('select[title="Move to group…"]').selectOption({ label: 'Polish Group' });
   await window.locator('select[title="Proxy"]').selectOption({ label: 'Polish Proxy' });
   await window.getByPlaceholder('Tags (comma-separated)').fill('vip, fresh');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
 
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'Fully Configured Profile' }) });
@@ -95,7 +95,7 @@ test('editing a proxy changes it in place, no delete+recreate needed', async () 
 
 test('filter by proxy narrows the list to only profiles using that proxy', async () => {
   await window.getByPlaceholder('New profile name').fill('No Proxy Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   await expect(window.locator('td', { hasText: 'No Proxy Profile' })).toBeVisible({ timeout: 15_000 });
 

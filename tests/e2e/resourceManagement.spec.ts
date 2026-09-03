@@ -60,7 +60,7 @@ test.afterAll(async () => {
 
 test(`${CYCLES} repeated start/stop cycles on one profile leave no orphan process, no locked directory, and a responsive UI`, async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Resource Cycle Profile');
-  await window.getByRole('button', { name: 'New Profile' }).click();
+  await window.getByRole('button', { name: 'Custom setup' }).click();
   await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
   const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Resource Cycle Profile' }) });
   await expect(row).toBeVisible({ timeout: 15_000 });
@@ -106,7 +106,7 @@ test(`${CYCLES} repeated start/stop cycles on one profile leave no orphan proces
 
   // The manager window itself is still fully interactive after all of this —
   // no stale/leaked IPC handler or runaway timer has degraded it.
-  await expect(window.getByRole('button', { name: 'New Profile' })).toBeEnabled();
+  await expect(window.getByRole('button', { name: 'Custom setup' })).toBeEnabled();
   await window.getByText('Settings', { exact: true }).click();
   await expect(window.getByText('Keyboard Shortcuts')).toBeVisible({ timeout: 5_000 });
 });
