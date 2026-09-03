@@ -135,19 +135,99 @@ electron-updater's own native OS notification — clicking it calls
 ## Code signing (you'll need to do this part yourself)
 
 The installer this project currently produces is **unsigned** — Windows
-SmartScreen will warn anyone who downloads it that it's from an "unknown
-publisher." Fixing that requires a real code-signing certificate, which
-isn't something that can be automated here (it costs money and requires
-verifying your identity/organization with a Certificate Authority). Once you
-have one:
+SmartScreen shows anyone who downloads it an "unrecognized app" warning
+("Windows protected your PC"), and without any signature at all, Windows
+also shows a separate "Unknown Publisher" prompt on launch. These are two
+different warnings from two different checks, and it matters which one
+each option below actually clears:
 
-1. **Get a certificate.** An "OV" (Organization Validation) or "EV" (Extended
-   Validation) Authenticode certificate from a CA such as DigiCert, Sectigo,
-   or SSL.com — a few hundred dollars/year. EV certs skip SmartScreen's
-   reputation-building period; OV certs still need to build up reputation
-   over time before warnings stop, but are cheaper. You'll receive either a
-   `.pfx`/`.p12` file (password-protected) or a physical/cloud HSM token
-   (EV certs are often hardware-bound and can't just be a portable file).
+- **"Unknown Publisher"** is an *identity* check: is this file signed by
+  someone Windows can verify against a trusted root? A valid signature
+  from any CA in Windows' trusted root store clears this immediately,
+  self-signed or not.
+- **SmartScreen's "unrecognized app"** is a *reputation* check: has this
+  exact file been downloaded/run by enough people that Microsoft's
+  telemetry treats it as known-good? A regular (OV) signature only starts
+  that reputation clock — it does not skip it. An EV signature, or a
+  service that itself vouches for identity the way EV does, skips it.
+
+Researched this stage — no cert purchased, no signing actually done here,
+this is deliberately a decision left to whoever manages a real release:
+
+### Option A: self-signed certificate — free, but doesn't fix the problem for public downloads
+
+A self-signed Authenticode cert (`New-SelfSignedCertificate` in
+PowerShell, or `signtool` with a locally-generated one) is free and takes
+minutes, but it does **not** clear either warning for someone downloading
+the app from the internet: the cert doesn't chain to a trusted root, so
+Windows still shows "Unknown Publisher," and SmartScreen still shows its
+own warning on top of that (verified via current documentation, not
+tested on this machine — self-signing changes *which* warning wording
+appears, not whether one appears). It only
+actually helps in one real scenario: **internal/organizational
+distribution**, where an IT admin pushes your self-signed public
+certificate into every target machine's Trusted Root Certification
+Authorities and Trusted Publishers stores via Group Policy ahead of time
+— at that point, and only for those specific machines, both warnings
+clear. That's not this project's situation (public download, no fleet to
+push a GPO to), and asking random public users to manually import an
+unknown self-signed root certificate into their own Trusted Root store is
+a real security anti-pattern worth naming plainly, not a workaround to
+recommend — a trusted root you control can sign *anything*, so training
+users to add one on request is the same move a real attacker would want.
+Documented here for completeness/honesty, not as this project's answer.
+
+### Option B: Azure Trusted Signing (Microsoft) — recommended: cheapest option that actually works
+
+Microsoft's own managed signing service (renamed **Azure Artifact
+Signing** in 2026; still commonly called Trusted Signing) validates your
+identity once, then issues short-lived certificates (~72h, auto-renewed
+daily) from Microsoft's own CA on every signing call — no `.pfx` file or
+hardware token to manage yourself. As of mid-2026 pricing: **Basic tier,
+$9.99/month, up to 5,000 signatures/month** (a hobby/small-project
+release cadence needs nowhere near that) — a small fraction of a
+traditional OV cert's per-year cost, billed monthly instead of a yearly
+lump sum. It's backed by Microsoft's own reputation, which is the
+practical reason it's worth naming as a *specific* recommendation instead
+of just "get any cert": it clears "Unknown Publisher" like any signed
+binary would, and in practice behaves like an EV cert for SmartScreen
+purposes without needing an EV cert's hardware-token handling.
+
+Caveat found while researching, not assumed: **individual-developer
+enrollment is currently limited to the US and Canada** (organizational
+enrollment covers the US, Canada, EU, and UK) — relevant if whoever signs
+a real release isn't based in one of those regions; check
+[Microsoft's current eligibility docs](https://azure.microsoft.com/en-us/products/artifact-signing)
+before committing to this path over Option C.
+
+Once enrolled (Azure subscription + identity validation through the Azure
+portal, a one-time setup outside this repo), electron-builder's
+`build.win.sign` custom-hook mechanism (same mechanism Option C's
+hardware-token certs need — see step 4 below) is how you'd wire it in,
+since Trusted Signing issues short-lived certs on demand rather than a
+static `.pfx` `CSC_LINK` could point at.
+
+### Option C: a traditional OV/EV Authenticode certificate from a CA
+
+The conventional path, still the right call for an organization that
+wants a certificate it fully owns rather than a subscription service:
+
+1. **Get a certificate.** An "OV" (Organization Validation) or "EV"
+   (Extended Validation) Authenticode certificate from a CA such as
+   DigiCert, Sectigo, or SSL.com. Current market pricing (2026): **OV
+   certs from ~$219/year** (Sectigo/Comodo) up to **~$400/year**
+   (DigiCert); **EV certs from ~$369/year** (GoGetSSL) up to **~$685/year**
+   (DigiCert) — EV is the pricier tier across every CA, in exchange for
+   skipping SmartScreen's reputation-building period the way Option B
+   also does. OV certs are cheaper but still need to build up download
+   reputation over time before SmartScreen warnings stop, same as an
+   unsigned build, just faster once it does. Note: as of March 2026, the
+   CA/Browser Forum capped publicly-trusted certificate validity at 460
+   days (~15 months) industry-wide, down from the previous 39-month
+   maximum — budget for more frequent renewal than older guides assume.
+   You'll receive either a `.pfx`/`.p12` file (password-protected) or a
+   physical/cloud HSM token (EV certs are often hardware-bound and can't
+   just be a portable file).
 2. **Set two environment variables** before running `npm run package` —
    electron-builder picks these up automatically, **no code or config change
    needed**:
@@ -172,6 +252,15 @@ have one:
    Node script) rather than the `CSC_LINK`/`CSC_KEY_PASSWORD` pair above —
    consult your CA's Windows/electron-builder signing instructions if you go
    this route, since the exact invocation is CA- and token-specific.
+
+### Recommendation for this project
+
+**Option B (Azure Trusted Signing), if the signer is US/Canada-eligible** —
+lowest cost by a wide margin, no hardware token to manage, and clears
+SmartScreen without an EV reputation-building wait. Fall back to **Option
+C with an OV cert** otherwise; skip Option A for anything meant for public
+download, it's documented above for honesty about what it does and
+doesn't solve, not as a real fix.
 
 ## Known dev-environment quirks
 
