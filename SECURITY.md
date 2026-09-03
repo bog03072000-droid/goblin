@@ -52,6 +52,69 @@ genuinely enforced in the running browser versus stored-and-validated-only.
   additional courtesy, not a new way for a hung process to avoid being
   terminated.
 
+## Automation API
+
+Any profile can optionally expose a Chrome DevTools Protocol (CDP) endpoint
+while it's running, so it can be driven directly by Puppeteer, Playwright,
+Selenium, or a raw CDP client (`src/main/browser/automationProxy.ts`,
+enabled per profile from the editor's Advanced tab, off by default). This is
+a new local network listener, so it's worth stating precisely what it does
+and does not expose:
+
+- **Raw CDP has no authentication anywhere in its own wire protocol.**
+  `--remote-debugging-port`'s HTTP JSON endpoints and its WebSocket both
+  accept any local connection with no token slot to add one to — this is
+  true of every Chromium-based browser's debug port, not specific to this
+  app. A token that isn't enforced at the actual connection level would be
+  security theater, not a real access control.
+- So this puts a real authenticated reverse proxy in front of Chromium's own
+  debug port instead of exposing it directly. The **real** internal CDP port
+  is bound to `127.0.0.1` on a random ephemeral port that is never told to
+  anything but this proxy — not stored, not logged, not reachable from the
+  configured (user-visible) port. The **configured** port — the one the user
+  sets and a client connects to — is this proxy's own listener, also bound
+  to `127.0.0.1` only, never `0.0.0.0`; it is not reachable from another
+  machine on the network under any configuration this app exposes.
+- **Every request is token-checked before anything is forwarded**: each HTTP
+  request and the WebSocket upgrade handshake must present the correct
+  token (as a `?token=` query parameter or an `Authorization: Bearer`
+  header), compared with `crypto.timingSafeEqual` (length-checked first so
+  unequal-length inputs never reach it, rather than throwing). A missing or
+  wrong token gets a real `401` before the request ever reaches the real CDP
+  port — verified end to end in `tests/e2e/automationApi.spec.ts` (real HTTP
+  requests from a separate OS-level process against a real running profile)
+  and `tests/unit/automationProxy.test.ts` (including a raw WebSocket
+  upgrade attempt with no token, confirmed rejected before any byte reaches
+  the internal port).
+- Once authenticated, the WebSocket connection is proxied as a raw TCP byte
+  pipe — CDP's own frame protocol is never parsed or reinterpreted by this
+  proxy in either direction, so the proxy itself can't become a source of
+  CDP-compatibility bugs, and it can't selectively filter or rewrite CDP
+  commands after the token check either (this is an all-or-nothing access
+  control on the whole debug port, not a fine-grained permission system).
+- The token is generated per profile (`ProfileRepository.regenerateAutomationToken()`,
+  a `crypto.randomUUID()`-based value), **encrypted at rest via the same
+  `credentialVault` used for proxy passwords** (see Credential storage
+  below — including its plaintext-fallback caveat), and is never part of
+  the plain `Profile` object returned by `profiles:get`/`profiles:list`.
+  It's handed to the child process over its own `stdin` on launch, the same
+  mechanism proxy credentials already use, not as a CLI argument or
+  environment variable (both stay readable by any other process running as
+  the same OS user for the child's entire lifetime).
+- **Practical implication**: anyone with the token can drive that profile's
+  browser exactly as if they were Puppeteer/Playwright — read cookies,
+  execute JavaScript on any open page, see everything the profile does.
+  Treat it like a password (the profile editor's Automation panel says so
+  explicitly). Regenerating it (same Advanced tab) immediately invalidates
+  the old one.
+- **What this does not change**: automation being enabled does not alter a
+  profile's fingerprint configuration. A profile actually being driven over
+  this API is, however, genuinely CDP-automation-detectable the same way
+  any Puppeteer/Playwright session already is by a fingerprinting script
+  that checks for it (`Runtime.enable` side effects and similar) — this is
+  inherent to CDP automation itself, not a gap this feature introduces or
+  could realistically close; see `docs/FINGERPRINT_AUDIT.md`.
+
 ## IPC validation
 
 Every IPC channel is registered in `src/main/ipc/registerIpc.ts` against a Zod
