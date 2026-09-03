@@ -4,28 +4,62 @@ import { FieldOverridesPicker, type FieldOverrides } from './FieldOverridesPicke
 
 export type { FieldOverrides };
 
-export const FIELD_ROW_KEYS: Array<[TranslationKey, keyof Fingerprint]> = [
-  ['editor.fingerprint.row.os', 'os'],
-  ['editor.fingerprint.row.osVersion', 'osVersion'],
-  ['editor.fingerprint.row.browserVersion', 'browserVersion'],
-  ['editor.fingerprint.field.platform', 'platform'],
-  ['editor.fingerprint.field.userAgent', 'userAgent'],
-  ['editor.fingerprint.field.locale', 'locale'],
-  ['editor.fingerprint.field.languages', 'languages'],
-  ['editor.fingerprint.field.timezone', 'timezone'],
-  ['editor.fingerprint.field.screenWidth', 'screenWidth'],
-  ['editor.fingerprint.field.deviceScaleFactor', 'deviceScaleFactor'],
-  ['editor.fingerprint.field.hardwareConcurrency', 'hardwareConcurrency'],
-  ['editor.fingerprint.row.deviceMemory', 'deviceMemory'],
-  ['editor.fingerprint.row.webglVendor', 'webglVendor'],
-  ['editor.fingerprint.row.webglRenderer', 'webglRenderer'],
-  ['editor.fingerprint.row.canvasMode', 'canvasMode'],
-  ['editor.fingerprint.row.audioMode', 'audioMode'],
-  ['editor.fingerprint.field.webrtcMode', 'webrtcMode'],
-  ['editor.fingerprint.row.fontsMode', 'fontsMode'],
-  ['editor.fingerprint.row.mediaDevicesMode', 'mediaDevicesMode'],
-  ['editor.fingerprint.spoofing.webglLabel', 'webglSpoofingMode'],
-  ['editor.fingerprint.row.seed', 'seed'],
+/** Same four field-categories FieldOverridesPicker groups its selects into
+ * (Platform/Hardware/Display), plus two more this read-only view also
+ * covers that the picker doesn't touch (Identity & Locale, Privacy &
+ * Spoofing) — kept as separate cards instead of one 21-row table so the
+ * read-only Auto-mode view and the explicit-selection picker read as the
+ * same design language, not two different UIs bolted together. */
+export const FIELD_GROUPS: Array<{
+  titleKey: TranslationKey;
+  rows: Array<[TranslationKey, keyof Fingerprint]>;
+}> = [
+  {
+    titleKey: 'editor.fingerprint.picker.group.platform',
+    rows: [
+      ['editor.fingerprint.row.os', 'os'],
+      ['editor.fingerprint.row.osVersion', 'osVersion'],
+      ['editor.fingerprint.row.browserVersion', 'browserVersion'],
+      ['editor.fingerprint.field.platform', 'platform'],
+      ['editor.fingerprint.field.userAgent', 'userAgent'],
+      ['editor.fingerprint.row.seed', 'seed'],
+    ],
+  },
+  {
+    titleKey: 'editor.fingerprint.group.identity',
+    rows: [
+      ['editor.fingerprint.field.locale', 'locale'],
+      ['editor.fingerprint.field.languages', 'languages'],
+      ['editor.fingerprint.field.timezone', 'timezone'],
+    ],
+  },
+  {
+    titleKey: 'editor.fingerprint.picker.group.hardware',
+    rows: [
+      ['editor.fingerprint.field.hardwareConcurrency', 'hardwareConcurrency'],
+      ['editor.fingerprint.row.deviceMemory', 'deviceMemory'],
+      ['editor.fingerprint.row.webglVendor', 'webglVendor'],
+      ['editor.fingerprint.row.webglRenderer', 'webglRenderer'],
+    ],
+  },
+  {
+    titleKey: 'editor.fingerprint.picker.group.display',
+    rows: [
+      ['editor.fingerprint.field.screenWidth', 'screenWidth'],
+      ['editor.fingerprint.field.deviceScaleFactor', 'deviceScaleFactor'],
+    ],
+  },
+  {
+    titleKey: 'editor.fingerprint.group.privacy',
+    rows: [
+      ['editor.fingerprint.row.canvasMode', 'canvasMode'],
+      ['editor.fingerprint.row.audioMode', 'audioMode'],
+      ['editor.fingerprint.field.webrtcMode', 'webrtcMode'],
+      ['editor.fingerprint.row.fontsMode', 'fontsMode'],
+      ['editor.fingerprint.row.mediaDevicesMode', 'mediaDevicesMode'],
+      ['editor.fingerprint.spoofing.webglLabel', 'webglSpoofingMode'],
+    ],
+  },
 ];
 
 export type FingerprintDraft = {
@@ -118,22 +152,29 @@ export function FingerprintTab({
       </div>
 
       {!manualMode && (
-        <table>
-          <tbody>
-            {FIELD_ROW_KEYS.map(([labelKey, key]) => (
-              <tr key={key}>
-                <th className="w-180">{t(labelKey)}</th>
-                <td className="mono">
-                  {key === 'languages'
-                    ? fingerprint.languages.join(', ')
-                    : key === 'screenWidth'
-                      ? `${fingerprint.screenWidth} x ${fingerprint.screenHeight}`
-                      : String(fingerprint[key])}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="fp-card-grid">
+          {FIELD_GROUPS.map((group) => (
+            <div key={group.titleKey} className="panel fp-field-card">
+              <h5 className="fp-picker-group-title">{t(group.titleKey)}</h5>
+              <table>
+                <tbody>
+                  {group.rows.map(([labelKey, key]) => (
+                    <tr key={key}>
+                      <th className="w-180">{t(labelKey)}</th>
+                      <td className="mono">
+                        {key === 'languages'
+                          ? fingerprint.languages.join(', ')
+                          : key === 'screenWidth'
+                            ? `${fingerprint.screenWidth} x ${fingerprint.screenHeight}`
+                            : String(fingerprint[key])}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       )}
 
       {!manualMode && fieldOptions && overrides !== undefined && onOverridesChange && (

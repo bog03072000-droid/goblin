@@ -217,6 +217,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.picker.group.platform': 'Платформа',
   'editor.fingerprint.picker.group.hardware': "Обладнання",
   'editor.fingerprint.picker.group.display': 'Дисплей',
+  'editor.fingerprint.group.identity': 'Локаль та ідентичність',
+  'editor.fingerprint.group.privacy': 'Приватність та спуфінг',
   'editor.unsavedChanges.confirm': 'У вас є незбережені зміни. Закрити без збереження?',
   'editor.unsavedChanges.discard': 'Скасувати зміни',
   'editor.proxy.assigned': 'Призначений проксі',

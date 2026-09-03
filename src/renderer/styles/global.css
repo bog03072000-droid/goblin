@@ -662,6 +662,20 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
   letter-spacing: 0.05em;
 }
 
+/* Read-only Auto-mode fingerprint view: one card per field category
+   (Platform/Identity/Hardware/Display/Privacy — same categories
+   FieldOverridesPicker groups its own selects into) instead of one long
+   flat table, so the two views read as the same design language. */
+.fp-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.fp-field-card { margin-bottom: 0; }
+.fp-field-card table { margin-top: 4px; }
+.fp-field-card th, .fp-field-card td { padding: 6px 8px; font-size: 12px; }
+
 .brand-logo { border-radius: 8px; }
 .update-banner { margin: 12px 20px 0; display: flex; align-items: center; gap: 12px; }
 

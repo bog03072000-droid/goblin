@@ -215,6 +215,8 @@ const en = {
   'editor.fingerprint.picker.group.platform': 'Platform',
   'editor.fingerprint.picker.group.hardware': 'Hardware',
   'editor.fingerprint.picker.group.display': 'Display',
+  'editor.fingerprint.group.identity': 'Identity & Locale',
+  'editor.fingerprint.group.privacy': 'Privacy & Spoofing',
   'editor.unsavedChanges.confirm': 'You have unsaved changes. Close without saving?',
   'editor.unsavedChanges.discard': 'Discard changes',
   'editor.proxy.assigned': 'Assigned proxy',
