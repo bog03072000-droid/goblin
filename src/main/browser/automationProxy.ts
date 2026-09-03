@@ -40,6 +40,51 @@ function timingSafeTokenMatch(provided: string, expected: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+/** Limits repeated bad-token attempts from the same source within a rolling
+ * window. "Loopback-only" narrows WHO can reach this port, not how many
+ * guesses they get once they're on the machine — any other local process
+ * (malware, a compromised browser extension with localhost fetch access,
+ * etc.) can still hit it, and the token is the only thing standing between
+ * it and full control of the browser session (see this module's own top
+ * comment). The token itself is long and random enough that brute-forcing
+ * it outright isn't realistic even unthrottled, but this still closes off
+ * cheap scanning/hammering and is standard defense-in-depth for anything
+ * token-gated, regardless of how strong the token is. */
+export class AuthRateLimiter {
+  private readonly attempts = new Map<string, { count: number; windowStart: number }>();
+
+  constructor(
+    private readonly maxAttempts = 20,
+    private readonly windowMs = 60_000,
+  ) {}
+
+  /** Whether `source` is currently blocked, without recording anything. */
+  isBlocked(source: string): boolean {
+    const entry = this.attempts.get(source);
+    if (!entry || Date.now() - entry.windowStart > this.windowMs) return false;
+    return entry.count >= this.maxAttempts;
+  }
+
+  /** Records one failed auth attempt for `source`, starting (or restarting,
+   * if the previous window has expired) its window as needed. */
+  recordFailure(source: string): void {
+    const now = Date.now();
+    const entry = this.attempts.get(source);
+    if (!entry || now - entry.windowStart > this.windowMs) {
+      this.attempts.set(source, { count: 1, windowStart: now });
+    } else {
+      entry.count++;
+    }
+  }
+
+  /** Clears a source's record on successful auth, so a client that mistyped
+   * a token a few times isn't punished for the rest of the window once it
+   * gets it right. */
+  recordSuccess(source: string): void {
+    this.attempts.delete(source);
+  }
+}
+
 function extractToken(req: IncomingMessage): string | null {
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   const queryToken = url.searchParams.get('token');
@@ -109,16 +154,30 @@ function rewriteCdpJson(body: string, proxyPort: number, internalPort: number, t
  * own WebSocket framing is never parsed or reinterpreted, only forwarded,
  * so this proxy can't itself become a source of CDP-protocol bugs.
  */
-export function startAutomationProxy(params: { port: number; internalPort: number; token: string }): Promise<AutomationProxyHandle> {
+export function startAutomationProxy(params: {
+  port: number;
+  internalPort: number;
+  token: string;
+  rateLimiter?: AuthRateLimiter;
+}): Promise<AutomationProxyHandle> {
   const { port, internalPort, token } = params;
+  const rateLimiter = params.rateLimiter ?? new AuthRateLimiter();
 
   function handleHttp(req: IncomingMessage, res: ServerResponse): void {
+    const source = req.socket.remoteAddress ?? 'unknown';
+    if (rateLimiter.isBlocked(source)) {
+      res.writeHead(429, { 'content-type': 'text/plain', 'retry-after': '60' });
+      res.end('Too Many Requests: too many failed automation-token attempts, try again later');
+      return;
+    }
     const provided = extractToken(req);
     if (!provided || !timingSafeTokenMatch(provided, token)) {
+      rateLimiter.recordFailure(source);
       res.writeHead(401, { 'content-type': 'text/plain' });
       res.end('Unauthorized: missing or invalid automation token');
       return;
     }
+    rateLimiter.recordSuccess(source);
     const upstream = http.request(
       { host: '127.0.0.1', port: internalPort, path: req.url, method: req.method },
       (upstreamRes) => {
@@ -141,12 +200,20 @@ export function startAutomationProxy(params: { port: number; internalPort: numbe
   const server = http.createServer(handleHttp);
 
   server.on('upgrade', (req: IncomingMessage, clientSocket: net.Socket, head: Buffer) => {
+    const source = clientSocket.remoteAddress ?? 'unknown';
+    if (rateLimiter.isBlocked(source)) {
+      clientSocket.write('HTTP/1.1 429 Too Many Requests\r\nRetry-After: 60\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
     const provided = extractToken(req);
     if (!provided || !timingSafeTokenMatch(provided, token)) {
+      rateLimiter.recordFailure(source);
       clientSocket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       clientSocket.destroy();
       return;
     }
+    rateLimiter.recordSuccess(source);
     const targetSocket = net.connect(internalPort, '127.0.0.1', () => {
       // Replay the original upgrade request line + headers verbatim (minus
       // the query string, which carries the token the real CDP endpoint
