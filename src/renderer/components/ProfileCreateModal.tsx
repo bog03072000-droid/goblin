@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
-import type { Fingerprint, FingerprintInput, FingerprintValidationResult, FingerprintOptionsResponse } from '@shared/schemas/fingerprint';
+import type { Fingerprint, FingerprintInput } from '@shared/schemas/fingerprint';
 import type { ProxyRecord, ProxyProtocol } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import type { Template } from '@shared/schemas/template';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { useFingerprintPreview } from '../hooks/useFingerprintPreview';
 import { useTranslation } from '../i18n';
 import { FingerprintTab, type FingerprintDraft, type SpoofingPatch, type FieldOverrides } from './profileEditor/FingerprintTab';
 
@@ -80,9 +81,6 @@ export function ProfileCreateModal({
   const [fingerprint, setFingerprint] = useState<Fingerprint | null>(null);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
   const [manualMode, setManualMode] = useState(false);
-  const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
-  const [fieldOptions, setFieldOptions] = useState<FingerprintOptionsResponse | null>(null);
-  const [overrides, setOverrides] = useState<FieldOverrides>({});
 
   const [showAddProxy, setShowAddProxy] = useState(false);
   const [proxyForm, setProxyForm] = useState({
@@ -100,31 +98,29 @@ export function ProfileCreateModal({
   const createAction = useAsyncAction();
   const error = loadAction.error ?? addProxyAction.error ?? miscAction.error ?? createAction.error;
 
-  async function generatePreview(forTemplateId: string, withOverrides: FieldOverrides = overrides): Promise<void> {
-    const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
-      seed: `new-profile-${Date.now()}`,
-      templateId: forTemplateId || undefined,
-      ...withOverrides,
-    });
-    const fp = toDraftFingerprint(generated);
-    setFingerprint(fp);
-    setDraft(draftFromFingerprint(fp));
-    setValidation(null);
-  }
+  // Nothing under fingerprint.id === '__draft__' is ever persisted — every
+  // freshly generated fingerprint here just becomes the local draft (and
+  // clears validation, handled by the hook itself), unlike
+  // ProfileEditorModal's onGenerated, which writes straight to the DB.
+  const { fieldOptions, overrides, setOverrides, validation, generatePreview, runValidate } = useFingerprintPreview(
+    (generated) => {
+      const fp = toDraftFingerprint(generated);
+      setFingerprint(fp);
+      setDraft(draftFromFingerprint(fp));
+    },
+  );
 
   async function load(): Promise<void> {
     await loadAction.run(async () => {
-      const [groupList, proxyList, templateList, options] = await Promise.all([
+      const [groupList, proxyList, templateList] = await Promise.all([
         callApi<'groups:list', Group[]>('groups:list', {}),
         callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}),
         callApi<'templates:list', Template[]>('templates:list', {}),
-        callApi<'fingerprint:options', FingerprintOptionsResponse>('fingerprint:options', {}),
       ]);
       setGroups(groupList);
       setProxies(proxyList);
       setTemplates(templateList);
-      setFieldOptions(options);
-      await generatePreview(initialTemplateId);
+      await generatePreview(`new-profile-${Date.now()}`, initialTemplateId);
     });
   }
 
@@ -135,45 +131,12 @@ export function ProfileCreateModal({
 
   function onTemplateChange(next: string): void {
     setTemplateId(next);
-    void miscAction.run(() => generatePreview(next));
+    void miscAction.run(() => generatePreview(`new-profile-${Date.now()}`, next));
   }
 
   function onOverridesChange(next: FieldOverrides): void {
     setOverrides(next);
-    void miscAction.run(() => generatePreview(templateId, next));
-  }
-
-  async function runValidate(fpArg?: Fingerprint): Promise<void> {
-    const source = fpArg ?? fingerprint;
-    if (!source) return;
-    await miscAction.run(async () => {
-      const result = await callApi<'fingerprint:validate', FingerprintValidationResult>('fingerprint:validate', {
-        name: source.name,
-        os: source.os,
-        osVersion: source.osVersion,
-        browserVersion: source.browserVersion,
-        userAgent: source.userAgent,
-        platform: source.platform,
-        locale: source.locale,
-        languages: source.languages,
-        timezone: source.timezone,
-        screenWidth: source.screenWidth,
-        screenHeight: source.screenHeight,
-        deviceScaleFactor: source.deviceScaleFactor,
-        hardwareConcurrency: source.hardwareConcurrency,
-        deviceMemory: source.deviceMemory,
-        webglVendor: source.webglVendor,
-        webglRenderer: source.webglRenderer,
-        canvasMode: source.canvasMode,
-        audioMode: source.audioMode,
-        webrtcMode: source.webrtcMode,
-        fontsMode: source.fontsMode,
-        mediaDevicesMode: source.mediaDevicesMode,
-        webglSpoofingMode: source.webglSpoofingMode,
-        seed: source.seed,
-      });
-      setValidation(result);
-    });
+    void miscAction.run(() => generatePreview(`new-profile-${Date.now()}`, templateId, next));
   }
 
   /** Applies the manual-mode draft fields onto the local (not-yet-persisted)
@@ -359,8 +322,8 @@ export function ProfileCreateModal({
                 validation={validation}
                 saving={false}
                 spoofingSaving={false}
-                onRegenerate={() => void miscAction.run(() => generatePreview(templateId))}
-                onValidate={() => void runValidate()}
+                onRegenerate={() => void miscAction.run(() => generatePreview(`new-profile-${Date.now()}`, templateId))}
+                onValidate={() => void runValidate(fingerprint)}
                 onSaveManual={applyManualDraft}
                 onUpdateSpoofing={updateSpoofingLocal}
                 fieldOptions={fieldOptions}

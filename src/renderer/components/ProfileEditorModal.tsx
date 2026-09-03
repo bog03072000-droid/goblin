@@ -1,17 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
 import type { Settings } from '@shared/schemas/settings';
-import type {
-  Fingerprint,
-  FingerprintInput,
-  FingerprintOptionsResponse,
-  FingerprintValidationResult,
-} from '@shared/schemas/fingerprint';
+import type { Fingerprint } from '@shared/schemas/fingerprint';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
+import { useFingerprintPreview, validateFingerprintPreview } from '../hooks/useFingerprintPreview';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
 import { FingerprintTab, type FieldOverrides, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
@@ -50,11 +46,8 @@ export function ProfileEditorModal({
   const [tagsText, setTagsText] = useState('');
   const [groupId, setGroupId] = useState('');
   const [proxyId, setProxyId] = useState('');
-  const [validation, setValidation] = useState<FingerprintValidationResult | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
-  const [fieldOptions, setFieldOptions] = useState<FingerprintOptionsResponse | null>(null);
-  const [overrides, setOverrides] = useState<FieldOverrides>({});
   const [automationToken, setAutomationToken] = useState<string | null>(null);
   const [defaultAutomationPort, setDefaultAutomationPort] = useState<number | null>(null);
   const [cookies, setCookies] = useState<CookieInfo[] | null>(null);
@@ -86,6 +79,24 @@ export function ProfileEditorModal({
   const error =
     loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error ?? automationAction.error ?? cookiesAction.error;
 
+  // AUTO mode here has no separate "preview vs. persist" step (unlike the
+  // create-modal's not-yet-persisted draft): a freshly generated fingerprint
+  // is written straight to this profile's existing fingerprint row via
+  // fingerprint:update, then validated — same merge shape fingerprint:update
+  // already uses for post-creation edits.
+  const { fieldOptions, overrides, setOverrides, validation, setValidation, generatePreview, runValidate } = useFingerprintPreview(
+    async (generated) => {
+      if (!fingerprint) return;
+      const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
+        id: fingerprint.id,
+        ...generated,
+      });
+      setFingerprint(updated);
+      resetDraft(updated);
+      setValidation(await validateFingerprintPreview(updated));
+    },
+  );
+
   async function load(): Promise<void> {
     await loadAction.run(async () => {
       const p = await callApi<'profiles:get', Profile | null>('profiles:get', { id: profileId });
@@ -107,14 +118,12 @@ export function ProfileEditorModal({
       setFingerprint(fp);
       if (fp) resetDraft(fp);
       setOverrides({});
-      const [proxyList, groupList, options] = await Promise.all([
+      const [proxyList, groupList] = await Promise.all([
         callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}),
         callApi<'groups:list', Group[]>('groups:list', {}),
-        callApi<'fingerprint:options', FingerprintOptionsResponse>('fingerprint:options', {}),
       ]);
       setProxies(proxyList);
       setGroups(groupList);
-      setFieldOptions(options);
       const tokenResult = await callApi<'profiles:getAutomationToken', { token: string | null }>(
         'profiles:getAutomationToken',
         { id: profileId },
@@ -240,30 +249,20 @@ export function ProfileEditorModal({
       });
       setFingerprint(updated);
       resetDraft(updated);
-      await runValidate(updated);
+      setValidation(await validateFingerprintPreview(updated));
     });
   }
 
-  /** AUTO mode: regenerates a fresh coherent bundle from a new random seed and
-   * applies it to this profile's existing fingerprint row (same id). Any
-   * explicit field overrides (OS/CPU/GPU/etc. picked in the UI, distinct from
-   * `draft`'s free-text manual-mode fields) win over the random pick for
-   * that field — same merge the create-modal preview already uses. */
+  /** AUTO mode: regenerates a fresh coherent bundle from a new random seed
+   * and applies it to this profile's existing fingerprint row (same id) —
+   * persistence/validation happens inside useFingerprintPreview's
+   * onGenerated callback above. Any explicit field overrides (OS/CPU/GPU/
+   * etc. picked in the UI, distinct from `draft`'s free-text manual-mode
+   * fields) win over the random pick for that field — same merge the
+   * create-modal preview uses. */
   async function regenerateAuto(withOverrides: FieldOverrides = overrides): Promise<void> {
     if (!fingerprint) return;
-    await miscAction.run(async () => {
-      const generated = await callApi<'fingerprint:generate', FingerprintInput>('fingerprint:generate', {
-        seed: `${profileId}-${Date.now()}`,
-        ...withOverrides,
-      });
-      const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
-        id: fingerprint.id,
-        ...generated,
-      });
-      setFingerprint(updated);
-      resetDraft(updated);
-      await runValidate(updated);
-    });
+    await miscAction.run(() => generatePreview(`${profileId}-${Date.now()}`, undefined, withOverrides));
   }
 
   /** Applying a field override immediately regenerates+saves — there is no
@@ -273,39 +272,6 @@ export function ProfileEditorModal({
   function onOverridesChange(next: FieldOverrides): void {
     setOverrides(next);
     void regenerateAuto(next);
-  }
-
-  async function runValidate(fpArg?: Fingerprint): Promise<void> {
-    const source = fpArg ?? fingerprint;
-    if (!source) return;
-    await miscAction.run(async () => {
-      const result = await callApi<'fingerprint:validate', FingerprintValidationResult>('fingerprint:validate', {
-        name: source.name,
-        os: source.os,
-        osVersion: source.osVersion,
-        browserVersion: source.browserVersion,
-        userAgent: source.userAgent,
-        platform: source.platform,
-        locale: source.locale,
-        languages: source.languages,
-        timezone: source.timezone,
-        screenWidth: source.screenWidth,
-        screenHeight: source.screenHeight,
-        deviceScaleFactor: source.deviceScaleFactor,
-        hardwareConcurrency: source.hardwareConcurrency,
-        deviceMemory: source.deviceMemory,
-        webglVendor: source.webglVendor,
-        webglRenderer: source.webglRenderer,
-        canvasMode: source.canvasMode,
-        audioMode: source.audioMode,
-        webrtcMode: source.webrtcMode,
-        fontsMode: source.fontsMode,
-        mediaDevicesMode: source.mediaDevicesMode,
-        webglSpoofingMode: source.webglSpoofingMode,
-        seed: source.seed,
-      });
-      setValidation(result);
-    });
   }
 
   async function clearCache(): Promise<void> {
@@ -419,7 +385,7 @@ export function ProfileEditorModal({
               saving={saveAction.pending}
               spoofingSaving={spoofingAction.pending}
               onRegenerate={() => void regenerateAuto()}
-              onValidate={() => void runValidate()}
+              onValidate={() => void runValidate(fingerprint)}
               onSaveManual={() => void saveManualFingerprint()}
               onUpdateSpoofing={(patch) => void updateSpoofing(patch)}
               fieldOptions={fieldOptions}
