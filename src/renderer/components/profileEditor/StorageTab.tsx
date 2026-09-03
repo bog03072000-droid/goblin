@@ -7,6 +7,12 @@ import { useTranslation } from '../../i18n';
 const EMPTY_DRAFT = { url: '', name: '', value: '', secure: true, httpOnly: false, persist: false };
 const EMPTY_LS_DRAFT = { key: '', value: '' };
 
+// Below this many rows a plain table stays easier to scan (dense, sortable
+// by eye); past it the fixed row height wastes space and a card per entry
+// reads better — same .fp-card-grid/.fp-field-card pattern FingerprintTab.tsx
+// uses for its field groups.
+const CARD_GRID_THRESHOLD = 8;
+
 function AddCookieForm({ onAdd }: { onAdd: (input: CookieSetInput) => void }): JSX.Element {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(EMPTY_DRAFT);
@@ -171,7 +177,7 @@ export function StorageTab({
 
             {cookies && cookies.length === 0 && <p className="text-dim text-sm">{t('editor.storage.cookies.empty')}</p>}
 
-            {cookies && cookies.length > 0 && (
+            {cookies && cookies.length > 0 && cookies.length <= CARD_GRID_THRESHOLD && (
               <table>
                 <thead>
                   <tr>
@@ -202,6 +208,42 @@ export function StorageTab({
                   ))}
                 </tbody>
               </table>
+            )}
+
+            {cookies && cookies.length > CARD_GRID_THRESHOLD && (
+              <div className="fp-card-grid">
+                {cookies.map((cookie) => (
+                  <div key={`${cookie.domain ?? ''}|${cookie.path ?? '/'}|${cookie.name}`} className="panel fp-field-card">
+                    <div className="fp-toolbar mb-0">
+                      <h5 className="fp-picker-group-title mono">{cookie.name}</h5>
+                      <div className="flex-1" />
+                      <button className="btn btn-danger-ghost btn-sm" type="button" onClick={() => onRemoveCookie(cookie)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <table>
+                      <tbody>
+                        <tr>
+                          <th className="w-180">{t('editor.storage.cookies.domain')}</th>
+                          <td className="mono">{cookie.domain}</td>
+                        </tr>
+                        <tr>
+                          <th>{t('editor.storage.cookies.value')}</th>
+                          <td className="mono" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cookie.value}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>{t('editor.storage.cookies.expires')}</th>
+                          <td className="mono">
+                            {cookie.expirationDate ? new Date(cookie.expirationDate * 1000).toLocaleDateString() : t('editor.storage.cookies.session')}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}
@@ -235,7 +277,7 @@ export function StorageTab({
               <p className="text-dim text-sm">{t('editor.storage.localStorage.empty')}</p>
             )}
 
-            {localStorageItems && localStorageItems.length > 0 && (
+            {localStorageItems && localStorageItems.length > 0 && localStorageItems.length <= CARD_GRID_THRESHOLD && (
               <table>
                 <thead>
                   <tr>
@@ -260,6 +302,32 @@ export function StorageTab({
                   ))}
                 </tbody>
               </table>
+            )}
+
+            {localStorageItems && localStorageItems.length > CARD_GRID_THRESHOLD && (
+              <div className="fp-card-grid">
+                {localStorageItems.map((item) => (
+                  <div key={item.key} className="panel fp-field-card">
+                    <div className="fp-toolbar mb-0">
+                      <h5 className="fp-picker-group-title mono">{item.key}</h5>
+                      <div className="flex-1" />
+                      <button className="btn btn-danger-ghost btn-sm" type="button" onClick={() => onRemoveLocalStorageItem(item.key)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <table>
+                      <tbody>
+                        <tr>
+                          <th className="w-180">{t('editor.storage.localStorage.value')}</th>
+                          <td className="mono" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.value}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}
