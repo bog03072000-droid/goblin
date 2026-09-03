@@ -5,6 +5,7 @@ import type { Fingerprint } from '@shared/schemas/fingerprint';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
+import type { LocalStorageEntry, LocalStorageSetInput } from '@shared/schemas/localStorageEntry';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useFingerprintPreview, validateFingerprintPreview } from '../hooks/useFingerprintPreview';
@@ -51,6 +52,8 @@ export function ProfileEditorModal({
   const [automationToken, setAutomationToken] = useState<string | null>(null);
   const [defaultAutomationPort, setDefaultAutomationPort] = useState<number | null>(null);
   const [cookies, setCookies] = useState<CookieInfo[] | null>(null);
+  const [localStorageItems, setLocalStorageItems] = useState<LocalStorageEntry[] | null>(null);
+  const [localStorageOrigin, setLocalStorageOrigin] = useState<string | null>(null);
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
   // modal (or the Reset button) can act on them instead of silently
@@ -76,8 +79,15 @@ export function ProfileEditorModal({
   const spoofingAction = useAsyncAction();
   const automationAction = useAsyncAction();
   const cookiesAction = useAsyncAction();
+  const localStorageAction = useAsyncAction();
   const error =
-    loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error ?? automationAction.error ?? cookiesAction.error;
+    loadAction.error ??
+    saveAction.error ??
+    miscAction.error ??
+    spoofingAction.error ??
+    automationAction.error ??
+    cookiesAction.error ??
+    localStorageAction.error;
 
   // AUTO mode here has no separate "preview vs. persist" step (unlike the
   // create-modal's not-yet-persisted draft): a freshly generated fingerprint
@@ -305,9 +315,41 @@ export function ProfileEditorModal({
     });
   }
 
+  /** Same running-only constraint as cookies, plus a narrower scope: only
+   * the profile's first/primary tab's current origin (see
+   * profileWindowEntry.ts's localStorage: handlers) — localStorage has no
+   * session-wide API the way cookies do. */
+  async function loadLocalStorage(): Promise<void> {
+    await localStorageAction.run(async () => {
+      const result = await callApi<'profiles:localStorage:list', { origin: string; items: LocalStorageEntry[] }>(
+        'profiles:localStorage:list',
+        { id: profileId },
+      );
+      setLocalStorageOrigin(result.origin);
+      setLocalStorageItems(result.items);
+    });
+  }
+
+  async function removeLocalStorageItem(key: string): Promise<void> {
+    await localStorageAction.run(async () => {
+      await callApi('profiles:localStorage:remove', { id: profileId, key });
+      await loadLocalStorage();
+    });
+  }
+
+  async function addLocalStorageItem(input: LocalStorageSetInput): Promise<void> {
+    await localStorageAction.run(async () => {
+      await callApi('profiles:localStorage:set', { id: profileId, item: input });
+      await loadLocalStorage();
+    });
+  }
+
   useEffect(() => {
     if (tab === 'storage' && profile?.status === 'RUNNING' && cookies === null) {
       void loadCookies();
+    }
+    if (tab === 'storage' && profile?.status === 'RUNNING' && localStorageItems === null) {
+      void loadLocalStorage();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, profile?.status]);
@@ -408,6 +450,12 @@ export function ProfileEditorModal({
               onRefreshCookies={() => void loadCookies()}
               onRemoveCookie={(cookie) => void removeCookie(cookie)}
               onAddCookie={(input) => void addCookie(input)}
+              localStorageOrigin={localStorageOrigin}
+              localStorageItems={localStorageItems}
+              localStorageLoading={localStorageAction.pending}
+              onRefreshLocalStorage={() => void loadLocalStorage()}
+              onRemoveLocalStorageItem={(key) => void removeLocalStorageItem(key)}
+              onAddLocalStorageItem={(input) => void addLocalStorageItem(input)}
             />
           )}
 

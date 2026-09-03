@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Cookie, Trash2, RefreshCw, Plus } from 'lucide-react';
+import { Cookie, Database, Trash2, RefreshCw, Plus } from 'lucide-react';
 import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
+import type { LocalStorageEntry, LocalStorageSetInput } from '@shared/schemas/localStorageEntry';
 import { useTranslation } from '../../i18n';
 
 const EMPTY_DRAFT = { url: '', name: '', value: '', secure: true, httpOnly: false, persist: false };
+const EMPTY_LS_DRAFT = { key: '', value: '' };
 
 function AddCookieForm({ onAdd }: { onAdd: (input: CookieSetInput) => void }): JSX.Element {
   const { t } = useTranslation();
@@ -75,6 +77,38 @@ function AddCookieForm({ onAdd }: { onAdd: (input: CookieSetInput) => void }): J
   );
 }
 
+function AddLocalStorageForm({ onAdd }: { onAdd: (input: LocalStorageSetInput) => void }): JSX.Element {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(EMPTY_LS_DRAFT);
+
+  function submit(): void {
+    if (!draft.key.trim()) return;
+    onAdd({ key: draft.key.trim(), value: draft.value });
+    setDraft(EMPTY_LS_DRAFT);
+  }
+
+  return (
+    <div className="panel mt-16">
+      <h4 className="fp-heading">
+        <Plus size={16} strokeWidth={2.25} />
+        {t('editor.storage.localStorage.add.title')}
+      </h4>
+      <label className="field field-narrow">
+        {t('editor.storage.localStorage.key')}
+        <input className="mono" value={draft.key} onChange={(e) => setDraft({ ...draft, key: e.target.value })} />
+      </label>
+      <label className="field field-narrow">
+        {t('editor.storage.localStorage.value')}
+        <input className="mono" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
+      </label>
+      <button className="btn btn-primary btn-sm" type="button" onClick={submit} disabled={!draft.key.trim()}>
+        <Plus size={14} />
+        {t('editor.storage.localStorage.add.submit')}
+      </button>
+    </div>
+  );
+}
+
 export function StorageTab({
   profilePath,
   onClearCache,
@@ -84,6 +118,12 @@ export function StorageTab({
   onRefreshCookies,
   onRemoveCookie,
   onAddCookie,
+  localStorageOrigin,
+  localStorageItems,
+  localStorageLoading,
+  onRefreshLocalStorage,
+  onRemoveLocalStorageItem,
+  onAddLocalStorageItem,
 }: {
   profilePath: string;
   onClearCache: () => void;
@@ -93,6 +133,12 @@ export function StorageTab({
   onRefreshCookies: () => void;
   onRemoveCookie: (cookie: CookieInfo) => void;
   onAddCookie: (input: CookieSetInput) => void;
+  localStorageOrigin: string | null;
+  localStorageItems: LocalStorageEntry[] | null;
+  localStorageLoading: boolean;
+  onRefreshLocalStorage: () => void;
+  onRemoveLocalStorageItem: (key: string) => void;
+  onAddLocalStorageItem: (input: LocalStorageSetInput) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -162,6 +208,64 @@ export function StorageTab({
       </div>
 
       {isRunning && <AddCookieForm onAdd={onAddCookie} />}
+
+      <div className="panel mt-16">
+        <h4 className="fp-heading">
+          <Database size={16} strokeWidth={2.25} />
+          {t('editor.storage.localStorage.title')}
+          {localStorageLoading && <span className="spinner" />}
+        </h4>
+
+        {!isRunning && <p className="text-dim text-sm mt-0">{t('editor.storage.localStorage.notRunning')}</p>}
+
+        {isRunning && (
+          <>
+            <div className="fp-toolbar">
+              <p className="text-dim text-xs mt-0 mb-0">
+                {localStorageOrigin ? t('editor.storage.localStorage.hint', { origin: localStorageOrigin }) : t('editor.storage.localStorage.hintNoOrigin')}
+              </p>
+              <div className="flex-1" />
+              <button className="btn btn-ghost btn-sm" type="button" onClick={onRefreshLocalStorage}>
+                <RefreshCw size={14} />
+                {t('common.refresh')}
+              </button>
+            </div>
+
+            {localStorageItems && localStorageItems.length === 0 && (
+              <p className="text-dim text-sm">{t('editor.storage.localStorage.empty')}</p>
+            )}
+
+            {localStorageItems && localStorageItems.length > 0 && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t('editor.storage.localStorage.key')}</th>
+                    <th>{t('editor.storage.localStorage.value')}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {localStorageItems.map((item) => (
+                    <tr key={item.key}>
+                      <td className="mono">{item.key}</td>
+                      <td className="mono" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.value}
+                      </td>
+                      <td>
+                        <button className="btn btn-danger-ghost btn-sm" type="button" onClick={() => onRemoveLocalStorageItem(item.key)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </div>
+
+      {isRunning && <AddLocalStorageForm onAdd={onAddLocalStorageItem} />}
     </div>
   );
 }

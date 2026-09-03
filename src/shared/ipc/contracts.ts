@@ -10,6 +10,7 @@ import { SettingsUpdateSchema } from '../schemas/settings';
 import { GroupCreateInputSchema, GroupRenameInputSchema, GroupDeleteInputSchema } from '../schemas/group';
 import { ActivityEventTypeSchema } from '../schemas/activityLog';
 import { CookieSetInputSchema } from '../schemas/cookie';
+import { LocalStorageSetInputSchema } from '../schemas/localStorageEntry';
 
 /**
  * Central IPC contract registry. Every channel's request/response shape is
@@ -41,6 +42,9 @@ export const IpcRequestSchemas = {
   'profiles:cookies:list': z.object({ id: ProfileIdSchema }),
   'profiles:cookies:remove': z.object({ id: ProfileIdSchema, url: z.string(), name: z.string() }),
   'profiles:cookies:set': z.object({ id: ProfileIdSchema, cookie: CookieSetInputSchema }),
+  'profiles:localStorage:list': z.object({ id: ProfileIdSchema }),
+  'profiles:localStorage:set': z.object({ id: ProfileIdSchema, item: LocalStorageSetInputSchema }),
+  'profiles:localStorage:remove': z.object({ id: ProfileIdSchema, key: z.string() }),
 
   'fingerprint:get': z.object({ id: z.string().uuid() }),
   'fingerprint:generate': z.object({

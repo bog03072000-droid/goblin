@@ -262,6 +262,54 @@ export function runProfileWindowProcess(): void {
       void target.loadURL(normalized);
     });
 
+    // localStorage editor support (ProfileManager.sendChildRequest, same
+    // protocol/retry as the cookies: handlers above). Unlike cookies
+    // (session-wide, via ses.cookies), localStorage is per-origin and only
+    // reachable by executing JS in a page actually loaded in one of this
+    // profile's tabs — there's no session-level API for it. Targets the
+    // profile's first/primary tab (webviewsById preserves insertion order);
+    // a profile with multiple tabs on different origins only ever exposes
+    // that one tab's localStorage here, which is an explicit, documented
+    // scope limitation, not an oversight — see StorageTab.tsx's UI copy.
+    process.on('message', (raw) => {
+      const msg = raw as { type?: string; requestId?: string; key?: string; value?: string };
+      if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string' || !msg.type.startsWith('localStorage:')) return;
+      const { requestId } = msg;
+      const target = webviewsById.values().next().value as Electron.WebContents | undefined;
+      if (!target) {
+        process.send?.({ type: 'localStorage:error', requestId, error: 'No tab is attached yet' });
+        return;
+      }
+      void (async () => {
+        try {
+          if (msg.type === 'localStorage:list') {
+            const origin: string = await target.executeJavaScript('window.location.origin');
+            const items: Array<{ key: string; value: string }> = await target.executeJavaScript(
+              `(function() {
+                var out = [];
+                for (var i = 0; i < window.localStorage.length; i++) {
+                  var k = window.localStorage.key(i);
+                  out.push({ key: k, value: window.localStorage.getItem(k) });
+                }
+                return out;
+              })()`,
+            );
+            process.send?.({ type: 'localStorage:list:result', requestId, origin, items });
+          } else if (msg.type === 'localStorage:set') {
+            await target.executeJavaScript(
+              `window.localStorage.setItem(${JSON.stringify(String(msg.key))}, ${JSON.stringify(String(msg.value))})`,
+            );
+            process.send?.({ type: 'localStorage:set:result', requestId });
+          } else if (msg.type === 'localStorage:remove') {
+            await target.executeJavaScript(`window.localStorage.removeItem(${JSON.stringify(String(msg.key))})`);
+            process.send?.({ type: 'localStorage:remove:result', requestId });
+          }
+        } catch (err) {
+          process.send?.({ type: 'localStorage:error', requestId, error: err instanceof Error ? err.message : String(err) });
+        }
+      })();
+    });
+
     // The webview starts at about:blank (see browser-shell.html); once Electron
     // attaches its guest WebContents here, the CDP fingerprint overrides are
     // applied and ONLY THEN does the real navigation start — so the very first

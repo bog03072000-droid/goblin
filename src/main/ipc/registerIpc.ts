@@ -83,6 +83,9 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:cookies:list', (p) => deps.profileManager.listCookies(p.id));
   handle('profiles:cookies:remove', (p) => deps.profileManager.removeCookie(p.id, { url: p.url, name: p.name }));
   handle('profiles:cookies:set', (p) => deps.profileManager.setCookie(p.id, p.cookie));
+  handle('profiles:localStorage:list', (p) => deps.profileManager.listLocalStorage(p.id));
+  handle('profiles:localStorage:set', (p) => deps.profileManager.setLocalStorageItem(p.id, p.item));
+  handle('profiles:localStorage:remove', (p) => deps.profileManager.removeLocalStorageItem(p.id, p.key));
 
   handle('fingerprint:get', (p) => deps.fingerprints.getById(p.id));
   handle('fingerprint:generate', (p) => {

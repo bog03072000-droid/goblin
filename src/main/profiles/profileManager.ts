@@ -20,6 +20,7 @@ import {
 } from '../storage/profileStorage';
 import type { Profile, ProfileCreateInput } from '../../shared/schemas/profile';
 import type { CookieInfo, CookieSetInput } from '../../shared/schemas/cookie';
+import type { LocalStorageEntry, LocalStorageListResponse, LocalStorageSetInput } from '../../shared/schemas/localStorageEntry';
 
 export interface BulkResult {
   succeeded: string[];
@@ -342,7 +343,9 @@ export class ProfileManager {
         const msg = raw as { requestId?: string; type?: string; error?: string };
         if (msg?.requestId !== requestId) return;
         cleanup();
-        if (msg.type === 'cookies:error') reject(new Error(msg.error ?? 'Cookie request failed'));
+        // Generic — covers cookies:error, localStorage:error, and any future
+        // *:error type this same request/response protocol grows to carry.
+        if (msg.type?.endsWith(':error')) reject(new Error(msg.error ?? 'Request failed'));
         else resolve(msg as T);
       }
 
@@ -380,6 +383,26 @@ export class ProfileManager {
   async setCookie(id: string, cookie: CookieSetInput): Promise<void> {
     await this.sendChildRequest(id, { type: 'cookies:set', cookie });
     this.logs.record('PROFILE_UPDATED', id, `Cookie "${cookie.name}" set on ${cookie.url}`);
+  }
+
+  /** Unlike cookies, localStorage is per-origin/per-tab — see
+   * profileWindowEntry.ts's localStorage: handlers for what "which tab"
+   * actually resolves to. */
+  async listLocalStorage(id: string): Promise<LocalStorageListResponse> {
+    const result = await this.sendChildRequest<{ origin: string; items: LocalStorageEntry[] }>(id, {
+      type: 'localStorage:list',
+    });
+    return { origin: result.origin, items: result.items };
+  }
+
+  async setLocalStorageItem(id: string, input: LocalStorageSetInput): Promise<void> {
+    await this.sendChildRequest(id, { type: 'localStorage:set', key: input.key, value: input.value });
+    this.logs.record('PROFILE_UPDATED', id, `localStorage key "${input.key}" set`);
+  }
+
+  async removeLocalStorageItem(id: string, key: string): Promise<void> {
+    await this.sendChildRequest(id, { type: 'localStorage:remove', key });
+    this.logs.record('PROFILE_UPDATED', id, `localStorage key "${key}" removed`);
   }
 
   /** Soft-deletes: the profile disappears from the default list immediately
