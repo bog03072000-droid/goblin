@@ -73,6 +73,10 @@ export class ImportExportService {
         fontsMode: fingerprint.fontsMode,
         mediaDevicesMode: fingerprint.mediaDevicesMode,
         webglSpoofingMode: fingerprint.webglSpoofingMode,
+        geolocationMode: fingerprint.geolocationMode,
+        geolocationLatitude: fingerprint.geolocationLatitude,
+        geolocationLongitude: fingerprint.geolocationLongitude,
+        permissionsMode: fingerprint.permissionsMode,
         seed: fingerprint.seed,
       },
       // Password is never included in an export, by design (see SECURITY.md) —

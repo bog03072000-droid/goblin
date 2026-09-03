@@ -99,6 +99,15 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     // the single largest practical detection gap (see docs/FINGERPRINT_AUDIT.md).
     // The user can still opt out per profile via the Fingerprint tab.
     webglSpoofingMode: 'spoof',
+    // Off by default (unlike webglSpoofingMode): unlike a real GPU leaking
+    // through unconditionally, a site simply doesn't ask for geolocation
+    // unless the user interacts with a feature that needs it, so there's no
+    // equivalent "silently leaks on every profile" default gap to close —
+    // see docs/FINGERPRINT_AUDIT.md before changing this default.
+    geolocationMode: 'real',
+    geolocationLatitude: locale.latitude,
+    geolocationLongitude: locale.longitude,
+    permissionsMode: 'real',
     seed: options.seed,
   };
 }

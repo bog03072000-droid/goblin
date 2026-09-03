@@ -88,14 +88,21 @@ export interface LocaleProfile {
   locale: string;
   languages: string[];
   timezone: string;
+  /** The real city the timezone above actually corresponds to — coherent
+   * with locale/timezone by construction, not an independently random
+   * point, same "pick one bundle, don't mix fields" principle as
+   * PlatformProfile. Used for `geolocationMode: 'spoof'` (see
+   * fingerprintEnforcement.ts). */
+  latitude: number;
+  longitude: number;
 }
 
 export const LOCALE_PROFILES: LocaleProfile[] = [
-  { locale: 'en-US', languages: ['en-US', 'en'], timezone: 'America/New_York' },
-  { locale: 'en-GB', languages: ['en-GB', 'en'], timezone: 'Europe/London' },
-  { locale: 'de-DE', languages: ['de-DE', 'de', 'en'], timezone: 'Europe/Berlin' },
-  { locale: 'fr-FR', languages: ['fr-FR', 'fr', 'en'], timezone: 'Europe/Paris' },
-  { locale: 'uk-UA', languages: ['uk-UA', 'uk', 'en'], timezone: 'Europe/Kyiv' },
+  { locale: 'en-US', languages: ['en-US', 'en'], timezone: 'America/New_York', latitude: 40.7128, longitude: -74.006 },
+  { locale: 'en-GB', languages: ['en-GB', 'en'], timezone: 'Europe/London', latitude: 51.5074, longitude: -0.1278 },
+  { locale: 'de-DE', languages: ['de-DE', 'de', 'en'], timezone: 'Europe/Berlin', latitude: 52.52, longitude: 13.405 },
+  { locale: 'fr-FR', languages: ['fr-FR', 'fr', 'en'], timezone: 'Europe/Paris', latitude: 48.8566, longitude: 2.3522 },
+  { locale: 'uk-UA', languages: ['uk-UA', 'uk', 'en'], timezone: 'Europe/Kyiv', latitude: 50.4501, longitude: 30.5234 },
 ];
 
 export function buildUserAgent(profile: PlatformProfile): string {

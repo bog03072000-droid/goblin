@@ -1,5 +1,5 @@
-import type { WebContents } from 'electron';
-import type { WebrtcMode } from '../../shared/schemas/fingerprint';
+import type { Session, WebContents } from 'electron';
+import type { GeolocationMode, PermissionsMode, WebrtcMode } from '../../shared/schemas/fingerprint';
 
 export interface EnforceableFingerprint {
   userAgent: string;
@@ -9,6 +9,9 @@ export interface EnforceableFingerprint {
   screenWidth: number;
   screenHeight: number;
   deviceScaleFactor: number;
+  geolocationMode: GeolocationMode;
+  geolocationLatitude: number;
+  geolocationLongitude: number;
 }
 
 /**
@@ -63,6 +66,54 @@ export async function enforceFingerprint(wc: WebContents, fp: EnforceableFingerp
     screenWidth: fp.screenWidth,
     screenHeight: fp.screenHeight,
   });
+
+  // 'real': no override — Chromium's real geolocation provider (or lack of
+  // one) behaves exactly as it did before this feature existed. 'blocked' is
+  // handled entirely by applyPermissionPolicy() below (denying the
+  // permission itself, the same outcome a user clicking "Block" gets) rather
+  // than here, so there is nothing to send for it on this CDP domain.
+  if (fp.geolocationMode === 'spoof') {
+    await wc.debugger.sendCommand('Emulation.setGeolocationOverride', {
+      latitude: fp.geolocationLatitude,
+      longitude: fp.geolocationLongitude,
+      accuracy: 100,
+    });
+  }
+}
+
+/**
+ * Installs this session's permission policy. Applied once per profile
+ * session (not per-WebContents like enforceFingerprint) since
+ * `session.setPermissionRequestHandler`/`setPermissionCheckHandler` are
+ * session-scoped APIs, not per-page.
+ *
+ * Geolocation and every other permission type are deliberately independent
+ * axes rather than one combined mode: `geolocationMode` decides geolocation
+ * specifically (denied outright for 'blocked', granted for 'spoof'/'real' —
+ * the actual position value for 'spoof' comes from the CDP override above,
+ * not from this handler), while `permissionsMode: 'deny-all'` is a blanket
+ * denial for every OTHER permission type (camera, mic, notifications,
+ * clipboard, etc.), so "spoof my location but block the camera" is a
+ * representable combination, not a contradiction one setting would force.
+ *
+ * Before this, no handler was installed at all, which is Electron's own
+ * implicit "allow everything" default — both branches below preserve that
+ * default exactly for anything not explicitly opted into a stricter mode,
+ * rather than silently becoming more restrictive for existing profiles.
+ */
+export function applyPermissionPolicy(
+  ses: Session,
+  opts: { permissionsMode: PermissionsMode; geolocationMode: GeolocationMode },
+): void {
+  function shouldGrant(permission: string): boolean {
+    if (permission === 'geolocation') return opts.geolocationMode !== 'blocked';
+    return opts.permissionsMode !== 'deny-all';
+  }
+
+  ses.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(shouldGrant(permission));
+  });
+  ses.setPermissionCheckHandler((_wc, permission) => shouldGrant(permission));
 }
 
 /**

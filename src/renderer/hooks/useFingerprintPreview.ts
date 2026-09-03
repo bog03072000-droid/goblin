@@ -38,6 +38,10 @@ export async function validateFingerprintPreview(source: Fingerprint): Promise<F
     fontsMode: source.fontsMode,
     mediaDevicesMode: source.mediaDevicesMode,
     webglSpoofingMode: source.webglSpoofingMode,
+    geolocationMode: source.geolocationMode,
+    geolocationLatitude: source.geolocationLatitude,
+    geolocationLongitude: source.geolocationLongitude,
+    permissionsMode: source.permissionsMode,
     seed: source.seed,
   });
 }

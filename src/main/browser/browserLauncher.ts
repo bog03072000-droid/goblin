@@ -58,6 +58,10 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
       fontsMode: params.fingerprint.fontsMode,
       mediaDevicesMode: params.fingerprint.mediaDevicesMode,
       webglSpoofingMode: params.fingerprint.webglSpoofingMode,
+      geolocationMode: params.fingerprint.geolocationMode,
+      geolocationLatitude: params.fingerprint.geolocationLatitude,
+      geolocationLongitude: params.fingerprint.geolocationLongitude,
+      permissionsMode: params.fingerprint.permissionsMode,
       seed: params.fingerprint.seed,
     }),
   ).toString('base64');

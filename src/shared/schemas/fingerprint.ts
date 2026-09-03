@@ -14,6 +14,21 @@ export const MediaDevicesModeSchema = z.enum(['real', 'hidden']);
 // for WebGL-heavy sites (canvas games, map renderers, some CAPTCHAs) — opt-in,
 // off by default. See docs/FINGERPRINT_AUDIT.md.
 export const WebglSpoofingModeSchema = z.enum(['off', 'spoof']);
+// 'real' preserves the pre-existing default behavior exactly (no CDP
+// override installed, Electron's own permission-request default applies) —
+// 'spoof' reports a locale-coherent city (see LocaleProfile.latitude/
+// longitude in platformProfiles.ts, not an independently random point) via
+// CDP `Emulation.setGeolocationOverride`; 'blocked' denies the geolocation
+// permission outright, the same outcome a real user clicking "Block" gets.
+export const GeolocationModeSchema = z.enum(['real', 'spoof', 'blocked']);
+export type GeolocationMode = z.infer<typeof GeolocationModeSchema>;
+// A blanket toggle for every OTHER permission type (camera, mic,
+// notifications, clipboard, etc.) — deliberately separate from
+// geolocationMode rather than folded into one enum, since "spoof my
+// location" and "deny every permission" are independent axes a user might
+// want in any combination (e.g. spoofed location + no camera/mic access).
+export const PermissionsModeSchema = z.enum(['real', 'deny-all']);
+export type PermissionsMode = z.infer<typeof PermissionsModeSchema>;
 
 export const FingerprintSchema = z.object({
   id: z.string().uuid(),
@@ -39,6 +54,15 @@ export const FingerprintSchema = z.object({
   fontsMode: FontsModeSchema,
   mediaDevicesMode: MediaDevicesModeSchema,
   webglSpoofingMode: WebglSpoofingModeSchema,
+  geolocationMode: GeolocationModeSchema,
+  // Always carried regardless of geolocationMode (same convention as
+  // webglVendor/webglRenderer being generated even when webglSpoofingMode is
+  // 'off') so switching to 'spoof' later doesn't need a regenerate — a
+  // locale-coherent city coordinate, not an arbitrary/independently random
+  // point (see LOCALE_PROFILES in platformProfiles.ts).
+  geolocationLatitude: z.number().min(-90).max(90),
+  geolocationLongitude: z.number().min(-180).max(180),
+  permissionsMode: PermissionsModeSchema,
   seed: z.string().min(1),
   createdAt: z.string(),
   updatedAt: z.string(),

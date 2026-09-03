@@ -1,9 +1,9 @@
 import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { enforceFingerprint, applyWebrtcPolicy } from './fingerprintEnforcement';
+import { enforceFingerprint, applyWebrtcPolicy, applyPermissionPolicy } from './fingerprintEnforcement';
 import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
-import type { WebrtcMode, Fingerprint } from '../../shared/schemas/fingerprint';
+import type { WebrtcMode, Fingerprint, GeolocationMode, PermissionsMode } from '../../shared/schemas/fingerprint';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
 import { findFreePort, startAutomationProxy } from './automationProxy';
@@ -167,6 +167,9 @@ export function runProfileWindowProcess(): void {
     ses.setUserAgent(args.userAgent, languages.join(','));
 
     const webrtcMode = (args.fingerprintConfig['webrtcMode'] as WebrtcMode | undefined) ?? 'default';
+    const geolocationMode = (args.fingerprintConfig['geolocationMode'] as GeolocationMode | undefined) ?? 'real';
+    const permissionsMode = (args.fingerprintConfig['permissionsMode'] as PermissionsMode | undefined) ?? 'real';
+    applyPermissionPolicy(ses, { permissionsMode, geolocationMode });
 
     // Registered on the profile's own session (not the default one) since that's
     // what the <webview partition="..."> actually uses. Serves the local
@@ -352,6 +355,9 @@ export function runProfileWindowProcess(): void {
         screenWidth: Number(fp['screenWidth'] ?? 1920),
         screenHeight: Number(fp['screenHeight'] ?? 1080),
         deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
+        geolocationMode,
+        geolocationLatitude: Number(fp['geolocationLatitude'] ?? 0),
+        geolocationLongitude: Number(fp['geolocationLongitude'] ?? 0),
       })
         .catch((err: unknown) => {
           console.error('[ProfileForge] fingerprint enforcement failed:', err);

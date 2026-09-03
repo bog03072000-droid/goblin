@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateFingerprint } from '../../src/main/fingerprint/generator';
 import { validateFingerprint } from '../../src/main/fingerprint/validator';
+import { LOCALE_PROFILES } from '../../src/main/fingerprint/platformProfiles';
 
 describe('fingerprint generator', () => {
   it('is deterministic for the same seed', () => {
@@ -28,6 +29,18 @@ describe('fingerprint generator', () => {
     const fp = generateFingerprint({ seed: 'mac-seed', os: 'macos' });
     expect(fp.os).toBe('macos');
     expect(fp.platform).toBe('MacIntel');
+  });
+
+  it('defaults geolocation/permissions to real/real (off) and carries a coordinate coherent with the picked locale/timezone, not an arbitrary point', () => {
+    for (let i = 0; i < 20; i++) {
+      const fp = generateFingerprint({ seed: `geo-${i}` });
+      expect(fp.geolocationMode).toBe('real');
+      expect(fp.permissionsMode).toBe('real');
+      const matchingLocale = LOCALE_PROFILES.find((l) => l.locale === fp.locale && l.timezone === fp.timezone);
+      expect(matchingLocale, `no LOCALE_PROFILE matched locale=${fp.locale} timezone=${fp.timezone}`).toBeTruthy();
+      expect(fp.geolocationLatitude).toBe(matchingLocale!.latitude);
+      expect(fp.geolocationLongitude).toBe(matchingLocale!.longitude);
+    }
   });
 });
 

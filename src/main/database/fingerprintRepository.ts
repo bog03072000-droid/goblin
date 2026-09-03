@@ -26,6 +26,10 @@ interface FingerprintRow {
   fonts_mode: string;
   media_devices_mode: string;
   webgl_spoofing_mode: string;
+  geolocation_mode: string;
+  geolocation_latitude: number;
+  geolocation_longitude: number;
+  permissions_mode: string;
   seed: string;
   created_at: string;
   updated_at: string;
@@ -65,6 +69,10 @@ function rowToFingerprint(row: FingerprintRow): Fingerprint {
     fontsMode: row.fonts_mode as Fingerprint['fontsMode'],
     mediaDevicesMode: row.media_devices_mode as Fingerprint['mediaDevicesMode'],
     webglSpoofingMode: row.webgl_spoofing_mode as Fingerprint['webglSpoofingMode'],
+    geolocationMode: row.geolocation_mode as Fingerprint['geolocationMode'],
+    geolocationLatitude: row.geolocation_latitude,
+    geolocationLongitude: row.geolocation_longitude,
+    permissionsMode: row.permissions_mode as Fingerprint['permissionsMode'],
     seed: row.seed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -84,12 +92,14 @@ export class FingerprintRepository {
           languages, timezone, screen_width, screen_height, device_scale_factor,
           hardware_concurrency, device_memory, webgl_vendor, webgl_renderer,
           canvas_mode, audio_mode, webrtc_mode, fonts_mode, media_devices_mode,
-          webgl_spoofing_mode, seed, created_at, updated_at
+          webgl_spoofing_mode, geolocation_mode, geolocation_latitude, geolocation_longitude,
+          permissions_mode, seed, created_at, updated_at
         ) VALUES (@id, @name, @os, @osVersion, @browserVersion, @userAgent, @platform, @locale,
           @languages, @timezone, @screenWidth, @screenHeight, @deviceScaleFactor,
           @hardwareConcurrency, @deviceMemory, @webglVendor, @webglRenderer,
           @canvasMode, @audioMode, @webrtcMode, @fontsMode, @mediaDevicesMode,
-          @webglSpoofingMode, @seed, @createdAt, @updatedAt)`,
+          @webglSpoofingMode, @geolocationMode, @geolocationLatitude, @geolocationLongitude,
+          @permissionsMode, @seed, @createdAt, @updatedAt)`,
       )
       .run({
         id,
@@ -122,7 +132,9 @@ export class FingerprintRepository {
           device_memory=@deviceMemory, webgl_vendor=@webglVendor, webgl_renderer=@webglRenderer,
           canvas_mode=@canvasMode, audio_mode=@audioMode, webrtc_mode=@webrtcMode,
           fonts_mode=@fontsMode, media_devices_mode=@mediaDevicesMode,
-          webgl_spoofing_mode=@webglSpoofingMode, seed=@seed,
+          webgl_spoofing_mode=@webglSpoofingMode, geolocation_mode=@geolocationMode,
+          geolocation_latitude=@geolocationLatitude, geolocation_longitude=@geolocationLongitude,
+          permissions_mode=@permissionsMode, seed=@seed,
           updated_at=@updatedAt WHERE id=@id`,
       )
       .run({

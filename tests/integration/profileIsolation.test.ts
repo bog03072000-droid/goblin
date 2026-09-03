@@ -116,6 +116,10 @@ class FingerprintRepositoryHelper {
       fontsMode: 'system',
       mediaDevicesMode: 'real',
       webglSpoofingMode: 'off',
+      geolocationMode: 'real',
+      geolocationLatitude: 40.7128,
+      geolocationLongitude: -74.006,
+      permissionsMode: 'real',
       seed,
     }).id;
   }
