@@ -249,7 +249,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.storage.localStorage.key': 'Ключ',
   'editor.storage.localStorage.value': 'Значення',
   'editor.storage.localStorage.add.title': 'Додати запис',
-  'editor.storage.localStorage.add.submit': 'Додати',
+  'editor.storage.localStorage.add.submit': 'Додати запис',
   'editor.advanced.id': 'ID профілю',
   'editor.advanced.created': 'Створено',
   'editor.advanced.updated': 'Оновлено',

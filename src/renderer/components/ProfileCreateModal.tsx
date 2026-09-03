@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { Fingerprint, FingerprintInput } from '@shared/schemas/fingerprint';
 import type { ProxyRecord, ProxyProtocol } from '@shared/schemas/proxy';
-import type { Group } from '@shared/schemas/group';
 import type { Template } from '@shared/schemas/template';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useFingerprintPreview } from '../hooks/useFingerprintPreview';
+import { useProfileFormFields, parseTagsText } from '../hooks/useProfileFormFields';
 import { useTranslation } from '../i18n';
 import { FingerprintTab, type FingerprintDraft, type SpoofingPatch, type FieldOverrides } from './profileEditor/FingerprintTab';
 
@@ -67,15 +67,10 @@ export function ProfileCreateModal({
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('general');
 
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState('');
-  const [tagsText, setTagsText] = useState(initialTags);
-  const [groupId, setGroupId] = useState(initialGroupId);
-  const [proxyId, setProxyId] = useState(initialProxyId);
+  const { name, setName, description, setDescription, tagsText, setTagsText, groupId, setGroupId, proxyId, setProxyId, groups, proxies, setProxies, loadGroupsAndProxies } =
+    useProfileFormFields({ name: initialName, description: '', tagsText: initialTags, groupId: initialGroupId, proxyId: initialProxyId });
   const [templateId, setTemplateId] = useState(initialTemplateId);
 
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [proxies, setProxies] = useState<ProxyRecord[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
 
   const [fingerprint, setFingerprint] = useState<Fingerprint | null>(null);
@@ -112,13 +107,10 @@ export function ProfileCreateModal({
 
   async function load(): Promise<void> {
     await loadAction.run(async () => {
-      const [groupList, proxyList, templateList] = await Promise.all([
-        callApi<'groups:list', Group[]>('groups:list', {}),
-        callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}),
+      const [, templateList] = await Promise.all([
+        loadGroupsAndProxies(),
         callApi<'templates:list', Template[]>('templates:list', {}),
       ]);
-      setGroups(groupList);
-      setProxies(proxyList);
       setTemplates(templateList);
       await generatePreview(`new-profile-${Date.now()}`, initialTemplateId);
     });
@@ -196,10 +188,7 @@ export function ProfileCreateModal({
         description: description || undefined,
         groupId: groupId || undefined,
         proxyId: proxyId || undefined,
-        tags: tagsText
-          .split(',')
-          .map((tg) => tg.trim())
-          .filter(Boolean),
+        tags: parseTagsText(tagsText),
         fingerprint: {
           name: fingerprint.name,
           os: fingerprint.os,

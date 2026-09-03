@@ -247,7 +247,7 @@ const en = {
   'editor.storage.localStorage.key': 'Key',
   'editor.storage.localStorage.value': 'Value',
   'editor.storage.localStorage.add.title': 'Add item',
-  'editor.storage.localStorage.add.submit': 'Add',
+  'editor.storage.localStorage.add.submit': 'Add item',
   'editor.advanced.id': 'Profile ID',
   'editor.advanced.created': 'Created',
   'editor.advanced.updated': 'Updated',

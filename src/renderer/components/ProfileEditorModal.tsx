@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
 import type { Settings } from '@shared/schemas/settings';
 import type { Fingerprint } from '@shared/schemas/fingerprint';
-import type { ProxyRecord } from '@shared/schemas/proxy';
-import type { Group } from '@shared/schemas/group';
 import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
 import type { LocalStorageEntry, LocalStorageSetInput } from '@shared/schemas/localStorageEntry';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useFingerprintPreview, validateFingerprintPreview } from '../hooks/useFingerprintPreview';
+import { useProfileFormFields, parseTagsText } from '../hooks/useProfileFormFields';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
 import { FingerprintTab, type FieldOverrides, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
@@ -40,13 +39,8 @@ export function ProfileEditorModal({
   const [tab, setTab] = useState<Tab>('general');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fingerprint, setFingerprint] = useState<Fingerprint | null>(null);
-  const [proxies, setProxies] = useState<ProxyRecord[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [tagsText, setTagsText] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [proxyId, setProxyId] = useState('');
+  const { name, setName, description, setDescription, tagsText, setTagsText, groupId, setGroupId, proxyId, setProxyId, setAllFields, groups, proxies, loadGroupsAndProxies } =
+    useProfileFormFields({ name: '', description: '', tagsText: '', groupId: '', proxyId: '' });
   const [manualMode, setManualMode] = useState(false);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
   const [automationToken, setAutomationToken] = useState<string | null>(null);
@@ -112,28 +106,20 @@ export function ProfileEditorModal({
       const p = await callApi<'profiles:get', Profile | null>('profiles:get', { id: profileId });
       if (!p) throw new Error('Profile not found');
       setProfile(p);
-      setName(p.name);
-      setDescription(p.description);
-      setTagsText(p.tags.join(', '));
-      setProxyId(p.proxyId ?? '');
-      setGroupId(p.groupId ?? '');
-      setSavedSnapshot({
+      const loaded = {
         name: p.name,
         description: p.description,
         tagsText: p.tags.join(', '),
         groupId: p.groupId ?? '',
         proxyId: p.proxyId ?? '',
-      });
+      };
+      setAllFields(loaded);
+      setSavedSnapshot(loaded);
       const fp = await callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId });
       setFingerprint(fp);
       if (fp) resetDraft(fp);
       setOverrides({});
-      const [proxyList, groupList] = await Promise.all([
-        callApi<'proxy:list', ProxyRecord[]>('proxy:list', {}),
-        callApi<'groups:list', Group[]>('groups:list', {}),
-      ]);
-      setProxies(proxyList);
-      setGroups(groupList);
+      await loadGroupsAndProxies();
       const tokenResult = await callApi<'profiles:getAutomationToken', { token: string | null }>(
         'profiles:getAutomationToken',
         { id: profileId },
@@ -185,10 +171,7 @@ export function ProfileEditorModal({
         name,
         description,
         groupId: groupId || null,
-        tags: tagsText
-          .split(',')
-          .map((t2) => t2.trim())
-          .filter(Boolean),
+        tags: parseTagsText(tagsText),
       });
       setSavedSnapshot((prev) => ({ ...prev, name, description, tagsText, groupId }));
       onSaved();
@@ -208,11 +191,7 @@ export function ProfileEditorModal({
    * values — a plain form reset, distinct from Fingerprint's "Regenerate"
    * (which creates a brand-new random identity, not a revert). */
   function resetFields(): void {
-    setName(savedSnapshot.name);
-    setDescription(savedSnapshot.description);
-    setTagsText(savedSnapshot.tagsText);
-    setGroupId(savedSnapshot.groupId);
-    setProxyId(savedSnapshot.proxyId);
+    setAllFields(savedSnapshot);
   }
 
   function requestClose(): void {
