@@ -43,6 +43,14 @@ export class ProfileManager {
   /** ids with a stop() currently in flight — lets the exit handler tell a
    * requested stop apart from a genuinely unexpected crash. See stop(). */
   private readonly stopping = new Set<string>();
+  /** Whether each running profile's automation proxy has actually finished
+   * binding — see waitForAutomationReady() for why this can't just be
+   * inferred from profile.status === 'RUNNING'. */
+  private readonly automationProxyState = new Map<string, 'ready' | { error: string }>();
+  private readonly automationProxyWaiters = new Map<
+    string,
+    Array<{ resolve: () => void; reject: (err: Error) => void }>
+  >();
 
   constructor(
     private readonly profilesRoot: string,
@@ -180,6 +188,30 @@ export class ProfileManager {
     this.logs.record('PROFILE_STARTED', id, `Profile "${profile.name}" started (pid ${child.pid})`);
     log.info(`[profile:start] "${profile.name}" (${id}) started, pid ${child.pid}`);
 
+    // One-shot, unsolicited notification from profileWindowEntry.ts once its
+    // own startAutomationProxy() call settles — as opposed to sendChildRequest's
+    // request/response protocol, there's nothing to (re)send here since the
+    // child was never asked; it's the sole source of this fact and reports it
+    // exactly once, whenever it's actually true. Resolves/rejects whoever's
+    // already waiting via waitForAutomationReady(); if nobody is, the settled
+    // state is simply cached in automationProxyState for a later caller.
+    this.automationProxyState.delete(id);
+    child.on('message', (raw) => {
+      const msg = raw as { type?: string; error?: string };
+      if (msg?.type === 'automation-proxy:ready') {
+        this.automationProxyState.set(id, 'ready');
+        const waiters = this.automationProxyWaiters.get(id) ?? [];
+        this.automationProxyWaiters.delete(id);
+        waiters.forEach((w) => w.resolve());
+      } else if (msg?.type === 'automation-proxy:error') {
+        const state = { error: msg.error ?? 'Automation proxy failed to start' };
+        this.automationProxyState.set(id, state);
+        const waiters = this.automationProxyWaiters.get(id) ?? [];
+        this.automationProxyWaiters.delete(id);
+        waiters.forEach((w) => w.reject(new Error(state.error)));
+      }
+    });
+
     // A bad spawn (e.g. a missing/relocated Electron binary) usually fails
     // ASYNCHRONOUSLY via this event, not by throwing out of spawn() itself —
     // the try/catch above only catches the rarer synchronous failure case
@@ -197,6 +229,12 @@ export class ProfileManager {
     child.on('exit', (code, signal) => {
       this.running.delete(id);
       this.lockManager.release(profile.profilePath);
+      this.automationProxyState.delete(id);
+      const waiters = this.automationProxyWaiters.get(id);
+      if (waiters) {
+        this.automationProxyWaiters.delete(id);
+        waiters.forEach((w) => w.reject(new Error('Profile stopped before its automation proxy became ready')));
+      }
       // A stop() the app itself requested is never a crash, no matter what
       // exit code the OS reports for it — root-caused via real repro (see
       // resourceManagement.spec.ts's history and the exit-code/signal log
@@ -367,6 +405,51 @@ export class ProfileManager {
 
       readyChild.on('message', onMessage);
       attempt();
+    });
+  }
+
+  /** Waits for confirmation that the profile's automation proxy has actually
+   * bound its external port — not just that profile.status says RUNNING,
+   * which start() sets synchronously right at spawn(), long before the
+   * child's own app.whenReady() (let alone startAutomationProxy()'s listen()
+   * callback within it) has fired. Same race class sendChildRequest already
+   * retries around for cookies/localStorage, confirmed real here too by
+   * automationApi.spec.ts's own comment about needing an artificial delay
+   * before hitting the port right after seeing RUNNING. Unlike
+   * sendChildRequest this is one-directional (the child was never asked
+   * anything, so there's nothing to re-send) — the child reports readiness
+   * exactly once, and this either returns the already-cached result or waits
+   * (bounded by timeoutMs) for that one message to arrive, rather than a
+   * caller doing a single synchronous check that could land on either side
+   * of it. */
+  waitForAutomationReady(id: string, timeoutMs = 10_000): Promise<void> {
+    const state = this.automationProxyState.get(id);
+    if (state === 'ready') return Promise.resolve();
+    if (state && typeof state === 'object') return Promise.reject(new Error(state.error));
+    if (!this.running.has(id)) return Promise.reject(new Error('Profile is not running'));
+
+    return new Promise<void>((resolve, reject) => {
+      const entry = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      };
+      const timer = setTimeout(() => {
+        const list = this.automationProxyWaiters.get(id);
+        if (list) {
+          const idx = list.indexOf(entry);
+          if (idx >= 0) list.splice(idx, 1);
+        }
+        reject(new Error('Automation proxy did not become ready in time'));
+      }, timeoutMs);
+      const waiters = this.automationProxyWaiters.get(id) ?? [];
+      waiters.push(entry);
+      this.automationProxyWaiters.set(id, waiters);
     });
   }
 

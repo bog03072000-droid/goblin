@@ -94,12 +94,19 @@ export function runProfileWindowProcess(): void {
       if (internalPort) {
         try {
           await startAutomationProxy({ port: args.automationPort, internalPort, token: automationToken });
+          // Lets ProfileManager.waitForAutomationReady() tell "the profile
+          // process exists" (RUNNING, set synchronously at spawn) apart from
+          // "the automation proxy's listen() callback has actually fired" —
+          // this can genuinely be a second or more later, since it only
+          // happens after this whenReady() callback runs.
+          process.send?.({ type: 'automation-proxy:ready' });
         } catch (err) {
           // Most likely EADDRINUSE (another already-running profile claimed
           // this port, or something else on the machine did) — the profile
           // itself still starts normally, just without automation access,
           // rather than failing the whole launch over an optional feature.
           console.error('[ProfileForge] failed to start automation proxy:', err);
+          process.send?.({ type: 'automation-proxy:error', error: err instanceof Error ? err.message : String(err) });
         }
       }
     }
