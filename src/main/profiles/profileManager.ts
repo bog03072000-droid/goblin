@@ -19,6 +19,7 @@ import {
   resolveProfileDir,
 } from '../storage/profileStorage';
 import type { Profile, ProfileCreateInput } from '../../shared/schemas/profile';
+import type { CookieInfo, CookieSetInput } from '../../shared/schemas/cookie';
 
 export interface BulkResult {
   succeeded: string[];
@@ -289,6 +290,96 @@ export class ProfileManager {
     if (this.running.has(id)) throw new Error('Stop the profile before clearing its cache');
     clearProfileCache(this.profilesRoot, id);
     this.logs.record('PROFILE_UPDATED', id, `Cache cleared for "${profile.name}"`);
+  }
+
+  /** Cookies live inside a running profile's own child-process session
+   * (session.fromPartition(...) — see profileWindowEntry.ts), never
+   * persisted anywhere the manager process can read directly. This sends a
+   * typed request over the existing stdio IPC channel (already used for
+   * graceful-quit) and correlates the reply by requestId, so multiple
+   * concurrent cookie requests to the same profile can't cross-resolve.
+   * Only usable while the profile is running — there is no session to ask
+   * otherwise.
+   *
+   * Retries the same request (same requestId, so a late reply to an
+   * earlier attempt still resolves it correctly) roughly once a second
+   * instead of sending once and only waiting: a profile freshly marked
+   * RUNNING (which happens the moment the OS process is spawned — see
+   * start()) can still be seconds away from Electron's whenReady() actually
+   * resolving in that child and this manager-side listener being attached
+   * on its end, so a single send can genuinely land before anything there
+   * is listening yet. Found via a real, reproducible E2E failure (the very
+   * first cookie request right after a profile reports RUNNING routinely
+   * timed out; a few seconds' artificial delay in the test made it pass
+   * every time) — not a hypothetical race. All three request types
+   * (list/remove/set) are naturally idempotent, so re-sending is safe. */
+  private sendChildRequest<T>(id: string, message: Record<string, unknown>, timeoutMs = 5_000): Promise<T> {
+    const child = this.running.get(id);
+    if (!child || !child.channel) {
+      throw new Error('Start the profile before viewing or editing its cookies');
+    }
+    // TS can't carry the above narrowing into the closures declared below
+    // (they could theoretically be invoked at any later, disconnected
+    // time), so this const re-binds it as definitely-ChildProcess for the
+    // rest of the method.
+    const readyChild = child;
+    const requestId = randomUUID();
+    const retryIntervalMs = 1_000;
+    const maxAttempts = Math.max(1, Math.round(timeoutMs / retryIntervalMs));
+
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      let retryTimer: NodeJS.Timeout;
+
+      function cleanup(): void {
+        settled = true;
+        clearTimeout(retryTimer);
+        readyChild.off('message', onMessage);
+      }
+
+      function onMessage(raw: unknown): void {
+        if (settled) return;
+        const msg = raw as { requestId?: string; type?: string; error?: string };
+        if (msg?.requestId !== requestId) return;
+        cleanup();
+        if (msg.type === 'cookies:error') reject(new Error(msg.error ?? 'Cookie request failed'));
+        else resolve(msg as T);
+      }
+
+      let attempts = 0;
+      function attempt(): void {
+        if (settled) return;
+        attempts++;
+        readyChild.send({ ...message, requestId });
+        retryTimer = setTimeout(() => {
+          if (settled) return;
+          if (attempts >= maxAttempts) {
+            cleanup();
+            reject(new Error('Profile did not respond in time'));
+          } else {
+            attempt();
+          }
+        }, retryIntervalMs);
+      }
+
+      readyChild.on('message', onMessage);
+      attempt();
+    });
+  }
+
+  async listCookies(id: string): Promise<CookieInfo[]> {
+    const result = await this.sendChildRequest<{ cookies: CookieInfo[] }>(id, { type: 'cookies:list' });
+    return result.cookies;
+  }
+
+  async removeCookie(id: string, params: { url: string; name: string }): Promise<void> {
+    await this.sendChildRequest(id, { type: 'cookies:remove', url: params.url, name: params.name });
+    this.logs.record('PROFILE_UPDATED', id, `Cookie "${params.name}" removed`);
+  }
+
+  async setCookie(id: string, cookie: CookieSetInput): Promise<void> {
+    await this.sendChildRequest(id, { type: 'cookies:set', cookie });
+    this.logs.record('PROFILE_UPDATED', id, `Cookie "${cookie.name}" set on ${cookie.url}`);
   }
 
   /** Soft-deletes: the profile disappears from the default list immediately

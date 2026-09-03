@@ -9,6 +9,7 @@ import type {
 } from '@shared/schemas/fingerprint';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
+import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation, type TranslationKey } from '../i18n';
@@ -56,6 +57,7 @@ export function ProfileEditorModal({
   const [overrides, setOverrides] = useState<FieldOverrides>({});
   const [automationToken, setAutomationToken] = useState<string | null>(null);
   const [defaultAutomationPort, setDefaultAutomationPort] = useState<number | null>(null);
+  const [cookies, setCookies] = useState<CookieInfo[] | null>(null);
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
   // modal (or the Reset button) can act on them instead of silently
@@ -80,7 +82,9 @@ export function ProfileEditorModal({
   const miscAction = useAsyncAction();
   const spoofingAction = useAsyncAction();
   const automationAction = useAsyncAction();
-  const error = loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error ?? automationAction.error;
+  const cookiesAction = useAsyncAction();
+  const error =
+    loadAction.error ?? saveAction.error ?? miscAction.error ?? spoofingAction.error ?? automationAction.error ?? cookiesAction.error;
 
   async function load(): Promise<void> {
     await loadAction.run(async () => {
@@ -310,6 +314,38 @@ export function ProfileEditorModal({
     });
   }
 
+  /** Cookies only exist inside a running profile's own child-process session
+   * (see ProfileManager.sendChildRequest) — there is nothing to list while
+   * stopped, so the Storage tab gates this behind profile.status. */
+  async function loadCookies(): Promise<void> {
+    await cookiesAction.run(async () => {
+      const list = await callApi<'profiles:cookies:list', CookieInfo[]>('profiles:cookies:list', { id: profileId });
+      setCookies(list);
+    });
+  }
+
+  async function removeCookie(cookie: CookieInfo): Promise<void> {
+    await cookiesAction.run(async () => {
+      const url = `${cookie.secure ? 'https' : 'http'}://${(cookie.domain ?? '').replace(/^\./, '')}${cookie.path ?? '/'}`;
+      await callApi('profiles:cookies:remove', { id: profileId, url, name: cookie.name });
+      await loadCookies();
+    });
+  }
+
+  async function addCookie(input: CookieSetInput): Promise<void> {
+    await cookiesAction.run(async () => {
+      await callApi('profiles:cookies:set', { id: profileId, cookie: input });
+      await loadCookies();
+    });
+  }
+
+  useEffect(() => {
+    if (tab === 'storage' && profile?.status === 'RUNNING' && cookies === null) {
+      void loadCookies();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, profile?.status]);
+
   async function updateSpoofing(patch: SpoofingPatch): Promise<void> {
     if (!fingerprint) return;
     await spoofingAction.run(async () => {
@@ -397,7 +433,16 @@ export function ProfileEditorModal({
           )}
 
           {profile && tab === 'storage' && (
-            <StorageTab profilePath={profile.profilePath} onClearCache={() => void clearCache()} />
+            <StorageTab
+              profilePath={profile.profilePath}
+              onClearCache={() => void clearCache()}
+              isRunning={profile.status === 'RUNNING'}
+              cookies={cookies}
+              cookiesLoading={cookiesAction.pending}
+              onRefreshCookies={() => void loadCookies()}
+              onRemoveCookie={(cookie) => void removeCookie(cookie)}
+              onAddCookie={(input) => void addCookie(input)}
+            />
           )}
 
           {profile && tab === 'advanced' && (

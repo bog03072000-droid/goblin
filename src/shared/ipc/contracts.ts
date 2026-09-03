@@ -9,6 +9,7 @@ import { ProxyInputSchema } from '../schemas/proxy';
 import { SettingsUpdateSchema } from '../schemas/settings';
 import { GroupCreateInputSchema, GroupRenameInputSchema, GroupDeleteInputSchema } from '../schemas/group';
 import { ActivityEventTypeSchema } from '../schemas/activityLog';
+import { CookieSetInputSchema } from '../schemas/cookie';
 
 /**
  * Central IPC contract registry. Every channel's request/response shape is
@@ -37,6 +38,9 @@ export const IpcRequestSchemas = {
     name: z.string().min(1).max(120),
   }),
   'profiles:clearCache': z.object({ id: ProfileIdSchema }),
+  'profiles:cookies:list': z.object({ id: ProfileIdSchema }),
+  'profiles:cookies:remove': z.object({ id: ProfileIdSchema, url: z.string(), name: z.string() }),
+  'profiles:cookies:set': z.object({ id: ProfileIdSchema, cookie: CookieSetInputSchema }),
 
   'fingerprint:get': z.object({ id: z.string().uuid() }),
   'fingerprint:generate': z.object({

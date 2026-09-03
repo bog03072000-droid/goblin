@@ -80,6 +80,9 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:restart', (p) => deps.profileManager.restart(p.id));
   handle('profiles:clone', (p) => deps.profileManager.clone(p.id, p.mode, p.name));
   handle('profiles:clearCache', (p) => deps.profileManager.clearCache(p.id));
+  handle('profiles:cookies:list', (p) => deps.profileManager.listCookies(p.id));
+  handle('profiles:cookies:remove', (p) => deps.profileManager.removeCookie(p.id, { url: p.url, name: p.name }));
+  handle('profiles:cookies:set', (p) => deps.profileManager.setCookie(p.id, p.cookie));
 
   handle('fingerprint:get', (p) => deps.fingerprints.getById(p.id));
   handle('fingerprint:generate', (p) => {

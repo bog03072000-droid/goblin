@@ -106,6 +106,37 @@ export function runProfileWindowProcess(): void {
 
     const partition = `persist:${args.profileId}`;
     const ses = session.fromPartition(partition, { cache: true });
+
+    // Cookie editor support (ProfileManager.sendChildRequest): cookies only
+    // ever exist inside this session, which only this process ever holds —
+    // the manager process asks over the existing stdio IPC channel (already
+    // used for graceful-quit) and correlates the reply by requestId. The
+    // manager retries its request for a few seconds if this attaches later
+    // than expected (see sendChildRequest's own comment for the real,
+    // reproduced race this covers) rather than this needing to signal
+    // readiness back somehow.
+    process.on('message', (raw) => {
+      const msg = raw as { type?: string; requestId?: string; url?: string; name?: string; cookie?: unknown };
+      if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string' || !msg.type.startsWith('cookies:')) return;
+      const { requestId } = msg;
+      void (async () => {
+        try {
+          if (msg.type === 'cookies:list') {
+            const cookies = await ses.cookies.get({});
+            process.send?.({ type: 'cookies:list:result', requestId, cookies });
+          } else if (msg.type === 'cookies:remove') {
+            await ses.cookies.remove(String(msg.url), String(msg.name));
+            process.send?.({ type: 'cookies:remove:result', requestId });
+          } else if (msg.type === 'cookies:set') {
+            await ses.cookies.set(msg.cookie as Electron.CookiesSetDetails);
+            process.send?.({ type: 'cookies:set:result', requestId });
+          }
+        } catch (err) {
+          process.send?.({ type: 'cookies:error', requestId, error: err instanceof Error ? err.message : String(err) });
+        }
+      })();
+    });
+
     if (args.proxyRules) {
       // Awaited: setProxy() resolves once the proxy config has actually been
       // applied to the session's network context. Without this await, the
