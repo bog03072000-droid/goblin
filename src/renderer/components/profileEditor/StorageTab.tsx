@@ -13,7 +13,7 @@ const EMPTY_LS_DRAFT = { key: '', value: '' };
 // uses for its field groups.
 const CARD_GRID_THRESHOLD = 8;
 
-function AddCookieForm({ onAdd }: { onAdd: (input: CookieSetInput) => void }): JSX.Element {
+export function AddCookieForm({ onAdd }: { onAdd: (input: CookieSetInput) => void }): JSX.Element {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(EMPTY_DRAFT);
 
