@@ -24,7 +24,11 @@ test.setTimeout(600_000);
 
 const REMOTE_DEBUG_PORT = 9337;
 const CYCLES = 10;
-const REPEATS = 2;
+// Raised from 2 to 8 (80 real-navigation cycles total instead of 20) for a
+// statistically more convincing "not reproduced" reading — see
+// docs/LOAD_TEST.md's Test 5 section for the accumulated result across all
+// runs of this file, not just the most recent one.
+const REPEATS = 8;
 const PROFILE_NAME = 'CDP Nav Stability Profile';
 
 let app: ElectronApplication;

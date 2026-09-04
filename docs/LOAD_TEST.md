@@ -150,15 +150,18 @@ finding below was investigated with a dedicated diagnostic
 `tests/performance/LOAD_TEST_STABILITY_CDPNAV_RAW.md`): one profile, 10
 real start → CDP-navigate (via the shell's own address bar, over a fresh
 CDP connection every cycle, not a JS-eval shortcut) → stop cycles, run
-twice (20 real-navigation cycles total, double the original single
-10-cycle report that produced the one `CRASHED` observation). **Result:
-0/20 cycles crashed, both repeats clean.** This doesn't *prove* the earlier
-`CRASHED` observation can never happen again — 2 repeats can't rule out a
-rare intermittent fault — but it meaningfully weakens the "confirmed
-product defect" reading: the same real-navigation mechanism that produced
-one crash before produced zero crashes across double the cycle count here,
-which is more consistent with the test-harness/timing-flake hypothesis
-already floated below than with a reliably reproducible bug. Treat this as
+**8 times** (**80 real-navigation cycles total**, 4× the original 20-cycle
+first pass, 8× the single 10-cycle report that produced the one `CRASHED`
+observation). **Result: 0/80 cycles crashed, all 8 repeats clean**
+(59.2s wall-clock for the full run). This still doesn't *prove* the
+earlier `CRASHED` observation can never happen again — no finite number of
+clean repeats can rule out a sufficiently rare intermittent fault — but at
+80 real-navigation cycles with zero repeats, the "confirmed product
+defect" reading is now hard to sustain: the same real-navigation mechanism
+that produced one crash before has now produced zero crashes across 4× the
+cycle count of the first follow-up and 8× the original report, which is
+far more consistent with the test-harness/timing-flake hypothesis already
+floated below than with a reliably reproducible bug. Treat this as
 **downgraded to low-confidence, not resolved to zero-risk** — worth
 revisiting if it's ever seen again in real usage, not worth further
 dedicated investigation time right now.
@@ -179,9 +182,10 @@ isolated investigation now recorded in the update above.
 
 **Result: PASS** on the validated, twice-reproduced mechanism (process
 leaks, locked directories, DB coherence, crash status all clean), **and**
-on the follow-up CDP-navigation investigation above (0/20 cycles crashed).
-The original single `CRASHED` observation stays on record as an
-unreproduced, low-confidence data point rather than being erased.
+on the follow-up CDP-navigation investigation above (0/80 cycles crashed
+across 8 repeats). The original single `CRASHED` observation stays on
+record as an unreproduced, low-confidence data point rather than being
+erased.
 
 ## Test 2 & 3 — Bulk start / bulk stop
 
@@ -316,7 +320,7 @@ profiles" recommendation below.
 | 1 — Profile database (20/50/100/200) | **PASS** |
 | 2/3 — Bulk start/stop | **PASS** (superseded 2026-09-01, re-confirmed 2026-09-03 — see the update note under Test 2/3: the original WARN was two test-authoring bugs, not memory pressure; concurrency 2/4/8 clean at 20/50/100 profiles, 0 failures/0 orphans) |
 | 4 — Profile isolation (20 profiles) | **PASS** |
-| 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism, and the CDP-navigation follow-up: 0/20 real-navigation cycles crashed) |
+| 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism, and the CDP-navigation follow-up: 0/80 real-navigation cycles crashed across 8 repeats) |
 | 6 — Clone (3 pairs) | **PASS** |
 | 7 — Backup/restore | **PASS** (existing `tests/unit/zipBackupRestore.test.ts` coverage: full export/import round-trip, bulk multi-profile export/import, corrupt-zip handling — all pre-existing, not modified this session, all passing) |
 | 8 — UI responsiveness (200 stored profiles) | **PASS** |
@@ -355,7 +359,8 @@ stability/bulk-start functionality is solidly validated at real scale
 (20/50/100 profiles, concurrency 2/4/8, re-confirmed fresh 2026-09-03) with
 zero product-code defects found. Test 5's CDP-navigation crash finding
 (see Test 5 above) — once the ceiling on readiness at 97% — was followed up
-with a dedicated 20-cycle real-navigation investigation on 2026-09-04 that
-reproduced zero crashes, downgrading it to a low-confidence, unreproduced
-data point rather than a known defect. The remaining 1% is exactly that
+with dedicated real-navigation investigations on 2026-09-04 (20 cycles,
+then 80 cycles across 8 repeats) that reproduced zero crashes, downgrading
+it to a low-confidence, unreproduced data point rather than a known
+defect. The remaining 1% is exactly that
 residual, irreducible-with-2-repeats uncertainty, not a larger open gap.
