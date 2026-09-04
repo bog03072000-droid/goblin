@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp } from 'lucide-react';
+import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp, ListPlus } from 'lucide-react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult, ProxyCheckHistoryEntry } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -19,6 +19,41 @@ function formatRelativeTime(iso: string, t: ReturnType<typeof useTranslation>['t
   return t('proxy.status.daysAgo', { n: Math.floor(hours / 24) });
 }
 
+interface ParsedBulkProxyLine {
+  line: string;
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+}
+
+/** One proxy per line: `host:port` or `host:port:username:password`. The
+ * password segment is rejoined with ':' instead of taken as parts[3] alone,
+ * since a real password may itself contain colons — everything after the
+ * username is the password, not just the next single segment. Blank lines
+ * are silently skipped (not counted as invalid); anything else that doesn't
+ * parse to a host and a valid 1-65535 port is reported back as invalid so
+ * the user can fix it before importing, instead of it just silently vanishing. */
+function parseBulkProxyLines(text: string): { valid: ParsedBulkProxyLine[]; invalid: string[] } {
+  const valid: ParsedBulkProxyLine[] = [];
+  const invalid: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split(':');
+    const host = parts[0]?.trim();
+    const port = Number(parts[1]);
+    if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+      invalid.push(line);
+      continue;
+    }
+    const username = parts[2]?.trim() || undefined;
+    const password = parts.length > 3 ? parts.slice(3).join(':').trim() || undefined : undefined;
+    valid.push({ line, host, port, username, password });
+  }
+  return { valid, invalid };
+}
+
 export function ProxiesPage(): JSX.Element {
   const { t } = useTranslation();
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
@@ -34,6 +69,14 @@ export function ProxiesPage(): JSX.Element {
   const historyAction = useAsyncAction();
   const { error, run } = useAsyncAction();
   const portInvalid = !Number.isInteger(form.port) || form.port < 1 || form.port > 65535;
+
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState('');
+  const [bulkImportProtocol, setBulkImportProtocol] = useState<ProxyProtocol>('http');
+  const [bulkImportResult, setBulkImportResult] = useState<{ succeeded: number; failed: Array<{ line: string; message: string }> } | null>(
+    null,
+  );
+  const { valid: bulkImportValid, invalid: bulkImportInvalid } = parseBulkProxyLines(bulkImportText);
 
   async function refresh(): Promise<void> {
     await run(async () => {
@@ -79,6 +122,43 @@ export function ProxiesPage(): JSX.Element {
   async function remove(id: string): Promise<void> {
     await run(async () => {
       await callApi('proxy:delete', { id });
+      await refresh();
+    });
+  }
+
+  /** No dedicated bulk-create IPC channel exists — each parsed line is just
+   * a normal `proxy:create` call, same as the single-proxy form above, run
+   * sequentially so one bad line's failure never aborts the rest of the
+   * batch (same "report each outcome independently" pattern the profiles
+   * bulk actions use). The name field this format doesn't carry is filled
+   * in as "host:port", which is what every other proxy in this table falls
+   * back to displaying anyway when nothing more specific is known. */
+  async function bulkImportProxies(): Promise<void> {
+    const { valid, invalid } = parseBulkProxyLines(bulkImportText);
+    if (valid.length === 0 && invalid.length === 0) return;
+    await run(async () => {
+      const failed: Array<{ line: string; message: string }> = invalid.map((line) => ({
+        line,
+        message: t('proxy.bulkImport.invalidLine'),
+      }));
+      let succeeded = 0;
+      for (const entry of valid) {
+        try {
+          await callApi('proxy:create', {
+            name: `${entry.host}:${entry.port}`,
+            protocol: bulkImportProtocol,
+            host: entry.host,
+            port: entry.port,
+            username: entry.username,
+            password: entry.password,
+          });
+          succeeded++;
+        } catch (err) {
+          failed.push({ line: entry.line, message: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      setBulkImportResult({ succeeded, failed });
+      setBulkImportText('');
       await refresh();
     });
   }
@@ -130,10 +210,67 @@ export function ProxiesPage(): JSX.Element {
           <PlugZap size={14} strokeWidth={2.25} />
           {t('proxy.create')}
         </button>
+        <button className="btn btn-ghost" onClick={() => setShowBulkImport((v) => !v)}>
+          <ListPlus size={14} strokeWidth={2.25} />
+          {t('proxy.bulkImport.toggle')}
+        </button>
       </div>
       <div className="content">
         {error && <div className="banner banner-error">{error}</div>}
         {portInvalid && <div className="banner banner-error">{t('proxy.portInvalid')}</div>}
+        {bulkImportResult && (
+          <div className={`banner ${bulkImportResult.failed.length > 0 ? 'banner-warn' : 'banner-success'}`}>
+            {t('proxy.bulkImport.resultSummary', {
+              succeeded: bulkImportResult.succeeded,
+              total: bulkImportResult.succeeded + bulkImportResult.failed.length,
+            })}
+            {bulkImportResult.failed.length > 0 && (
+              <ul className="bulk-failure-list">
+                {bulkImportResult.failed.map((f) => (
+                  <li key={f.line}>
+                    <span className="mono">{f.line}</span>: {f.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {showBulkImport && (
+          <div className="panel mb-16">
+            <h5 className="fp-picker-group-title">{t('proxy.bulkImport.title')}</h5>
+            <p className="text-dim text-sm mt-0">{t('proxy.bulkImport.hint')}</p>
+            <textarea
+              className="field-textarea mono"
+              rows={6}
+              placeholder={t('proxy.bulkImport.placeholder')}
+              value={bulkImportText}
+              onChange={(e) => setBulkImportText(e.target.value)}
+            />
+            <label className="field">
+              {t('proxy.bulkImport.protocolLabel')}
+              <select value={bulkImportProtocol} onChange={(e) => setBulkImportProtocol(e.target.value as ProxyProtocol)}>
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+            </label>
+            {bulkImportText.trim() !== '' && (
+              <p className="text-dim text-sm">
+                {t('proxy.bulkImport.parsedSummary', { valid: bulkImportValid.length, invalid: bulkImportInvalid.length })}
+              </p>
+            )}
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={bulkImportValid.length === 0}
+              onClick={() => void bulkImportProxies()}
+            >
+              {t('proxy.bulkImport.import')}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowBulkImport(false)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        )}
         <div className="panel">
         <table>
           <thead>

@@ -208,4 +208,107 @@ describe('ProxiesPage', () => {
     // proof the cache was actually dropped, not just harmlessly re-rendered.
     expect(invoke.mock.calls.filter((c) => c[0] === 'proxy:checkHistory')).toHaveLength(2);
   });
+
+  describe('bulk import', () => {
+    function openBulkImport() {
+      fireEvent.click(screen.getByRole('button', { name: 'Bulk import' }));
+    }
+
+    it('Bulk import toggles a panel with a textarea and a protocol select, closed by default', async () => {
+      mockInvoke({ 'proxy:list': () => [] });
+      renderPage();
+      await screen.findByText('No proxies yet. Add one above.');
+
+      expect(screen.queryByPlaceholderText(/203\.0\.113\.5:8080/)).not.toBeInTheDocument();
+      openBulkImport();
+      expect(screen.getByPlaceholderText(/203\.0\.113\.5:8080/)).toBeInTheDocument();
+    });
+
+    it('parses host:port and host:port:user:pass lines, creates one proxy per valid line, and reports invalid lines without creating them', async () => {
+      const invoke = mockInvoke({
+        'proxy:list': () => [],
+        'proxy:create': (p) => makeProxy(p as Partial<ProxyRecord>),
+      });
+      renderPage();
+      await screen.findByText('No proxies yet. Add one above.');
+      openBulkImport();
+
+      fireEvent.change(screen.getByPlaceholderText(/203\.0\.113\.5:8080/), {
+        target: { value: '10.0.0.1:8080\n10.0.0.2:3128:alice:s3cret\nnot-a-valid-line\n\n' },
+      });
+
+      expect(screen.getByText('2 valid line(s), 1 invalid')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith(
+          'proxy:create',
+          expect.objectContaining({ name: '10.0.0.1:8080', host: '10.0.0.1', port: 8080, protocol: 'http' }),
+        ),
+      );
+      expect(invoke).toHaveBeenCalledWith(
+        'proxy:create',
+        expect.objectContaining({ name: '10.0.0.2:3128', host: '10.0.0.2', port: 3128, username: 'alice', password: 's3cret' }),
+      );
+      // The invalid line never became a proxy:create call — only the 2 valid ones did.
+      expect(invoke.mock.calls.filter((c) => c[0] === 'proxy:create')).toHaveLength(2);
+
+      expect(await screen.findByText('Imported 2 of 3 proxies')).toBeInTheDocument();
+      expect(screen.getByText('not-a-valid-line', { exact: false })).toBeInTheDocument();
+    });
+
+    it('applies the selected protocol to every imported line', async () => {
+      const invoke = mockInvoke({
+        'proxy:list': () => [],
+        'proxy:create': (p) => makeProxy(p as Partial<ProxyRecord>),
+      });
+      renderPage();
+      await screen.findByText('No proxies yet. Add one above.');
+      openBulkImport();
+
+      fireEvent.change(screen.getByPlaceholderText(/203\.0\.113\.5:8080/), { target: { value: '10.0.0.1:1080' } });
+      fireEvent.change(screen.getByLabelText('Protocol (applied to every imported proxy)'), { target: { value: 'socks5' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith('proxy:create', expect.objectContaining({ protocol: 'socks5' })),
+      );
+    });
+
+    it('a proxy:create failure for one line is reported per-line without blocking the others from importing', async () => {
+      const invoke = mockInvoke({
+        'proxy:list': () => [],
+        'proxy:create': (p) => {
+          const input = p as { host: string };
+          if (input.host === '10.0.0.2') throw new Error('duplicate host');
+          return makeProxy(p as Partial<ProxyRecord>);
+        },
+      });
+      renderPage();
+      await screen.findByText('No proxies yet. Add one above.');
+      openBulkImport();
+
+      fireEvent.change(screen.getByPlaceholderText(/203\.0\.113\.5:8080/), {
+        target: { value: '10.0.0.1:8080\n10.0.0.2:8080' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+
+      expect(await screen.findByText('Imported 1 of 2 proxies')).toBeInTheDocument();
+      expect(screen.getByText('duplicate host', { exact: false })).toBeInTheDocument();
+      expect(invoke.mock.calls.filter((c) => c[0] === 'proxy:create')).toHaveLength(2);
+    });
+
+    it('Import is disabled when there are no valid lines yet', async () => {
+      mockInvoke({ 'proxy:list': () => [] });
+      renderPage();
+      await screen.findByText('No proxies yet. Add one above.');
+      openBulkImport();
+
+      expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+
+      fireEvent.change(screen.getByPlaceholderText(/203\.0\.113\.5:8080/), { target: { value: 'garbage-line' } });
+      expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+    });
+  });
 });
