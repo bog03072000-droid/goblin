@@ -571,6 +571,7 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border: 1px solid transparent;
+  transition: background var(--ease), color var(--ease), border-color var(--ease), text-shadow var(--ease);
 }
 .pill.on { background: rgba(124, 179, 66, 0.14); color: var(--lime); border-color: rgba(124, 179, 66, 0.35); text-shadow: 0 0 8px var(--lime-glow); }
 .pill.idle { background: rgba(170, 179, 162, 0.1); color: var(--ash); border-color: var(--stroke); }
