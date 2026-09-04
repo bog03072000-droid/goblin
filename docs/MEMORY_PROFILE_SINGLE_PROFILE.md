@@ -1,6 +1,9 @@
 # Memory profile — one running profile (real measurement)
 
-Generated: 2026-09-03
+Generated: 2026-09-03, updated 2026-09-04 (see "Update" section below — the
+2026-09-04 measurement supersedes the ~240 MB figure below with a more
+precise, isolated one; kept the original write-up intact rather than
+rewriting history)
 
 ## What was asked
 
@@ -110,3 +113,68 @@ profiles concurrently costs proportionally less RAM per profile than
 bulk-launching many at once, consistent with `LOAD_TEST_BULKSTART_RAW.md`'s
 own finding of compressing RAM headroom and super-linear startup time at
 higher concurrent tiers.
+
+## Update, 2026-09-04 — a cleaner per-process measurement, and it revises the conclusion above
+
+Asked to repeat this measurement via CDP's `Memory.getBrowserMemoryUsage`
+instead of driving the Task Manager UI, to route around the session-
+isolation and UIPI blockers documented above.
+
+**That exact CDP method doesn't exist.** The Chrome DevTools Protocol's
+public `Memory` domain only has `getDOMCounters`, `startSampling`/
+`stopSampling`, `getSamplingProfile`, `forciblyPurgeJavaScriptMemory`,
+`prepareForLeakDetection`, and the pressure-notification methods — none of
+which return OS-level process memory. Checked this before writing any code,
+rather than half-implementing a method that isn't there.
+
+**What was used instead: `app.getAppMetrics()`**, Electron's own main-
+process API — the same one Electron's built-in Task Manager uses
+internally. Each profile already runs as its own separate Electron process
+(one profile == one OS process tree, per `profileWindowEntry.ts`'s own
+module doc comment), so calling this from *inside* that profile's own main
+process, rather than from the manager, gives a clean per-process breakdown
+for exactly one profile with no GUI interaction at all — sidestepping both
+blockers directly instead of working around them.
+
+Implementation: a `PF_DEBUG_MEMORY=1`-gated block in
+`src/main/browser/profileWindowEntry.ts` (same env-var-gated pattern
+already used by `PF_E2E_AUTO_DIAGNOSTICS` in the same file), sampling
+`app.getAppMetrics()` every 20s and appending it to a `memory-debug.log`
+file next to the profile's own `userData`. Not wired into the normal app
+path — only active when that env var is set, so it ships inert.
+
+### Real result
+
+One profile ("Memory Profile Test"), steady state, four samples ~20s apart,
+**5 OS processes** (Browser/main, GPU, Utility, and 2 Tab/renderer
+processes — this profile had 2 tabs open):
+
+| Sample | Browser | GPU | Utility | Tab 1 | Tab 2 | Total |
+|---|---|---|---|---|---|---|
+| 12:38:02 | 141,840 | 137,808 | 95,568 | 94,624 | 133,772 | 603,612 KB (589.5 MB) |
+| 12:38:22 | 136,684 | 137,800 | 95,636 | 94,328 | 126,976 | 591,424 KB (577.6 MB) |
+| 12:38:42 | 135,584 | 137,800 | 95,152 | 94,328 | 130,024 | 592,888 KB (579.0 MB) |
+| 12:39:02 | 135,576 | 137,540 | 95,132 | 94,524 | 124,840 | 587,612 KB (573.8 MB) |
+
+**Average ≈ 580 MB, range 573.8–589.5 MB** for this one isolated profile —
+essentially in line with the original ~585 MB/profile figure in
+`docs/LOAD_TEST.md`, not the ~240 MB this doc reported above.
+
+### This revises the conclusion above, not just adds to it
+
+The ~240 MB Task Manager figure above was explicitly caveated as "combined
+manager + one running profile... grouped under one 'Electron' entry, which
+does not distinguish them" — i.e. it was never a clean per-profile number
+to begin with, just the best available given that measurement's own
+blockers. This new measurement *is* clean (one profile's own process tree,
+nothing else mixed in), and it lands close to the original ~585 MB figure
+instead of confirming the earlier "per-profile RAM cost is lower in
+isolation" finding. That earlier finding is **retracted** — it was an
+artifact of the Task Manager method's inability to cleanly separate the two
+"Electron" entries, not a real property of isolated vs. concurrent
+profiles. The right conclusion is the simpler one: one profile, isolated or
+not, costs roughly ~580 MB across its 5 OS processes, matching what
+`docs/LOAD_TEST.md` already reported.
+
+No code change was made here either — this was a measurement task, and the
+`PF_DEBUG_MEMORY` instrumentation stays inert unless explicitly enabled.

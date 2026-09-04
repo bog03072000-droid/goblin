@@ -205,6 +205,32 @@ export function runProfileWindowProcess(): void {
     });
     win.maximize();
 
+    // Testing-only, gated the same way as PF_E2E_AUTO_DIAGNOSTICS above: logs
+    // this profile's own per-process memory breakdown (main/renderer/GPU/
+    // utility — app.getAppMetrics() reports every OS process belonging to
+    // THIS Electron instance, since one profile == one OS process tree here,
+    // same as the module doc comment) to a file next to its userData. Chosen
+    // over the originally-suggested CDP `Memory.getBrowserMemoryUsage` —
+    // that method doesn't actually exist in the public Chrome DevTools
+    // Protocol (the real Memory domain only has getDOMCounters,
+    // startSampling/stopSampling, forciblyPurgeJavaScriptMemory, etc., none
+    // of which return OS-level process memory) — app.getAppMetrics() is the
+    // real, already-battle-tested Electron API for exactly this (it's what
+    // Electron's own Task Manager uses internally), and unlike driving the
+    // real Windows Task Manager UI it needs no GUI interaction at all, so it
+    // sidesteps both the session-isolation and UIPI blockers documented in
+    // docs/MEMORY_PROFILE_SINGLE_PROFILE.md.
+    if (process.env['PF_DEBUG_MEMORY'] === '1') {
+      const memLogPath = path.join(args.userDataDir, 'memory-debug.log');
+      const sampleMemory = (): void => {
+        const metrics = app.getAppMetrics();
+        const line = `${new Date().toISOString()} ${JSON.stringify(metrics.map((m) => ({ type: m.type, pid: m.pid, workingSetKB: m.memory.workingSetSize })))}\n`;
+        fs.appendFileSync(memLogPath, line);
+      };
+      sampleMemory();
+      setInterval(sampleMemory, 20000);
+    }
+
     setupDownloadHandling({ win, ses, userDataDir: args.userDataDir, profileId: args.profileId, dbPath: args.dbPath });
 
     // Forced here (main process) rather than left to the <webview> tag's own
