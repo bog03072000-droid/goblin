@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { PlugZap, Wifi, Pencil, Trash2 } from 'lucide-react';
-import type { ProxyRecord, ProxyProtocol, ProxyTestResult } from '@shared/schemas/proxy';
+import { Fragment, useEffect, useState } from 'react';
+import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp } from 'lucide-react';
+import type { ProxyRecord, ProxyProtocol, ProxyTestResult, ProxyCheckHistoryEntry } from '@shared/schemas/proxy';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EditProxyModal } from '../components/EditProxyModal';
@@ -26,6 +26,12 @@ export function ProxiesPage(): JSX.Element {
   const [form, setForm] = useState({ name: '', protocol: 'http' as ProxyProtocol, host: '', port: 8080, username: '', password: '' });
   const [confirmDeleteProxy, setConfirmDeleteProxy] = useState<ProxyRecord | null>(null);
   const [editingProxy, setEditingProxy] = useState<ProxyRecord | null>(null);
+  // Which proxy's history panel is open (at most one at a time) and its
+  // fetched rows, keyed by proxy id so switching back and forth doesn't
+  // re-fetch a panel that was already loaded this session.
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [history, setHistory] = useState<Record<string, ProxyCheckHistoryEntry[]>>({});
+  const historyAction = useAsyncAction();
   const { error, run } = useAsyncAction();
   const portInvalid = !Number.isInteger(form.port) || form.port < 1 || form.port > 65535;
 
@@ -60,6 +66,13 @@ export function ProxiesPage(): JSX.Element {
     await run(async () => {
       const result = await callApi<'proxy:test', ProxyTestResult>('proxy:test', { id });
       setResults((prev) => ({ ...prev, [id]: result }));
+      // A manual test writes a new history row on the backend (see
+      // proxy:test's handler) — drop the cached history for this proxy so
+      // the panel re-fetches instead of showing a stale list if reopened.
+      setHistory((prev) => {
+        const { [id]: _drop, ...rest } = prev;
+        return rest;
+      });
     });
   }
 
@@ -67,6 +80,22 @@ export function ProxiesPage(): JSX.Element {
     await run(async () => {
       await callApi('proxy:delete', { id });
       await refresh();
+    });
+  }
+
+  /** Toggles the history panel for one proxy — fetches on first open only
+   * (results.length===0 either way once loaded means "no checks yet", not
+   * "not loaded yet"), so re-toggling the same proxy doesn't re-fetch. */
+  async function toggleHistory(id: string): Promise<void> {
+    if (expandedHistoryId === id) {
+      setExpandedHistoryId(null);
+      return;
+    }
+    setExpandedHistoryId(id);
+    if (history[id]) return;
+    await historyAction.run(async () => {
+      const rows = await callApi<'proxy:checkHistory', ProxyCheckHistoryEntry[]>('proxy:checkHistory', { id });
+      setHistory((prev) => ({ ...prev, [id]: rows }));
     });
   }
 
@@ -120,7 +149,8 @@ export function ProxiesPage(): JSX.Element {
           </thead>
           <tbody>
             {proxies.map((p) => (
-              <tr key={p.id}>
+              <Fragment key={p.id}>
+              <tr>
                 <td>{p.name}</td>
                 <td>{p.protocol}</td>
                 <td className="mono">{p.host}</td>
@@ -155,6 +185,15 @@ export function ProxiesPage(): JSX.Element {
                     <Wifi size={13} strokeWidth={2.25} />
                     {t('proxy.test')}
                   </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => void toggleHistory(p.id)}>
+                    <History size={13} strokeWidth={2.25} />
+                    {t('proxy.history')}
+                    {expandedHistoryId === p.id ? (
+                      <ChevronUp size={13} strokeWidth={2.25} />
+                    ) : (
+                      <ChevronDown size={13} strokeWidth={2.25} />
+                    )}
+                  </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditingProxy(p)}>
                     <Pencil size={13} strokeWidth={2.25} />
                     {t('proxy.edit')}
@@ -165,6 +204,41 @@ export function ProxiesPage(): JSX.Element {
                   </button>
                 </td>
               </tr>
+              {expandedHistoryId === p.id && (
+                <tr className="proxy-history-row">
+                  <td colSpan={7}>
+                    {historyAction.pending && !history[p.id] ? (
+                      <p className="text-dim text-sm m-0">{t('common.loading')}</p>
+                    ) : !history[p.id] || history[p.id]!.length === 0 ? (
+                      <p className="text-dim text-sm m-0">{t('proxy.history.empty')}</p>
+                    ) : (
+                      <table className="proxy-history-table">
+                        <thead>
+                          <tr>
+                            <th>{t('proxy.history.when')}</th>
+                            <th>{t('proxy.history.status')}</th>
+                            <th>{t('proxy.history.latency')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history[p.id]!.map((entry) => (
+                            <tr key={entry.id}>
+                              <td className="mono" title={new Date(entry.checkedAt).toLocaleString()}>
+                                {formatRelativeTime(entry.checkedAt, t)}
+                              </td>
+                              <td>
+                                <span className={`pill ${entry.status === 'OK' ? 'on' : 'danger'}`}>{entry.status}</span>
+                              </td>
+                              <td className="mono">{entry.latencyMs !== null ? `${entry.latencyMs}ms` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {proxies.length === 0 && (
               <tr>

@@ -147,6 +147,8 @@ export function registerIpc(deps: IpcDependencies): void {
     return result;
   });
 
+  handle('proxy:checkHistory', (p) => deps.proxies.listCheckHistory(p.id));
+
   handle('logs:list', (p) =>
     deps.logs.list({
       limit: p.limit,

@@ -36,3 +36,15 @@ export interface ProxyTestResult {
   latencyMs: number | null;
   error: string | null;
 }
+
+/** One row from proxy_check_history — every scheduled or manual health
+ * check, not just the most recent (which lives on ProxyRecord itself via
+ * lastCheckStatus/lastCheckedAt/lastCheckLatencyMs). See
+ * ProxyRepository.recordCheckResult()/listCheckHistory(). */
+export const ProxyCheckHistoryEntrySchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['OK', 'FAIL']),
+  latencyMs: z.number().nullable(),
+  checkedAt: z.string(),
+});
+export type ProxyCheckHistoryEntry = z.infer<typeof ProxyCheckHistoryEntrySchema>;

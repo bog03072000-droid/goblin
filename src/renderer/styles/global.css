@@ -492,6 +492,12 @@ td { transition: background var(--ease), box-shadow var(--ease); }
 tr:hover td { background: rgba(124, 179, 66, 0.05); }
 tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
 
+/* ---------- Proxy check-history panel (ProxiesPage.tsx) ---------- */
+.proxy-history-row td { background: var(--char); padding: 10px 14px; }
+.proxy-history-row:hover td { background: var(--char); }
+.proxy-history-table { width: auto; margin: 0; }
+.proxy-history-table th, .proxy-history-table td { padding: 4px 12px 4px 0; font-size: 12px; }
+
 /* ---------- Form field (label + control), reusable across all
    modals/tabs — extracted this stage from what used to be repeated inline
    `style={{ display: 'block', marginBottom: 8 }}` on every <label>. ---------- */

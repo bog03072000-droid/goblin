@@ -147,4 +147,65 @@ describe('ProxiesPage', () => {
 
     expect(await screen.findByText('OK (42ms)')).toBeInTheDocument();
   });
+
+  it('History fetches and shows past checks on first open, then closes without re-fetching on a second click', async () => {
+    const invoke = mockInvoke({
+      'proxy:list': () => [makeProxy({})],
+      'proxy:checkHistory': () => [
+        { id: 'h1', status: 'OK', latencyMs: 12, checkedAt: '2026-01-01T00:05:00.000Z' },
+        { id: 'h2', status: 'FAIL', latencyMs: null, checkedAt: '2026-01-01T00:00:00.000Z' },
+      ],
+    });
+    renderPage();
+    await screen.findByText('My Proxy');
+
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:checkHistory', { id: 'proxy-1' }));
+    expect(await screen.findByText('12ms')).toBeInTheDocument();
+    expect(screen.getByText('FAIL')).toBeInTheDocument(); // the null-latency row's status pill
+
+    // Closing and reopening must not re-fetch — the cached history is reused.
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    expect(screen.queryByText('12ms')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    expect(await screen.findByText('12ms')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(2); // proxy:list once, proxy:checkHistory once — not twice
+  });
+
+  it('History shows an empty-state message when a proxy has never been checked', async () => {
+    mockInvoke({
+      'proxy:list': () => [makeProxy({})],
+      'proxy:checkHistory': () => [],
+    });
+    renderPage();
+    await screen.findByText('My Proxy');
+
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+
+    expect(await screen.findByText('No checks recorded yet.')).toBeInTheDocument();
+  });
+
+  it('a manual Test drops any cached history for that proxy so History re-fetches instead of showing a stale list', async () => {
+    const invoke = mockInvoke({
+      'proxy:list': () => [makeProxy({})],
+      'proxy:checkHistory': () => [{ id: 'h1', status: 'OK', latencyMs: 5, checkedAt: '2026-01-01T00:00:00.000Z' }],
+      'proxy:test': () => ({ success: true, latencyMs: 99 }),
+    });
+    renderPage();
+    await screen.findByText('My Proxy');
+
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    await screen.findByText('5ms');
+    fireEvent.click(screen.getByRole('button', { name: /History/ })); // close
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await screen.findByText('OK (99ms)');
+
+    fireEvent.click(screen.getByRole('button', { name: /History/ })); // reopen
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:checkHistory', { id: 'proxy-1' }));
+    // Called twice total (once on the original open, once on this reopen) —
+    // proof the cache was actually dropped, not just harmlessly re-rendered.
+    expect(invoke.mock.calls.filter((c) => c[0] === 'proxy:checkHistory')).toHaveLength(2);
+  });
 });
