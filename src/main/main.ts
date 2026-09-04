@@ -137,12 +137,16 @@ function runManagerProcess(): void {
 
 /**
  * electron-updater reads its feed URL from `build.publish` in package.json
- * (see that file for the real GitHub owner/repo this still needs, and
- * README.md's "Releases and auto-updates" section for how to fill it in or
- * switch providers). Only meaningful for a packaged, signed build — an
- * unpackaged dev run has no real version/feed to check against, so this
- * intentionally no-ops there rather than logging a stream of dev-only
- * "update check failed" noise on every launch.
+ * (see that file for the real GitHub owner/repo, and DEVELOPMENT.md's
+ * "Auto-updates (electron-updater)" section — including a verified,
+ * working end-to-end run against the real published release — for how
+ * this actually behaves and how to switch providers). Only meaningful for
+ * a packaged build (`app.isPackaged`) — an unpackaged dev run (`electron .`)
+ * has no real version/feed to check against, so this intentionally no-ops
+ * there. Note that `app.isPackaged` is also `true` for an `electron-builder
+ * --dir` build, which does NOT get an `app-update.yml` written into it (see
+ * DEVELOPMENT.md) — that combination is a real, harmless ENOENT here, not a
+ * bug in this function.
  *
  * `checkForUpdatesAndNotify()` already shows a native OS notification once
  * an update is downloaded; the `update-downloaded` listener additionally

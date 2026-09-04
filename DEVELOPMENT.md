@@ -109,14 +109,34 @@ from CI with a `GH_TOKEN` env var set) — this project does not wire that up
 automatically, so a maintainer stays in control of when a release actually
 goes out.
 
-**This config alone does not make auto-updates work yet.** electron-updater
-only finds something to update to once a tagged Release with a published
-installer asset actually exists on `bog03072000-droid/goblin` — until the
-first `electron-builder --publish always` run (which needs a `GH_TOKEN`
+**Verified working end-to-end (2026-09-04).** A tagged `v0.2.0` Release
+with a published installer asset (plus its `latest.yml`/`.blockmap`) does
+exist on `bog03072000-droid/goblin` — real proof, not assumed: built a
+packaged installer at a locally-lowered version (`0.1.0`), ran it, and
+`main.log` showed a real, complete flow — `Checking for update` → `Found
+version 0.2.0` → a genuine **differential** download (block-map diffing,
+`0 KB` to download since the block map matched) → `New version 0.2.0 has
+been downloaded ... ready to install`. No code or config changes were
+needed for this to work; `build.publish` was already correct.
+
+Getting a *newer* release out is still the same separate, deliberate step
+it always was: `electron-builder --publish always` (needs a `GH_TOKEN`
 with `repo` scope, e.g. a GitHub Personal Access Token or `gh auth token`,
-set in the environment that runs it), `checkForUpdatesAndNotify()` will
-simply find no releases and do nothing. Setting up that token/CI step is a
-separate, deliberate decision for whoever manages releases — not done here.
+set in the environment that runs it) — not wired into CI automatically, so
+a maintainer stays in control of when a release actually goes out.
+
+**A trap worth knowing about, since it's what actually caused a real
+"ENOENT: app-update.yml" failure during development:** `electron-builder
+--dir` (the fast, installer-less target used for quick local iteration —
+`release/win-unpacked/`) does **not** write `resources/app-update.yml` at
+all, even though `app.isPackaged` is still `true` for a `--dir` build, so
+`setUpAutoUpdater()` still runs and immediately fails looking for a file
+that was never written. Only a real installer-producing target (`npm run
+package`, i.e. plain `electron-builder`, or an actual `--publish` run) 
+writes it. If you're testing a `--dir` build directly, either expect that
+one specific ENOENT (harmless — nothing else is affected) or test the
+real installer target instead when auto-update behavior specifically is
+what you're checking.
 
 If GitHub Releases isn't where you want to host updates, swap the whole
 block for a `"provider": "generic"` config instead:
