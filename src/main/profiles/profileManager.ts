@@ -10,11 +10,12 @@ import type { GroupRepository } from '../database/groupRepository';
 import { log } from '../logger';
 import { LockManager } from './lockManager';
 import { ProfileChildChannel } from './profileChildChannel';
+import { ProfileLifecycleManager } from './profileLifecycleManager';
+import type { BulkResult } from './bulkResult';
 import { launchProfileProcess } from '../browser/browserLauncher';
 import { checkBrowserCompatibility } from '../fingerprint/browserCompatibility';
 import {
   createProfileStorage,
-  deleteProfileStorage,
   clearProfileCache,
   copyProfileStorage,
   resolveProfileDir,
@@ -23,24 +24,15 @@ import type { Profile, ProfileCreateInput } from '../../shared/schemas/profile';
 import type { CookieInfo, CookieSetInput } from '../../shared/schemas/cookie';
 import type { LocalStorageListResponse, LocalStorageSetInput } from '../../shared/schemas/localStorageEntry';
 
-export interface BulkResult {
-  succeeded: string[];
-  failed: Array<{ id: string; message: string }>;
-}
+export type { BulkResult } from './bulkResult';
 
 /**
  * Orchestrates the full profile lifecycle: DB state + on-disk storage + OS
  * process + lock file all move together so they never drift out of sync.
  */
-/** How long a soft-deleted profile stays recoverable via restoreDeleted()
- * before ProfileManager permanently removes it. Overridable for tests only
- * (see PF_E2E_* convention) — never meant to be end-user configurable. */
-const SOFT_DELETE_WINDOW_MS = Number(process.env['PF_SOFT_DELETE_WINDOW_MS'] ?? 30_000);
-
 export class ProfileManager {
   private readonly running = new Map<string, ChildProcess>();
   private readonly lockManager = new LockManager();
-  private readonly pendingHardDeletes = new Map<string, NodeJS.Timeout>();
   /** ids with a stop() currently in flight — lets the exit handler tell a
    * requested stop apart from a genuinely unexpected crash. See stop(). */
   private readonly stopping = new Set<string>();
@@ -48,6 +40,10 @@ export class ProfileManager {
    * ProfileChildChannel's own doc comment for why this is a separate class
    * rather than more ProfileManager methods. */
   private readonly childChannel: ProfileChildChannel;
+  /** Soft-delete/undo/hard-delete state machine — see
+   * ProfileLifecycleManager's own doc comment for why this is a separate
+   * class rather than more ProfileManager methods. */
+  private readonly lifecycle: ProfileLifecycleManager;
 
   constructor(
     private readonly profilesRoot: string,
@@ -63,14 +59,7 @@ export class ProfileManager {
     private readonly groups?: GroupRepository,
   ) {
     this.childChannel = new ProfileChildChannel(this.logs);
-    // Defensive cleanup for profiles whose undo window elapsed while the app
-    // wasn't running to fire the in-memory timer (closed/crashed mid-window) —
-    // without this they'd stay soft-deleted (invisible in the list, but still
-    // on disk) forever.
-    const cutoff = new Date(Date.now() - SOFT_DELETE_WINDOW_MS).toISOString();
-    for (const { id } of this.profiles.listStaleDeleted(cutoff)) {
-      this.hardDeletePermanently(id);
-    }
+    this.lifecycle = new ProfileLifecycleManager(this.profilesRoot, this.profiles, this.logs, (id) => this.running.has(id));
   }
 
   create(input: ProfileCreateInput, fingerprintId: string): Profile {
@@ -334,46 +323,14 @@ export class ProfileManager {
     return this.childChannel.removeLocalStorageItem(this.running.get(id), id, key);
   }
 
-  /** Soft-deletes: the profile disappears from the default list immediately
-   * and stays fully recoverable via restoreDeleted() for SOFT_DELETE_WINDOW_MS,
-   * after which it's permanently removed (files included) in the background —
-   * same end state the old hard-delete-on-click behavior produced, just with
-   * an undo window in front of it. */
+  /** Thin delegations to ProfileLifecycleManager — see that class for the
+   * actual soft-delete/undo/hard-delete logic. */
   delete(id: string): void {
-    const profile = this.mustGet(id);
-    if (this.running.has(id)) throw new Error('Stop the profile before deleting it');
-    this.profiles.softDelete(id);
-    this.logs.record('PROFILE_DELETED', id, `Profile "${profile.name}" deleted`);
-    const timer = setTimeout(() => {
-      this.pendingHardDeletes.delete(id);
-      this.hardDeletePermanently(id);
-    }, SOFT_DELETE_WINDOW_MS);
-    timer.unref();
-    this.pendingHardDeletes.set(id, timer);
+    this.lifecycle.delete(id);
   }
 
-  /** Reverses a pending delete() within its undo window. Throws if the window
-   * already elapsed (and the profile was hard-deleted) or the id never
-   * existed — nothing left to restore. */
   restoreDeleted(id: string): Profile {
-    const timer = this.pendingHardDeletes.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      this.pendingHardDeletes.delete(id);
-    }
-    this.profiles.restoreDeleted(id);
-    const profile = this.mustGet(id);
-    this.logs.record('PROFILE_DELETE_UNDONE', id, `Deletion of "${profile.name}" undone`);
-    return profile;
-  }
-
-  private hardDeletePermanently(id: string): void {
-    const profile = this.profiles.getById(id);
-    deleteProfileStorage(this.profilesRoot, id);
-    this.profiles.hardDelete(id);
-    if (profile) {
-      this.logs.record('PROFILE_DELETED', id, `Profile "${profile.name}" permanently removed`);
-    }
+    return this.lifecycle.restoreDeleted(id);
   }
 
   /** mode 'config' shares nothing but the fingerprint/proxy config; 'full' also
@@ -475,13 +432,11 @@ export class ProfileManager {
   }
 
   bulkDelete(ids: string[]): Promise<BulkResult> {
-    return this.bulkRun(ids, (id) => this.delete(id));
+    return this.lifecycle.bulkDelete(ids);
   }
 
   bulkRestoreDeleted(ids: string[]): Promise<BulkResult> {
-    return this.bulkRun(ids, (id) => {
-      this.restoreDeleted(id);
-    });
+    return this.lifecycle.bulkRestoreDeleted(ids);
   }
 
   bulkClone(ids: string[]): Promise<BulkResult> {
