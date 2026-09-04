@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import type { Profile } from '@shared/schemas/profile';
 import type { Settings } from '@shared/schemas/settings';
 import type { Fingerprint } from '@shared/schemas/fingerprint';
-import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
-import type { LocalStorageEntry, LocalStorageSetInput } from '@shared/schemas/localStorageEntry';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useFingerprintPreview, validateFingerprintPreview } from '../hooks/useFingerprintPreview';
 import { useProfileFormFields, parseTagsText } from '../hooks/useProfileFormFields';
+import { useProfileStorageData } from '../hooks/useProfileStorageData';
+import { useProfileAutomation } from '../hooks/useProfileAutomation';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
 import { FingerprintTab, type FieldOverrides, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
@@ -43,11 +43,29 @@ export function ProfileEditorModal({
     useProfileFormFields({ name: '', description: '', tagsText: '', groupId: '', proxyId: '' });
   const [manualMode, setManualMode] = useState(false);
   const [draft, setDraft] = useState<FingerprintDraft | null>(null);
-  const [automationToken, setAutomationToken] = useState<string | null>(null);
   const [defaultAutomationPort, setDefaultAutomationPort] = useState<number | null>(null);
-  const [cookies, setCookies] = useState<CookieInfo[] | null>(null);
-  const [localStorageItems, setLocalStorageItems] = useState<LocalStorageEntry[] | null>(null);
-  const [localStorageOrigin, setLocalStorageOrigin] = useState<string | null>(null);
+  const {
+    automationToken,
+    setAutomationToken,
+    pending: automationPending,
+    error: automationError,
+    saveAutomation,
+    regenerateAutomationToken,
+  } = useProfileAutomation(profileId, setProfile);
+  const {
+    cookies,
+    cookiesPending,
+    loadCookies,
+    removeCookie,
+    addCookie,
+    localStorageOrigin,
+    localStorageItems,
+    localStoragePending,
+    loadLocalStorage,
+    removeLocalStorageItem,
+    addLocalStorageItem,
+    error: storageError,
+  } = useProfileStorageData(profileId);
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
   // modal (or the Reset button) can act on them instead of silently
@@ -71,17 +89,13 @@ export function ProfileEditorModal({
   const saveAction = useAsyncAction();
   const miscAction = useAsyncAction();
   const spoofingAction = useAsyncAction();
-  const automationAction = useAsyncAction();
-  const cookiesAction = useAsyncAction();
-  const localStorageAction = useAsyncAction();
   const error =
     loadAction.error ??
     saveAction.error ??
     miscAction.error ??
     spoofingAction.error ??
-    automationAction.error ??
-    cookiesAction.error ??
-    localStorageAction.error;
+    automationError ??
+    storageError;
 
   // AUTO mode here has no separate "preview vs. persist" step (unlike the
   // create-modal's not-yet-persisted draft): a freshly generated fingerprint
@@ -127,35 +141,6 @@ export function ProfileEditorModal({
       setAutomationToken(tokenResult.token);
       const settings = await callApi<'settings:get', Settings>('settings:get', {});
       setDefaultAutomationPort(settings.defaultAutomationPort);
-    });
-  }
-
-  /** Toggling automation on generates a token the first time (none exists
-   * yet for a profile that never had it enabled); toggling off just flips
-   * the flag and clears the displayed token — the encrypted token itself
-   * stays in the database so re-enabling later doesn't silently rotate it
-   * out from under an already-configured external automation client. */
-  async function saveAutomation(patch: { automationEnabled?: boolean; automationPort?: number | null }): Promise<void> {
-    await automationAction.run(async () => {
-      const updated = await callApi<'profiles:update', Profile>('profiles:update', { id: profileId, ...patch });
-      setProfile(updated);
-      if (patch.automationEnabled === true && !automationToken) {
-        const generated = await callApi<'profiles:regenerateAutomationToken', { token: string }>(
-          'profiles:regenerateAutomationToken',
-          { id: profileId },
-        );
-        setAutomationToken(generated.token);
-      }
-    });
-  }
-
-  async function regenerateAutomationToken(): Promise<void> {
-    await automationAction.run(async () => {
-      const result = await callApi<'profiles:regenerateAutomationToken', { token: string }>(
-        'profiles:regenerateAutomationToken',
-        { id: profileId },
-      );
-      setAutomationToken(result.token);
     });
   }
 
@@ -269,60 +254,6 @@ export function ProfileEditorModal({
     });
   }
 
-  /** Cookies only exist inside a running profile's own child-process session
-   * (see ProfileManager.sendChildRequest) — there is nothing to list while
-   * stopped, so the Storage tab gates this behind profile.status. */
-  async function loadCookies(): Promise<void> {
-    await cookiesAction.run(async () => {
-      const list = await callApi<'profiles:cookies:list', CookieInfo[]>('profiles:cookies:list', { id: profileId });
-      setCookies(list);
-    });
-  }
-
-  async function removeCookie(cookie: CookieInfo): Promise<void> {
-    await cookiesAction.run(async () => {
-      const url = `${cookie.secure ? 'https' : 'http'}://${(cookie.domain ?? '').replace(/^\./, '')}${cookie.path ?? '/'}`;
-      await callApi('profiles:cookies:remove', { id: profileId, url, name: cookie.name });
-      await loadCookies();
-    });
-  }
-
-  async function addCookie(input: CookieSetInput): Promise<void> {
-    await cookiesAction.run(async () => {
-      await callApi('profiles:cookies:set', { id: profileId, cookie: input });
-      await loadCookies();
-    });
-  }
-
-  /** Same running-only constraint as cookies, plus a narrower scope: only
-   * the profile's first/primary tab's current origin (see
-   * profileWindowEntry.ts's localStorage: handlers) — localStorage has no
-   * session-wide API the way cookies do. */
-  async function loadLocalStorage(): Promise<void> {
-    await localStorageAction.run(async () => {
-      const result = await callApi<'profiles:localStorage:list', { origin: string; items: LocalStorageEntry[] }>(
-        'profiles:localStorage:list',
-        { id: profileId },
-      );
-      setLocalStorageOrigin(result.origin);
-      setLocalStorageItems(result.items);
-    });
-  }
-
-  async function removeLocalStorageItem(key: string): Promise<void> {
-    await localStorageAction.run(async () => {
-      await callApi('profiles:localStorage:remove', { id: profileId, key });
-      await loadLocalStorage();
-    });
-  }
-
-  async function addLocalStorageItem(input: LocalStorageSetInput): Promise<void> {
-    await localStorageAction.run(async () => {
-      await callApi('profiles:localStorage:set', { id: profileId, item: input });
-      await loadLocalStorage();
-    });
-  }
-
   useEffect(() => {
     if (tab === 'storage' && profile?.status === 'RUNNING' && cookies === null) {
       void loadCookies();
@@ -425,13 +356,13 @@ export function ProfileEditorModal({
               onClearCache={() => void clearCache()}
               isRunning={profile.status === 'RUNNING'}
               cookies={cookies}
-              cookiesLoading={cookiesAction.pending}
+              cookiesLoading={cookiesPending}
               onRefreshCookies={() => void loadCookies()}
               onRemoveCookie={(cookie) => void removeCookie(cookie)}
               onAddCookie={(input) => void addCookie(input)}
               localStorageOrigin={localStorageOrigin}
               localStorageItems={localStorageItems}
-              localStorageLoading={localStorageAction.pending}
+              localStorageLoading={localStoragePending}
               onRefreshLocalStorage={() => void loadLocalStorage()}
               onRemoveLocalStorageItem={(key) => void removeLocalStorageItem(key)}
               onAddLocalStorageItem={(input) => void addLocalStorageItem(input)}
@@ -443,7 +374,7 @@ export function ProfileEditorModal({
               profile={profile}
               automationToken={automationToken}
               defaultAutomationPort={defaultAutomationPort}
-              automationSaving={automationAction.pending}
+              automationSaving={automationPending}
               onSaveAutomation={(patch) => void saveAutomation(patch)}
               onRegenerateToken={() => void regenerateAutomationToken()}
             />
