@@ -12,6 +12,8 @@ import { FingerprintTab, type FingerprintDraft, type SpoofingPatch, type FieldOv
 
 type Tab = 'general' | 'fingerprint' | 'proxy' | 'storage' | 'advanced';
 
+const CUSTOM_SETUP_HINT_SEEN_KEY = 'profileforge.hint.customSetupSeen';
+
 /** A local, not-yet-persisted stand-in for a real `Fingerprint` row — same
  * shape so FingerprintTab (built for editing a real, saved fingerprint) can
  * be reused unmodified here. Nothing under this id is ever read from or
@@ -66,6 +68,24 @@ export function ProfileCreateModal({
 }): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('general');
+  // Shown once (per browser profile, via localStorage) the first time this
+  // modal opens, so a user coming from Quick Create understands what the
+  // extra tabs here are for before hunting through them.
+  const [showHint, setShowHint] = useState(() => {
+    try {
+      return localStorage.getItem(CUSTOM_SETUP_HINT_SEEN_KEY) !== '1';
+    } catch {
+      return false;
+    }
+  });
+  function dismissHint(): void {
+    setShowHint(false);
+    try {
+      localStorage.setItem(CUSTOM_SETUP_HINT_SEEN_KEY, '1');
+    } catch {
+      /* localStorage unavailable (private mode etc.) — hint just reappears next time, harmless */
+    }
+  }
 
   const { name, setName, description, setDescription, tagsText, setTagsText, groupId, setGroupId, proxyId, setProxyId, groups, proxies, setProxies, loadGroupsAndProxies } =
     useProfileFormFields({ name: initialName, description: '', tagsText: initialTags, groupId: initialGroupId, proxyId: initialProxyId });
@@ -252,6 +272,14 @@ export function ProfileCreateModal({
           </button>
         </div>
         <div className="modal-body-scroll">
+          {showHint && (
+            <div className="banner banner-info">
+              <span>{t('profileCreate.hint.body')}</span>
+              <button className="btn btn-ghost btn-sm" onClick={dismissHint}>
+                {t('profileCreate.hint.dismiss')}
+              </button>
+            </div>
+          )}
           {error && <div className="banner banner-error">{error}</div>}
           {loadAction.pending && !fingerprint && <p>{t('common.loading')}</p>}
 

@@ -132,6 +132,9 @@ const en = {
   'profiles.msg.exportedAll': 'Exported all profiles to {path}',
 
   'profileCreate.title': 'Create New Profile',
+  'profileCreate.hint.body':
+    "Custom setup lets you configure the fingerprint, proxy, and manual overrides before the profile is created. For a fast start with an auto-generated fingerprint, use Quick Create instead.",
+  'profileCreate.hint.dismiss': 'Got it',
   'profileCreate.createButton': 'Create profile',
   'profileCreate.fingerprint.template': 'Template (OS / browser)',
   'profileCreate.proxy.addNew': 'Add new proxy',

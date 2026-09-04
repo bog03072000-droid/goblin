@@ -563,6 +563,7 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
 .banner-error { background: rgba(229, 72, 77, 0.1); border-color: var(--danger); color: color-mix(in srgb, var(--danger) 70%, white); }
 .banner-success { background: rgba(124, 179, 66, 0.1); border-color: var(--lime); color: var(--lime); }
 .banner-warn { background: rgba(210, 153, 34, 0.1); border-color: var(--warn); color: var(--warn); }
+.banner-info { background: var(--char-hi); border-color: var(--stroke); color: var(--ash); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 
 /* ---------- Undo toast ---------- */
 .undo-toast {

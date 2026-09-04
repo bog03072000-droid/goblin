@@ -134,6 +134,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.msg.exportedAll': 'Усі профілі експортовано до {path}',
 
   'profileCreate.title': 'Створити новий профіль',
+  'profileCreate.hint.body':
+    'Custom setup дозволяє налаштувати відбиток, проксі та ручні перевизначення ще до створення профілю. Для швидкого старту з автогенерованим відбитком скористайтеся Швидким створенням.',
+  'profileCreate.hint.dismiss': 'Зрозуміло',
   'profileCreate.createButton': 'Створити профіль',
   'profileCreate.fingerprint.template': 'Шаблон (ОС / браузер)',
   'profileCreate.proxy.addNew': 'Додати новий проксі',
