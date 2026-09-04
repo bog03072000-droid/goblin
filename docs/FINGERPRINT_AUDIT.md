@@ -4,18 +4,23 @@
 > Spoofing (navigator fields, canvas/audio noise, WebGL vendor/renderer) is
 > genuinely applied and E2E-verified for the main document and every
 > dedicated/shared Worker. It does **not** reach a Service Worker's own
-> global scope — a real, reproducible gap that lets a Service-Worker-based
-> fingerprint probe (this is exactly how CreepJS reads part of its report)
-> see this machine's real GPU and real navigator values instead of the
-> configured ones. Three independent, concrete fix attempts were built,
-> tested against a real proxy-authentication regression, and reverted —
-> the technical path that closes this gap breaks authenticated proxy
-> support, which is core functionality, not a trade this project makes.
-> This is a final decision, not an open investigation: see **"Confirmed,
-> real, honest limitation: Service Workers"** and **"Third and final
-> attempt"** below (§CDP footprint reduction + Worker/SharedWorker
-> propagation fix) for the full technical history if you need it — most
-> readers won't.
+> global scope in shipped code — a real, reproducible gap that lets a
+> Service-Worker-based fingerprint probe (this is exactly how CreepJS reads
+> part of its report) see this machine's real GPU and real navigator values
+> instead of the configured ones. Four independent, concrete fix attempts
+> were built and reverted: the first three broke a real
+> proxy-authentication regression (core functionality, not a trade this
+> project makes); the fourth (a browser-level CDP `Target.setAutoAttach`
+> session, no network interception involved) genuinely did NOT break proxy
+> auth and DID fix part of the gap (Worker-section navigator/UA/GPU now
+> correctly spoofed), but introduced a new, reproducible CreepJS "stealth"
+> detection signal (0% → 20%) that wasn't present before — a disqualifying
+> outcome under this project's own decision rule, even though the two other
+> named risks (proxy-auth, "like headless") came back clean. This is a
+> final decision, not an open investigation: see **"Confirmed, real, honest
+> limitation: Service Workers"**, **"Third and final attempt"**, and
+> **"Fourth attempt — browser-level Target.setAutoAttach"** below for the
+> full technical history if you need it — most readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -854,11 +859,184 @@ exhaustively investigated dead end: three concrete attempts (full
 interception, narrowed-by-destination — abandoned early once `destination`
 proved unpopulated — and narrowed-by-navigation-mode), one confirmed
 working injection mechanism, one confirmed unconditional blocker, no
-remaining unscoped variation of `protocol.handle()` left to try. The fourth
-alternative (CDP `Target.setAutoAttach`) remains correctly unattempted for
-the same CDP-footprint reason as before. No fix currently known that
-doesn't either reintroduce this regression or add disproportionate new
-surface.
+remaining unscoped variation of `protocol.handle()` left to try. No fix
+currently known via `protocol.handle()` that doesn't either reintroduce
+this regression or add disproportionate new surface. The fourth
+alternative — CDP `Target.setAutoAttach` at the browser level — was
+attempted next, in a later stage; see immediately below.
+
+## Fourth attempt — browser-level `Target.setAutoAttach`, real partial fix, real new detection signal, reverted
+
+**What this attempted.** The one alternative the "CDP footprint reduction"
+stage above explicitly flagged as unattempted, for the reason stated there:
+Electron's `webContents.debugger` is scoped to one page's own WebContents,
+never the whole browser, so reaching a Service Worker target before it runs
+its own code would need a genuinely different kind of CDP session — one
+attached to the *browser* endpoint, not a page. Attempted directly this
+stage: a real WebSocket CDP client (no client library existed in this
+project's dependencies; a minimal one was written for exactly this,
+`swAutoAttachExperiment.ts`, using the `ws` package — Electron's main-process
+Node runtime was checked directly and confirmed to have no global
+`WebSocket`, unlike a page's own JS context) connects to the browser-level
+`webSocketDebuggerUrl` from `/json/version` on the profile's own
+`--remote-debugging-port`, sends `Target.setAutoAttach({ autoAttach: true,
+waitForDebuggerOnStart: true, flatten: true, filter: [...] })`, and on every
+`Target.attachedToTarget` event for a `service_worker`-type target, runs
+`Runtime.enable` + `Runtime.evaluate` with the exact same `self`-scoped core
+patch script already used for dedicated/shared Worker propagation
+(`buildCoreScript()`, newly exported from `spoofingScript.ts` for this),
+then `Runtime.runIfWaitingForDebugger` to let the paused target actually
+start — by which point the patch has already run.
+
+Gated behind a new testing-only env var,
+`PF_E2E_SW_AUTOATTACH_EXPERIMENT=1`, following the exact same convention as
+`PF_E2E_AUTO_DIAGNOSTICS`/`PF_E2E_REMOTE_DEBUG_PORT` — never set in a normal
+launch, and structurally *can't* be: this mechanism only works at all when a
+real `--remote-debugging-port` is already open for the profile's entire
+lifetime, which today only happens for automation-enabled profiles or E2E
+test runs — never a normal profile. That is itself a real, structural cost
+of this whole approach, independent of whether the mechanism works: shipping
+this as the real fix would mean either opening a real, permanent, localhost
+TCP CDP port on *every* profile process all the time (a materially larger
+and more permanent surface than today's opt-in-only automation port), or
+accepting the fix only protects automation-enabled profiles — not evaluated
+further since the result below didn't clear the bar to justify picking
+between those two costs at all.
+
+**Method — same standard as the first three attempts: real captures, not
+inference.** Two profiles were created per run (one baseline, one with the
+experiment flag), both against a real CreepJS scan
+(`https://abrahamjuliot.github.io/creepjs/`), using the project's own
+existing profile-creation flow — no fixture, no mocked browser. Both
+baseline and experiment runs used an already-open `--remote-debugging-port`
+(`PF_E2E_REMOTE_DEBUG_PORT`, the same mechanism `creepjsBenchmark.spec.ts`
+and every existing capture in `docs/creepjs-results/` already uses to drive
+the tab bar via Playwright) so the comparison isolates exactly one variable
+— the browser-level `Target.setAutoAttach` subscription and its per-target
+patching — not "debug port open vs. not." Each scenario was run **twice**,
+independently, to confirm every finding below reproduces rather than being
+one-off noise; the exact reproduced numbers are given, not rounded or
+averaged away.
+
+**Result 1 — the Worker-section leak this stage specifically targeted is
+genuinely, reproducibly fixed.** CreepJS's own "Worker" report section
+(populated from inside the same Service Worker `getWorkerData()` reads
+navigator/UA/GPU from) reported the real host identity in both baseline
+runs and the **configured** identity in both experiment runs:
+
+| Field | Baseline run 1 | Baseline run 2 | Experiment run 1 | Experiment run 2 |
+|---|---|---|---|---|
+| Worker `gpu` | real: `Google Inc. (NVIDIA)` / RTX 4060 | real: `Google Inc. (NVIDIA)` / RTX 4060 | configured: `Google Inc. (Apple)` / Apple M2 | configured: `Google Inc. (Apple)` / Apple M1 Pro |
+| Worker `userAgent` | real `profileforge/0.2.0 ... Electron/32.3.3` UA | (same pattern) | configured UA, exactly | configured UA, exactly |
+| Worker `cores`/`ram` | real: 16 cores | real: 16 cores | configured: 8 cores | configured: 8 cores |
+
+This is a real fix of the exact, specific gap every prior stage of this
+audit documented as open: the Service Worker registration this time
+succeeded *through* the patched path (the paused-target injection ran
+before `creep.js`'s own code, unlike the blob:-URL rewrite the first three
+attempts relied on, which Chromium's SW registration restriction always
+rejected) — confirmed by the Worker section reading the configured identity
+where every previous capture read the real one.
+
+**Result 2 — a second, narrower leak in the very same execution was NOT
+fixed, and the reason isn't fully root-caused.** CreepJS's separate "WebGL"
+report section — populated by `getWebglData()`, called from the *same*
+`getWorkerData()` inside the *same* Service Worker execution, via an
+`OffscreenCanvas` it creates itself — still reported the real GPU
+(`Google Inc. (NVIDIA)` / RTX 4060) in **both** experiment runs, identical
+to baseline, even though the injected core script includes the WebGL
+`getParameter()` patch and that same script's navigator-override (the very
+next statement after the WebGL patch in `buildCoreScript()`) demonstrably
+did run and take effect. Two candidate explanations were identified but
+**not** distinguished by further instrumentation this stage (unlike the
+rigor the original Service Worker root-cause and the later WebGL-leak
+root-cause both received — see above): either `self.WebGLRenderingContext`/
+`WebGL2RenderingContext` are not yet defined as globals at the exact moment
+`Runtime.evaluate` runs against a target paused this early (before its
+realm is fully populated), or the specific `OffscreenCanvas`-obtained
+context instance CreepJS reads from resolves `getParameter` through a path
+this patch doesn't reach. Left as an open question, not a fixed sub-gap —
+stated honestly rather than assumed away, since claiming this row without
+distinguishing the two would repeat exactly the mistake the original WebGL
+Service-Worker leak investigation was careful not to make.
+
+**Result 3 — the specific concern this stage was asked to check first: did
+CreepJS's "like headless" score get worse?** No — bit-identical across all
+four runs (baseline ×2, experiment ×2), same hash (`11583836`) every time:
+`44% like headless`. Whatever produces that composite score did not react
+to this change at all.
+
+**Result 4 — but a *different*, previously-unseen CreepJS signal appeared,
+reproducibly.** CreepJS's separate "stealth" score, not previously discussed
+anywhere in this document because it had never moved from `0%` in any prior
+capture (including both this stage's own baseline runs): **`0% stealth` in
+both baseline runs → `20% stealth` in both experiment runs**, a different
+result hash each time (`0c019315` baseline vs. `4b82ddf4` experiment,
+consistent across both repetitions of each). This is exactly the kind of
+outcome this stage was told to check for and report honestly regardless of
+whether it confirmed the hypothesis: a real, reproducible, new automation
+tell that appeared specifically because of the browser-level CDP session —
+not the metric named as the primary risk (`like headless`, which stayed
+flat), but a sibling heuristic in the same detector that reacted where the
+other one didn't, and reacted in the wrong direction.
+
+**Result 5 — authenticated proxy support, the regression that killed all
+three prior attempts, is genuinely NOT broken by this approach.** Verified
+directly, twice, with a real fake-auth-proxy fixture (same shape as
+`proxyVerification.spec.ts`'s own, run in combination with
+`PF_E2E_SW_AUTOATTACH_EXPERIMENT=1` this time): the profile's real 407
+challenge completed and authenticated correctly in both runs. This is
+exactly the outcome the original hypothesis predicted — this mechanism
+never touches `session.protocol.handle()` or any request/response
+construction at all, so the interactive-auth restriction that doomed
+`protocol.handle()` (see the three attempts above) simply never applies
+here. The full existing `proxyVerification.spec.ts` suite (unmodified, flag
+not set) was also re-run afterward to confirm no incidental regression from
+the new code merely existing in the tree — 4/4 passed.
+
+**Result 6 — no measurable performance cost.** CreepJS's own self-reported
+total scan time (embedded in its report, not this project's timing) was
+statistically indistinguishable between conditions: baseline 5606.5ms /
+5159.3ms vs. experiment 5342.4ms / 5086.6ms — well within normal run-to-run
+noise, if anything slightly faster on the experiment side, clearly not a
+real regression either way.
+
+**Decision: reverted, not shipped — a new, reproducible detection signal is
+disqualifying under this stage's own stated decision rule, even though two
+of the three named risk criteria (proxy-auth, `like headless`) came back
+clean.** The instruction going into this stage was explicit: a new
+CDP-detection trail is a negative outcome on its own, independent of
+whether the specific named `like headless` metric moves. The `stealth`
+score doing exactly that — moving from a value that had never once been
+non-zero across every prior capture in `docs/creepjs-results/`, to a
+consistent 20%, precisely when this browser-level CDP session is active —
+is a new CDP-detection trail by that standard, even though it is also, in
+every other respect, the closest any of the four attempts has come to
+actually closing the underlying gap (Result 1 is real and reproducible, not
+a partial illusion). `swAutoAttachExperiment.ts` was deleted;
+`profileWindowEntry.ts` and `spoofingScript.ts` (whose only change was
+exporting the already-existing `buildCoreScript()` instead of keeping it
+module-private) were reverted to their pre-this-stage state; the temporary
+`ws`/`@types/ws` dependency added only for this experiment's CDP client was
+removed. No trace of this attempt remains in shipped code — only this
+write-up, per the same policy the first three attempts were held to.
+
+**What would need to be true to reconsider this.** Two separate open
+questions, either of which could change the calculus: (a) root-causing
+*why* the `stealth` heuristic reacted — if it turns out to be reacting to
+something narrower than "a browser-level CDP session with
+`Target.setAutoAttach` exists at all" (e.g. specifically
+`waitForDebuggerOnStart`, or the `filter` parameter's shape, or the
+`Runtime.evaluate` call itself rather than the attach), a narrower variant
+might avoid it without giving up Result 1; this stage did not attempt that
+narrowing — the first reproducible negative result was enough to stop and
+report, per this stage's own instruction not to keep combining variations
+after a disqualifying signal. (b) whether the structural cost noted above
+(a permanent open CDP port on every profile, or automation-only coverage)
+would even be acceptable if the detection question were resolved — not
+evaluated in depth here since (a) wasn't cleared first. Neither is a
+concrete next step recommended for immediate follow-up; both are recorded
+so a future stage doesn't have to rediscover exactly where this one stopped.
 
 ## Automated test coverage
 
