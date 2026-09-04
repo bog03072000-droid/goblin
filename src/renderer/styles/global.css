@@ -461,6 +461,9 @@ input[type="checkbox"]:hover { transform: scale(1.08); }
 
 /* ---------- Tabs (modal) ---------- */
 .tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 14px;
   cursor: pointer;
   color: var(--ash);
@@ -476,6 +479,18 @@ input[type="checkbox"]:hover { transform: scale(1.08); }
   color: var(--lime);
   border-bottom-color: var(--lime);
   text-shadow: 0 0 10px var(--lime-glow);
+}
+/* Unsaved-changes marker on one specific tab (ProfileEditorModal.tsx) —
+ * distinct from the global Reset button, which only tells you *something*
+ * is dirty, not which tab it's on. --warn (amber), not --lime, so it never
+ * reads as "this tab is currently selected" (that's the active-tab lime
+ * underline) — dirty and active are separate, simultaneously-true states. */
+.tab-dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  flex-shrink: 0;
 }
 
 /* ---------- Table ---------- */

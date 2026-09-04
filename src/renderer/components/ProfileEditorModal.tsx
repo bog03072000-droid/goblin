@@ -78,12 +78,19 @@ export function ProfileEditorModal({
     proxyId: '',
   });
   const [confirmClose, setConfirmClose] = useState(false);
-  const isDirty =
+  // Split by tab (General owns name/description/tags/group, Proxy owns just
+  // proxyId — matching saveGeneral()/saveProxy()'s own separate save calls
+  // below) rather than one combined flag, so the tab strip can show a dirty
+  // marker on the specific tab that actually has unsaved edits instead of
+  // leaving the user to guess which one Reset would revert.
+  const generalDirty =
     name !== savedSnapshot.name ||
     description !== savedSnapshot.description ||
     tagsText !== savedSnapshot.tagsText ||
-    groupId !== savedSnapshot.groupId ||
-    proxyId !== savedSnapshot.proxyId;
+    groupId !== savedSnapshot.groupId;
+  const proxyDirty = proxyId !== savedSnapshot.proxyId;
+  const isDirty = generalDirty || proxyDirty;
+  const DIRTY_TABS: Partial<Record<Tab, boolean>> = { general: generalDirty, proxy: proxyDirty };
 
   const loadAction = useAsyncAction();
   const saveAction = useAsyncAction();
@@ -294,6 +301,9 @@ export function ProfileEditorModal({
               onClick={() => setTab(tabKey)}
             >
               {t(TAB_LABEL_KEYS[tabKey])}
+              {DIRTY_TABS[tabKey] && (
+                <span className="tab-dirty-dot" title={t('editor.tab.unsavedChanges')} />
+              )}
             </div>
           ))}
           <div className="flex-1" />

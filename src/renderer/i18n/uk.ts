@@ -148,6 +148,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.tab.proxy': 'проксі',
   'editor.tab.storage': 'сховище',
   'editor.tab.advanced': 'додатково',
+  'editor.tab.unsavedChanges': 'На цій вкладці є незбережені зміни',
   'editor.general.name': "Назва",
   'editor.general.description': 'Опис',
   'editor.general.tags': 'Теги (через кому)',

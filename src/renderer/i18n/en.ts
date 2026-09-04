@@ -146,6 +146,7 @@ const en = {
   'editor.tab.proxy': 'proxy',
   'editor.tab.storage': 'storage',
   'editor.tab.advanced': 'advanced',
+  'editor.tab.unsavedChanges': 'This tab has unsaved changes',
   'editor.general.name': 'Name',
   'editor.general.description': 'Description',
   'editor.general.tags': 'Tags (comma-separated)',
