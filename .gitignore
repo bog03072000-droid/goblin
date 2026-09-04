@@ -13,3 +13,6 @@ test-results/
 *.db-wal
 *.db-shm
 *.lnk
+
+sign.key
+sign.env

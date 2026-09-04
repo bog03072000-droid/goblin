@@ -220,12 +220,59 @@ a real release isn't based in one of those regions; check
 [Microsoft's current eligibility docs](https://azure.microsoft.com/en-us/products/artifact-signing)
 before committing to this path over Option C.
 
-Once enrolled (Azure subscription + identity validation through the Azure
-portal, a one-time setup outside this repo), electron-builder's
-`build.win.sign` custom-hook mechanism (same mechanism Option C's
-hardware-token certs need — see step 4 below) is how you'd wire it in,
-since Trusted Signing issues short-lived certs on demand rather than a
-static `.pfx` `CSC_LINK` could point at.
+**Wired in and ready to use (2026-09-04) — correcting an earlier, wrong
+assumption in this doc.** This section used to point at an npm package
+called `@azure/trusted-signing-cli` as the integration path; that package
+does not exist on the npm registry at all (confirmed directly — a real
+`npm install` 404s). The actual working integration is
+[`electron-azure-trusted-signing`](https://www.npmjs.com/package/electron-azure-trusted-signing)
+(already a devDependency), which is architecturally different from what
+was originally assumed, not just a rename:
+
+- It shells out to a bundled `jsign` (a **Java** signing tool) via
+  `child_process` — a **JDK or JRE must be installed** on whatever
+  machine/CI runner actually signs a release. Nothing else in this
+  project needs Java; this is the one exception.
+- It's wired into `package.json`'s `build.win.signtoolOptions.sign` as a
+  plain string (`"electron-azure-trusted-signing"`) — electron-builder
+  resolves and calls it directly. There is no `scripts/sign.js` file
+  anymore; the previous version of this doc had one as a custom hook, but
+  the actual signing logic now lives entirely inside the installed
+  package, so a wrapper script would just be dead indirection.
+- Credentials are read from a **`sign.env` file at the project root**
+  (auto-created, empty, as soon as `npm install` runs — `postinstall.js`
+  in the package does this — and auto-added to `.gitignore` alongside its
+  companion `sign.key`, which caches the short-lived access token between
+  signing calls). Fill in real values before signing a release:
+  ```env
+  AZURE_TENANT_ID=""
+  AZURE_CLIENT_ID=""
+  AZURE_CLIENT_SECRET=""
+  TRUSTEDSIGNING_ACCOUNT_NAME=""
+  TRUSTEDSIGNING_PROFILE_NAME=""
+  ```
+  (Note the env var names: `TRUSTEDSIGNING_ACCOUNT_NAME`/
+  `TRUSTEDSIGNING_PROFILE_NAME` — not `AZURE_CODE_SIGNING_ACCOUNT_NAME`/
+  `AZURE_CERTIFICATE_PROFILE_NAME` as an earlier draft of this doc
+  guessed.) **Never commit real values** — `sign.env`/`sign.key` are
+  gitignored specifically so this file can hold real secrets locally or
+  be generated from CI secrets at build time, never checked in.
+- Signing only actually runs when `build.win.signAndEditExecutable` is
+  `true` — the default `npm run package` script deliberately leaves it
+  `false` (see the "Cannot create symbolic link" section above; this dev
+  machine doesn't have Developer Mode enabled, checked directly via the
+  registry, so the default has to stay safe for everyday local builds).
+  Use `npm run package:signed` instead — it overrides just that one flag
+  for that one invocation via electron-builder's own
+  `--config.win.signAndEditExecutable=true` CLI flag, from an environment
+  that actually has real `sign.env` values and a working Java install (a
+  normal CI runner with `actions/setup-java` typically satisfies both,
+  though no CI job currently runs packaging/signing — that's a separate,
+  deliberate decision for whoever sets up an actual release pipeline).
+  Running `package:signed` with `sign.env` still empty fails loudly with a
+  specific "Env variable ... is not set in sign.env file" error rather
+  than silently producing an unsigned build — the right failure mode for
+  a script whose entire point is producing a signed one.
 
 ### Option C: a traditional OV/EV Authenticode certificate from a CA
 

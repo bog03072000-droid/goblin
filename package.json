@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "package": "npm run build && electron-builder",
+    "package:signed": "npm run build && electron-builder --config.win.signAndEditExecutable=true",
     "package:mac": "npm run build && electron-builder --mac",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3"
@@ -48,6 +49,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "@vitest/coverage-v8": "^2.1.9",
     "electron": "^32.0.1",
+    "electron-azure-trusted-signing": "^1.0.9",
     "electron-builder": "^25.0.5",
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.35.0",
@@ -79,7 +81,9 @@
       "target": "nsis",
       "signAndEditExecutable": false,
       "icon": "build/icon.ico",
-      "sign": "scripts/sign.js"
+      "signtoolOptions": {
+        "sign": "scripts/sign.js"
+      }
     },
     "nsis": {
       "oneClick": false,
