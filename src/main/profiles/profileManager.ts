@@ -12,7 +12,7 @@ import { LockManager } from './lockManager';
 import { ProfileChildChannel } from './profileChildChannel';
 import { ProfileLifecycleManager } from './profileLifecycleManager';
 import type { BulkResult } from './bulkResult';
-import { launchProfileProcess } from '../browser/browserLauncher';
+import { launchProfileProcess, isTransientSpawnError, type LaunchParams } from '../browser/browserLauncher';
 import { checkBrowserCompatibility } from '../fingerprint/browserCompatibility';
 import {
   createProfileStorage,
@@ -25,6 +25,12 @@ import type { CookieInfo, CookieSetInput } from '../../shared/schemas/cookie';
 import type { LocalStorageListResponse, LocalStorageSetInput } from '../../shared/schemas/localStorageEntry';
 
 export type { BulkResult } from './bulkResult';
+
+/** How many extra attempts a transient spawn failure (see
+ * isTransientSpawnError) gets before the profile is given up on and marked
+ * ERROR — 2 retries means up to 3 total attempts. */
+const MAX_SPAWN_RETRIES = 2;
+const SPAWN_RETRY_DELAY_MS = 500;
 
 /**
  * Orchestrates the full profile lifecycle: DB state + on-disk storage + OS
@@ -149,20 +155,34 @@ export class ProfileManager {
     }
 
     this.profiles.updateStatus(id, 'STARTING');
+    const launchParams: LaunchParams = {
+      profileId: id,
+      profileName: profile.name,
+      userDataDir: browserDataDir,
+      fingerprint,
+      proxy,
+      proxyPassword,
+      dbPath: this.dbPath,
+      initialUrl: opts?.initialUrl,
+      automationPort: profile.automationEnabled ? profile.automationPort : null,
+      automationToken,
+    };
+    this.launchAndTrack(id, profile, launchParams, MAX_SPAWN_RETRIES);
+
+    return this.mustGet(id);
+  }
+
+  /** Spawns the profile's child process and wires up its lifecycle handlers.
+   * Split out of start() so a transient async spawn failure (see
+   * isTransientSpawnError) can retry by calling this again after a delay,
+   * up to `retriesLeft` times, without duplicating the registration/handler
+   * logic. The first call (from start()) still throws synchronously on a
+   * synchronous launchProfileProcess() failure exactly as before — only the
+   * async retry path is new. */
+  private launchAndTrack(id: string, profile: Profile, launchParams: LaunchParams, retriesLeft: number): void {
     let child: ChildProcess;
     try {
-      child = launchProfileProcess({
-        profileId: id,
-        profileName: profile.name,
-        userDataDir: browserDataDir,
-        fingerprint,
-        proxy,
-        proxyPassword,
-        dbPath: this.dbPath,
-        initialUrl: opts?.initialUrl,
-        automationPort: profile.automationEnabled ? profile.automationPort : null,
-        automationToken,
-      });
+      child = launchProfileProcess(launchParams);
     } catch (err) {
       this.profiles.updateStatus(id, 'ERROR');
       log.error(`[profile:start] failed to launch process for profile ${id}`, err);
@@ -185,6 +205,32 @@ export class ProfileManager {
     child.on('error', (err) => {
       this.running.delete(id);
       this.lockManager.release(profile.profilePath);
+      this.childChannel.unregisterChild(id);
+
+      // Transient OS-level resource pressure (too many open handles,
+      // temporarily out of memory/process slots) is often gone a moment
+      // later — worth one short delay and another attempt before giving up.
+      // A permanent problem (missing binary, permission denied) isn't
+      // transient and would just fail identically again, so only retry the
+      // specific error codes isTransientSpawnError recognizes.
+      if (retriesLeft > 0 && isTransientSpawnError(err)) {
+        this.logs.record(
+          'PROFILE_CRASHED',
+          id,
+          `Transient spawn error for "${profile.name}" (${err.message}) — retrying in ${SPAWN_RETRY_DELAY_MS}ms (${retriesLeft} attempt(s) left)`,
+        );
+        log.warn(`[profile:start] transient spawn error for profile ${id}, retrying`, err);
+        setTimeout(() => {
+          try {
+            this.launchAndTrack(id, profile, launchParams, retriesLeft - 1);
+          } catch {
+            // launchAndTrack already marks the profile ERROR and logs on
+            // failure — this timer callback has no caller to rethrow to.
+          }
+        }, SPAWN_RETRY_DELAY_MS).unref();
+        return;
+      }
+
       this.profiles.updateStatus(id, 'ERROR');
       this.logs.record('PROFILE_CRASHED', id, `Failed to launch process for "${profile.name}": ${err.message}`);
       log.error(`[profile:start] child process error for profile ${id}`, err);
@@ -226,8 +272,6 @@ export class ProfileManager {
         log.info(`[profile:stop] "${profile.name}" (${id}) stopped: ${context}`);
       }
     });
-
-    return this.mustGet(id);
   }
 
   /** Waits for the child's actual OS-level exit (not just for the kill signal

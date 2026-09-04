@@ -27,6 +27,19 @@ export interface LaunchParams {
   automationToken?: string | null;
 }
 
+const TRANSIENT_SPAWN_ERROR_CODES = new Set(['EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM']);
+
+/** True for spawn failures worth retrying after a short delay — transient
+ * OS-level resource pressure (too many open file handles, temporarily out of
+ * process slots/memory) rather than a genuine, permanent problem (missing
+ * binary, permission denied) that an identical retry would just reproduce.
+ * Used by ProfileManager.start() to decide whether the async child "error"
+ * event should trigger a retry or go straight to marking the profile ERROR. */
+export function isTransientSpawnError(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === 'string' && TRANSIENT_SPAWN_ERROR_CODES.has(code);
+}
+
 /**
  * Launches one profile as an independent Electron/Chromium OS process (rather
  * than a BrowserWindow inside the manager process), the same architecture real

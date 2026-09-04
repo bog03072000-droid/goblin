@@ -28,6 +28,12 @@ vi.mock('../../src/main/browser/browserLauncher', () => ({
     lastChild = new FakeChildProcess();
     return lastChild;
   }),
+  // Real implementation, not a mock — the retry tests below need the actual
+  // transient/permanent error-code classification, not a stubbed one.
+  isTransientSpawnError: (err: unknown) => {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    return code === 'EAGAIN' || code === 'EMFILE' || code === 'ENFILE' || code === 'ENOMEM';
+  },
 }));
 
 const { ProfileManager } = await import('../../src/main/profiles/profileManager');
@@ -93,6 +99,68 @@ describe('ProfileManager error handling', () => {
 
     lastChild.emit('error', new Error('spawn electron.exe ENOENT'));
 
+    expect(profiles.getById(profile.id)!.status).toBe('ERROR');
+    expect(manager.isRunning(profile.id)).toBe(false);
+  });
+
+  it('a transient spawn error (e.g. EAGAIN) retries and recovers instead of marking the profile ERROR immediately', async () => {
+    vi.useFakeTimers();
+    try {
+      const profile = makeProfile('Transient Retry');
+      manager.start(profile.id);
+      const firstChild = lastChild;
+      expect(manager.isRunning(profile.id)).toBe(true);
+
+      const transientErr = Object.assign(new Error('spawn EAGAIN'), { code: 'EAGAIN' });
+      firstChild.emit('error', transientErr);
+
+      // Still not given up yet — retry is scheduled, not yet fired.
+      expect(profiles.getById(profile.id)!.status).not.toBe('ERROR');
+      expect(manager.isRunning(profile.id)).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      // launchProfileProcess was called again by the retry and succeeded
+      // (the mock always returns a fresh working FakeChildProcess), so the
+      // profile should be back to RUNNING against the new child.
+      expect(vi.mocked(launchProfileProcess)).toHaveBeenCalledTimes(2);
+      expect(profiles.getById(profile.id)!.status).toBe('RUNNING');
+      expect(manager.isRunning(profile.id)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a transient spawn error exhausts its retries and marks the profile ERROR if every attempt fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const profile = makeProfile('Transient Exhausted');
+      manager.start(profile.id);
+
+      const transientErr = () => Object.assign(new Error('spawn EAGAIN'), { code: 'EAGAIN' });
+      // Attempt 1 (from start()) fails, then 2 retries (attempts 2 and 3)
+      // also fail — 3 total attempts, matching MAX_SPAWN_RETRIES = 2.
+      lastChild.emit('error', transientErr());
+      await vi.advanceTimersByTimeAsync(500);
+      lastChild.emit('error', transientErr());
+      await vi.advanceTimersByTimeAsync(500);
+      lastChild.emit('error', transientErr());
+
+      expect(vi.mocked(launchProfileProcess)).toHaveBeenCalledTimes(3);
+      expect(profiles.getById(profile.id)!.status).toBe('ERROR');
+      expect(manager.isRunning(profile.id)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a non-transient spawn error (e.g. ENOENT) marks the profile ERROR immediately without retrying', () => {
+    const profile = makeProfile('Non Transient');
+    manager.start(profile.id);
+
+    lastChild.emit('error', Object.assign(new Error('spawn electron.exe ENOENT'), { code: 'ENOENT' }));
+
+    expect(vi.mocked(launchProfileProcess)).toHaveBeenCalledTimes(1);
     expect(profiles.getById(profile.id)!.status).toBe('ERROR');
     expect(manager.isRunning(profile.id)).toBe(false);
   });
