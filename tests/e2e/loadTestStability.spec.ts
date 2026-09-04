@@ -20,18 +20,14 @@ import path from 'node:path';
  *
  * "Navigate" here means the manager UI's own responsiveness while a
  * profile is running (same technique as resourceManagement.spec.ts), not a
- * real per-cycle `<webview>` page load via CDP. A per-cycle CDP-navigation
- * variant was tried and reconnecting/renavigating 10 times in a row against
- * an already memory-pressured machine (see loadTestBulkStartStop.spec.ts's
- * module comment) produced a flaky, unreliable run — including one profile
- * ending a cycle in a CRASHED state that a subsequent clean, non-CDP run of
- * the exact same 10-cycle sequence on the same profile did NOT reproduce.
- * That result was inconclusive (test-harness flakiness under memory
- * pressure vs. a genuine intermittent product crash could not be
- * distinguished with the time/resource budget available here) so it is
- * reported as an open question in docs/LOAD_TEST.md rather than asserted
- * either way, and this file reverts to the simpler, twice-reproduced clean
- * mechanism for its actual pass/fail numbers.
+ * real per-cycle `<webview>` page load via CDP — that variant is kept
+ * separate, in loadTestStabilityCdpNav.spec.ts, since it's slower and more
+ * environment-sensitive; this file stays the simpler, fast, twice-reproduced
+ * clean mechanism for the actual pass/fail numbers. See that other file's
+ * own module comment and docs/LOAD_TEST.md's Test 5 section for the
+ * CDP-navigation variant's own history (one unreproduced CRASHED
+ * observation, followed up with a dedicated 20-cycle investigation that
+ * found zero crashes).
  */
 test.setTimeout(600_000);
 

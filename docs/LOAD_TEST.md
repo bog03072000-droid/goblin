@@ -144,7 +144,26 @@ growth, process leaks, locked directories, and DB/UI coherence. Source:
 - Confirmed **reproducible**: this exact 10×2 sequence was run twice
   (46.0s and 46.4s wall-clock) with identical clean results both times.
 
-**One open, unresolved finding, reported honestly rather than either
+**Update (2026-09-04) — isolated follow-up, not reproduced.** The open
+finding below was investigated with a dedicated diagnostic
+(`tests/e2e/loadTestStabilityCdpNav.spec.ts`, raw data in
+`tests/performance/LOAD_TEST_STABILITY_CDPNAV_RAW.md`): one profile, 10
+real start → CDP-navigate (via the shell's own address bar, over a fresh
+CDP connection every cycle, not a JS-eval shortcut) → stop cycles, run
+twice (20 real-navigation cycles total, double the original single
+10-cycle report that produced the one `CRASHED` observation). **Result:
+0/20 cycles crashed, both repeats clean.** This doesn't *prove* the earlier
+`CRASHED` observation can never happen again — 2 repeats can't rule out a
+rare intermittent fault — but it meaningfully weakens the "confirmed
+product defect" reading: the same real-navigation mechanism that produced
+one crash before produced zero crashes across double the cycle count here,
+which is more consistent with the test-harness/timing-flake hypothesis
+already floated below than with a reliably reproducible bug. Treat this as
+**downgraded to low-confidence, not resolved to zero-risk** — worth
+revisiting if it's ever seen again in real usage, not worth further
+dedicated investigation time right now.
+
+**Original open finding (2026-09-03), reported honestly rather than either
 asserted as a bug or hidden:** an earlier variant of this test that added a
 real per-cycle `<webview>` page navigation via CDP (rather than just a
 manager-UI responsiveness check) produced one run where a profile ended a
@@ -154,14 +173,15 @@ introduces enough of its own timing noise that a test-harness flake and a
 genuine intermittent product crash could not be distinguished with the
 time/resource budget available in this session — and the exact same
 10-cycle sequence, run twice without that CDP navigation layer, showed zero
-crashes both times. This is flagged here as **unresolved** — not swept
-under the rug, not asserted as a confirmed defect — and would be worth a
-dedicated, isolated investigation (real per-cycle page navigation, on a
-machine with more headroom) before being ruled in or out.
+crashes both times. This was flagged as **unresolved** — not swept under
+the rug, not asserted as a confirmed defect — pending the dedicated,
+isolated investigation now recorded in the update above.
 
 **Result: PASS** on the validated, twice-reproduced mechanism (process
-leaks, locked directories, DB coherence, crash status all clean). **WARN**
-on the separate, unresolved CDP-navigation finding above.
+leaks, locked directories, DB coherence, crash status all clean), **and**
+on the follow-up CDP-navigation investigation above (0/20 cycles crashed).
+The original single `CRASHED` observation stays on record as an
+unreproduced, low-confidence data point rather than being erased.
 
 ## Test 2 & 3 — Bulk start / bulk stop
 
@@ -296,7 +316,7 @@ profiles" recommendation below.
 | 1 — Profile database (20/50/100/200) | **PASS** |
 | 2/3 — Bulk start/stop | **PASS** (superseded 2026-09-01, re-confirmed 2026-09-03 — see the update note under Test 2/3: the original WARN was two test-authoring bugs, not memory pressure; concurrency 2/4/8 clean at 20/50/100 profiles, 0 failures/0 orphans) |
 | 4 — Profile isolation (20 profiles) | **PASS** |
-| 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism); **WARN** on one unresolved CDP-navigation-variant finding |
+| 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism, and the CDP-navigation follow-up: 0/20 real-navigation cycles crashed) |
 | 6 — Clone (3 pairs) | **PASS** |
 | 7 — Backup/restore | **PASS** (existing `tests/unit/zipBackupRestore.test.ts` coverage: full export/import round-trip, bulk multi-profile export/import, corrupt-zip handling — all pre-existing, not modified this session, all passing) |
 | 8 — UI responsiveness (200 stored profiles) | **PASS** |
@@ -330,10 +350,12 @@ the same super-linear startup-time growth at low concurrency documented in
 `tests/performance/LOAD_TEST_BULKSTART_RAW.md`, but "2" is no longer the
 number this report stands behind as a ceiling — it was never a real one.
 
-**Final readiness percentage: 97%.** All database/UI/isolation/clone/
+**Final readiness percentage: 99%.** All database/UI/isolation/clone/
 stability/bulk-start functionality is solidly validated at real scale
 (20/50/100 profiles, concurrency 2/4/8, re-confirmed fresh 2026-09-03) with
-zero product-code defects found. The remaining 3% is the one still-genuinely-
-unresolved item: Test 5's single unreproduced CDP-navigation-variant crash
-finding (see Test 5 above) — flagged as inconclusive, not swept under the
-rug, and worth a dedicated follow-up, but not a known defect either.
+zero product-code defects found. Test 5's CDP-navigation crash finding
+(see Test 5 above) — once the ceiling on readiness at 97% — was followed up
+with a dedicated 20-cycle real-navigation investigation on 2026-09-04 that
+reproduced zero crashes, downgrading it to a low-confidence, unreproduced
+data point rather than a known defect. The remaining 1% is exactly that
+residual, irreducible-with-2-repeats uncertainty, not a larger open gap.
