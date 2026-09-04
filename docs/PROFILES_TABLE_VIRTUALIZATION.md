@@ -1,6 +1,66 @@
 # Profiles table virtualization — investigation (react-window)
 
-Generated: 2026-09-04
+Generated: 2026-09-04, corrected 2026-09-04 (see "Correction" section below —
+the "8x worse than proportional" invert-selection number in the original
+investigation turned out to be a measurement artifact, not a real app
+cost; the react-window conclusion itself stands, kept intact below)
+
+## Correction, same day — the "8x degradation" was Playwright's own overhead, not the app's
+
+Asked to profile `invert selection`'s ~8x-worse-than-proportional number
+via Chrome DevTools Performance and fix the cause (most likely guess:
+missing `React.memo`/stable keys in `ProfilesTable.tsx`).
+
+**What profiling actually found, in order:**
+
+1. A first CPU profile (via CDP's `Profiler` domain, capturing the exact
+   `getByRole('button', {name: 'Invert selection'}).click()` +
+   `expect(locator).toBeHidden()` sequence the original E2E benchmark
+   uses) showed **2569ms of the ~3052ms total self-time inside a single
+   function: `getTextAlternativeInternal`** — not application code at all.
+   That function belongs to Playwright's own injected accessibility-tree
+   walker, used internally to resolve `getByRole(..., {name: ...})` and to
+   compute whether an element is visible for `toBeHidden()`. It scales
+   with total DOM element count on the page, independent of how fast React
+   itself re-renders.
+2. Re-measuring with a version of the same interaction timed **entirely
+   inside the page** (`performance.now()` around a raw
+   `document.querySelector(...).click()` and a `requestAnimationFrame`
+   poll — no Playwright locator/accessibility-tree resolution in the timed
+   window at all) gave **86.1ms**, reproduced 3× in the 84–92ms range —
+   not 2500ms+, and not remotely an "8x" scaling problem for 5x the rows.
+3. Implemented the originally-guessed fix anyway (`React.memo` with a
+   custom comparator on a new `ProfileRow` component, plus O(1)
+   `Map`-based proxy/group name lookups replacing per-row `Array.find()`)
+   since it's valid, low-risk practice regardless. Re-measured with the
+   same in-page method: **88–91ms — statistically unchanged.** Also
+   re-ran the *original* Playwright-based benchmark with the fix applied:
+   **still ~2517ms — also unchanged.**
+
+**Conclusion: there was no real ~8x application performance bug to fix.**
+The fix is kept (see `ProfilesTable.tsx` — it's correct, harmless, and
+will matter more once genuinely large row counts make single-row updates
+common), but it demonstrably did not move either number, which is the
+proof that neither number was measuring what it claimed to. The ~2500ms
+figure the original investigation reported was overwhelmingly Playwright's
+own `getByRole`/`toBeHidden` accessible-name computation cost at a
+~1000-row (≈10,000-interactive-element) DOM size — a property of
+`loadTestUIResponsiveness.spec.ts`'s own measurement technique at that
+scale, not of the app. The real, isolated app cost for inverting all 1000
+checkboxes is ~86ms, which was never a problem. The `sort direction
+toggle` and `bulk add-tag` numbers from the original investigation were
+not re-profiled this way and should be treated with the same skepticism
+until someone does — they were measured with the identical
+`getByRole`/`toHaveCount` Playwright methodology and could be inflated by
+the same effect.
+
+This does **not** change the react-window conclusion below: that was
+based on the 200-row numbers (measured cleanly, at the scale this app's
+own brief targets) being comfortably fast, which is still true, and on the
+architectural cost of virtualizing being real either way. It does mean the
+1000-row table in that conclusion overstated how bad things get before
+virtualization would matter — the real picture is more favorable to "don't
+implement" than originally written, not less.
 
 ## What was asked
 
