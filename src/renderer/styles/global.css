@@ -805,6 +805,15 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
 .fp-field-card table { margin-top: 4px; }
 .fp-field-card th, .fp-field-card td { padding: 6px 8px; font-size: 12px; }
 
+/* "As seen by a site" preview — sits above both the AUTO card grid and the
+   MANUAL form, live-reflecting the draft in manual mode, so a change can be
+   reviewed in these terms before Regenerate/Save commits it. */
+.fp-preview { margin-bottom: 16px; }
+.fp-preview table { margin-top: 4px; }
+.fp-preview th, .fp-preview td { padding: 5px 8px; font-size: 12px; }
+.fp-preview-ua { word-break: break-all; }
+.fp-preview-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
 .brand-logo { border-radius: 8px; }
 .update-banner { margin: 12px 20px 0; display: flex; align-items: center; gap: 12px; }
 

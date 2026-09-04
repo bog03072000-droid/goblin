@@ -98,6 +98,52 @@ export type SpoofingPatch = Partial<
   >
 >;
 
+/** What a live-loaded copy of `fingerprint`/`draft` — whichever is currently
+ * "in effect" — actually presents to a website's own JS (navigator.*,
+ * screen.*, the User-Agent header, etc.), rendered before Regenerate/Save so
+ * a change can be reviewed in these terms instead of only as raw field
+ * values. In MANUAL mode this reflects the still-unsaved draft for the
+ * fields it covers; fields the manual form doesn't expose (WebGL
+ * vendor/renderer, spoofing modes, ...) always come from the last-saved
+ * `fingerprint`, since editing them isn't possible until after Save anyway. */
+function buildSitePreview(
+  fingerprint: Fingerprint,
+  manualMode: boolean,
+  draft: FingerprintDraft,
+): {
+  userAgent: string;
+  platform: string;
+  screen: string;
+  languages: string;
+  timezone: string;
+  hardwareConcurrency: string;
+  webrtcMode: string;
+} {
+  return {
+    userAgent: manualMode ? draft.userAgent : fingerprint.userAgent,
+    platform: manualMode ? draft.platform : fingerprint.platform,
+    screen: manualMode
+      ? `${draft.screenWidth} x ${draft.screenHeight} @ ${draft.deviceScaleFactor}x`
+      : `${fingerprint.screenWidth} x ${fingerprint.screenHeight} @ ${fingerprint.deviceScaleFactor}x`,
+    languages: manualMode ? draft.languages : fingerprint.languages.join(', '),
+    timezone: manualMode ? draft.timezone : fingerprint.timezone,
+    hardwareConcurrency: manualMode ? draft.hardwareConcurrency : String(fingerprint.hardwareConcurrency),
+    webrtcMode: manualMode ? draft.webrtcMode : fingerprint.webrtcMode,
+  };
+}
+
+const PROTECTION_PILLS: Array<{
+  labelKey: TranslationKey;
+  active: (fp: Fingerprint) => boolean;
+}> = [
+  { labelKey: 'editor.fingerprint.row.canvasMode', active: (fp) => fp.canvasMode !== 'off' },
+  { labelKey: 'editor.fingerprint.row.audioMode', active: (fp) => fp.audioMode !== 'off' },
+  { labelKey: 'editor.fingerprint.row.fontsMode', active: (fp) => fp.fontsMode !== 'system' },
+  { labelKey: 'editor.fingerprint.row.mediaDevicesMode', active: (fp) => fp.mediaDevicesMode !== 'real' },
+  { labelKey: 'editor.fingerprint.spoofing.webglLabel', active: (fp) => fp.webglSpoofingMode !== 'off' },
+  { labelKey: 'editor.fingerprint.spoofing.geolocationLabel', active: (fp) => fp.geolocationMode !== 'real' },
+];
+
 export function FingerprintTab({
   fingerprint,
   draft,
@@ -136,6 +182,7 @@ export function FingerprintTab({
   onOverridesChange?: (next: FieldOverrides) => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const sitePreview = buildSitePreview(fingerprint, manualMode, draft);
   return (
     <div>
       <div className="fp-toolbar">
@@ -154,6 +201,52 @@ export function FingerprintTab({
         <button className="btn btn-ghost btn-sm" onClick={onValidate}>
           {t('editor.fingerprint.validate')}
         </button>
+      </div>
+
+      <div className="panel fp-preview" data-testid="fp-site-preview">
+        <h5 className="fp-picker-group-title">{t('editor.fingerprint.preview.title')}</h5>
+        <table>
+          <tbody>
+            <tr>
+              <th className="w-180">{t('editor.fingerprint.field.userAgent')}</th>
+              <td className="mono fp-preview-ua">{sitePreview.userAgent}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.field.platform')}</th>
+              <td className="mono">{sitePreview.platform}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.preview.screen')}</th>
+              <td className="mono">{sitePreview.screen}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.field.languages')}</th>
+              <td className="mono">{sitePreview.languages}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.field.timezone')}</th>
+              <td className="mono">{sitePreview.timezone}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.field.hardwareConcurrency')}</th>
+              <td className="mono">{sitePreview.hardwareConcurrency}</td>
+            </tr>
+            <tr>
+              <th>{t('editor.fingerprint.field.webrtcMode')}</th>
+              <td className="mono">{sitePreview.webrtcMode}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="fp-preview-pills">
+          {PROTECTION_PILLS.map(({ labelKey, active }) => {
+            const isActive = active(fingerprint);
+            return (
+              <span key={labelKey} className={`pill ${isActive ? 'on' : 'idle'}`}>
+                {t(labelKey)}: {isActive ? t('editor.fingerprint.preview.protected') : t('editor.fingerprint.preview.real')}
+              </span>
+            );
+          })}
+        </div>
       </div>
 
       {!manualMode && (
