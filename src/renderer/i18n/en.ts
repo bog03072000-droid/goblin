@@ -355,9 +355,9 @@ const en = {
   'settings.theme.dark': 'Dark',
   'settings.saved': 'Saved. Some settings (hardware acceleration) take effect on next launch.',
   'settings.encryptionWarning':
-    'OS-level credential encryption is unavailable on this machine — proxy passwords are being stored in a plaintext-marked format instead, not encrypted.',
+    'OS-level credential encryption is unavailable on this machine — proxy passwords are protected with a weaker, machine-derived fallback encryption instead of the OS keychain.',
   'settings.encryptionWarning.tooltip':
-    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) reported it isn't available. This is rare and usually specific to this machine or session — see SECURITY.md's Credential storage section.",
+    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) reported it isn't available. This is rare and usually specific to this machine or session. Passwords are still encrypted, not stored in plaintext — see SECURITY.md's Credential storage section for exactly what this fallback does and doesn't protect against.",
 
   'downloads.searchPlaceholder': 'Search by filename...',
   'downloads.filter.allProfiles': 'All profiles',

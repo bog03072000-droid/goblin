@@ -357,9 +357,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.theme.dark': 'Темна',
   'settings.saved': 'Збережено. Деякі налаштування (апаратне прискорення) набудуть чинності після перезапуску.',
   'settings.encryptionWarning':
-    'Шифрування облікових даних на рівні ОС недоступне на цій машині — паролі проксі зберігаються у форматі з plaintext-міткою, а не зашифровані.',
+    'Шифрування облікових даних на рівні ОС недоступне на цій машині — паролі проксі захищені слабшим, прив\'язаним до цієї машини резервним шифруванням замість ключа ОС.',
   'settings.encryptionWarning.tooltip':
-    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) повідомив, що недоступний. Це рідкісний випадок, зазвичай специфічний для цієї машини чи сесії — див. розділ Credential storage у SECURITY.md.",
+    "Electron's safeStorage API (Windows DPAPI / macOS Keychain / Linux Secret Service) повідомив, що недоступний. Це рідкісний випадок, зазвичай специфічний для цієї машини чи сесії. Паролі все одно шифруються, а не зберігаються у відкритому вигляді — див. розділ Credential storage у SECURITY.md, де чесно описано, що саме цей резервний варіант захищає, а що ні.",
 
   'downloads.searchPlaceholder': 'Пошук за назвою файлу...',
   'downloads.filter.allProfiles': 'Усі профілі',

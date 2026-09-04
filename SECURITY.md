@@ -145,16 +145,52 @@ return the password; only the internal `.getPassword()` method does, and it is
 called only when wiring up a session's proxy auth — never for logging,
 display, or export.
 
-**Known limitation:** if OS-level encryption is unavailable (rare, e.g. some
-headless/CI environments), the vault falls back to a clearly-prefixed
-plaintext encoding rather than silently pretending to encrypt.
-`decryptSecret` detects and handles both cases. This used to be a
-code-and-docs-only "known limitation" with nothing surfacing it to an
-actual user — the Settings page now checks `safeStorage.isEncryptionAvailable()`
-(via the `security:credentialEncryptionStatus` IPC channel) on load and
-shows a visible warning banner whenever the app is running in this
-degraded mode, so a user whose proxy passwords are unencrypted is actually
-told, not just able to read about it here.
+**Fallback when OS-level encryption is unavailable (rare, e.g. some
+headless/CI environments, or a Linux machine with no Secret Service
+running):** the vault used to fall back to a clearly-prefixed but genuinely
+unencrypted plaintext encoding. As of 2026-09-04 it falls back to a
+self-managed AES-256-GCM layer instead (`encryptFallback`/`decryptFallback`
+in `credentialVault.ts`), keyed from a passphrase derived from stable local
+identifiers — OS hostname, platform, arch, the OS username, and this app's
+own per-user data directory path, combined and run through `scrypt`. No
+native dependency or hardware ID lookup is involved; every input is already
+available through Node's `os` module or Electron's `app.getPath()`.
+
+**Be honest about what this fallback actually buys you — it is real
+encryption, but a meaningfully weaker guarantee than the OS keychain, not
+an equivalent one:**
+- The "secret" is *derivable*, not random — anything with local code
+  execution under the same OS user account can reconstruct the exact same
+  key from the exact same public-ish inputs (hostname, username, a known
+  fixed salt). It is **not** protected by an OS-level access-control
+  boundary the way DPAPI/Keychain/Secret Service entries are.
+- It **does** stop the trivial attacks that plaintext didn't: opening the
+  SQLite file directly (or a casual disk/backup scan) no longer reveals the
+  password, and copying the DB file to a different machine or a different
+  OS user account does not let the password decrypt there — the derived
+  key won't match.
+- It does **not** stop a determined local attacker who can already run
+  code as the same OS user this app runs as — at that point they can
+  derive the same key themselves. This is the same class of guarantee as,
+  e.g., a browser's own unlocked profile-local credential store without a
+  separate master password — "protects the file at rest from being read in
+  isolation," not "protects the secret from anyone who can already act as
+  this user."
+- Rows written under the old plaintext fallback (before this change) are
+  still read correctly (`LEGACY_PLAINTEXT_PREFIX` handling stays in
+  `decryptSecret` for backward compatibility) but are not retroactively
+  re-encrypted — only rows written or updated after this change get the
+  AES-GCM fallback.
+
+`decryptSecret` detects and handles all three formats (real `safeStorage`
+buffers, the new AES-GCM fallback, and legacy plaintext rows) by a distinct
+prefix marker on the stored buffer. This used to be a code-and-docs-only
+"known limitation" with nothing surfacing it to an actual user — the
+Settings page checks `safeStorage.isEncryptionAvailable()` (via the
+`security:credentialEncryptionStatus` IPC channel) on load and shows a
+visible warning banner whenever the app is running in this degraded mode,
+so a user affected by it is actually told, not just able to read about it
+here.
 
 ## Logging
 
