@@ -241,15 +241,24 @@
   --ash-dim: #7c8577;
 }
 
-/* Light-theme bevel/glow overrides for .panel/.btn-primary — the dark-mode
- * box-shadows above read fine against a near-black background, but two of
- * them go nearly invisible once the surface itself turns light: .panel's
- * inset highlight is white-on-white against its own near-white background,
- * and .btn-primary's diffuse --lime-glow drop-shadow blends into the pale
- * sage page background instead of standing out. Both get a crisper,
- * higher-contrast treatment here (a visible top highlight plus a defined
- * dark-tinted shadow, rather than a soft glow) instead of reusing the dark
- * values as-is. */
+/* Light-theme bevel/glow overrides — the dark-mode box-shadows above read
+ * fine against a near-black background, but go nearly invisible once the
+ * surface (or the page behind it) turns light: .panel's inset highlight is
+ * white-on-white against its own near-white background, .btn-primary's and
+ * .sidebar-item.active's diffuse --lime-glow drop-shadow/text-shadow blend
+ * into the pale sage page background instead of standing out. All three get
+ * a crisper, higher-contrast treatment here instead of reusing the dark
+ * values as-is.
+ *
+ * .btn-ghost and .btn-danger were checked too (same audit that flagged
+ * these three) and turned out NOT to need this: .btn-ghost has no
+ * box-shadow at all — its background/border/text colors already come
+ * straight from theme tokens, so it was never dark-only to begin with.
+ * .btn-danger's box-shadow is two `inset` shadows on its own fixed-red
+ * surface (never `--lime-glow` or anything page-background-dependent) — an
+ * inset highlight/shadow pair is self-contained to the button's own
+ * surface and doesn't extend onto (or blend with) the page behind it,
+ * unlike an outer glow, so it reads identically on both themes already. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .panel {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 24px -18px rgba(60, 66, 54, 0.35);
@@ -260,6 +269,10 @@
   :root:not([data-theme="dark"]) .btn-primary:hover:not(:disabled) {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 4px rgba(30, 46, 10, 0.3), 0 6px 16px -4px rgba(76, 122, 31, 0.6);
   }
+  :root:not([data-theme="dark"]) .sidebar-item.active {
+    box-shadow: inset 0 0 0 1px rgba(76, 122, 31, 0.35), 0 1px 3px -1px rgba(60, 66, 54, 0.3);
+    text-shadow: none;
+  }
 }
 :root[data-theme="light"] .panel {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 24px -18px rgba(60, 66, 54, 0.35);
@@ -269,6 +282,10 @@
 }
 :root[data-theme="light"] .btn-primary:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 4px rgba(30, 46, 10, 0.3), 0 6px 16px -4px rgba(76, 122, 31, 0.6);
+}
+:root[data-theme="light"] .sidebar-item.active {
+  box-shadow: inset 0 0 0 1px rgba(76, 122, 31, 0.35), 0 1px 3px -1px rgba(60, 66, 54, 0.3);
+  text-shadow: none;
 }
 
 * { box-sizing: border-box; }
