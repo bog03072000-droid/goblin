@@ -25,7 +25,13 @@ jobs:
       - run: npm run lint
       - name: Rebuild native modules for Node ABI
         run: npm run rebuild:node
-      - run: npm test
+      # Runs the exact same unit/integration suite as `npm test` plus a
+      # coverage-threshold gate (see vitest.config.ts's `coverage.thresholds`
+      # — 70% statements, currently a REAL, deliberately-red gate against a
+      # measured 54.45% baseline, not a decorative target already cleared)
+      # — replaces the plain `npm test` step rather than running both, since
+      # that would just execute the same tests twice.
+      - run: npm run test:coverage
 
   # Real Electron/Chromium E2E suite — blocking, since this is the only
   # thing that actually exercises the packaged app's behavior end to end.
