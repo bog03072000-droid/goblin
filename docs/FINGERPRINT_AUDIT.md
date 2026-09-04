@@ -7,19 +7,24 @@
 > global scope in shipped code — a real, reproducible gap that lets a
 > Service-Worker-based fingerprint probe (this is exactly how CreepJS reads
 > part of its report) see this machine's real GPU and real navigator values
-> instead of the configured ones. Four independent, concrete fix attempts
+> instead of the configured ones. Five independent, concrete fix attempts
 > were built and reverted: the first three broke a real
 > proxy-authentication regression (core functionality, not a trade this
 > project makes); the fourth (a browser-level CDP `Target.setAutoAttach`
-> session, no network interception involved) genuinely did NOT break proxy
-> auth and DID fix part of the gap (Worker-section navigator/UA/GPU now
-> correctly spoofed), but introduced a new, reproducible CreepJS "stealth"
-> detection signal (0% → 20%) that wasn't present before — a disqualifying
-> outcome under this project's own decision rule, even though the two other
-> named risks (proxy-auth, "like headless") came back clean. This is a
-> final decision, not an open investigation: see **"Confirmed, real, honest
-> limitation: Service Workers"**, **"Third and final attempt"**, and
-> **"Fourth attempt — browser-level Target.setAutoAttach"** below for the
+> session) and fifth (JS-level deletion of `navigator.serviceWorker`, no
+> CDP at all) both genuinely did NOT break proxy auth and DID fix the
+> Worker-section navigator/UA/GPU leak (the fifth more cleanly than the
+> fourth), but both introduced the **exact same** new, reproducible CreepJS
+> "stealth" detection signal (0% → 20%, byte-identical result hash across
+> two unrelated mechanisms) that wasn't present before — a disqualifying
+> outcome under this project's own decision rule, even though the other
+> named risks (proxy-auth, "like headless") came back clean both times. The
+> fifth attempt also uncovered a separate, real reliability gap (the patch
+> silently didn't apply on a real, ordinary site — github.com — in 2/2
+> reproductions). This is a final decision, not an open investigation: see
+> **"Confirmed, real, honest limitation: Service Workers"**, **"Third and
+> final attempt"**, **"Fourth attempt — browser-level Target.setAutoAttach"**,
+> and **"Fifth attempt — remove Service Worker entirely"** below for the
 > full technical history if you need it — most readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
@@ -1037,6 +1042,199 @@ would even be acceptable if the detection question were resolved — not
 evaluated in depth here since (a) wasn't cleared first. Neither is a
 concrete next step recommended for immediate follow-up; both are recorded
 so a future stage doesn't have to rediscover exactly where this one stopped.
+
+## Fifth attempt — remove Service Worker entirely instead of patching it, real partial win, same stealth regression plus a new reliability gap, reverted
+
+**A different class of fix than the first four.** Every prior attempt tried
+to make a Service Worker's own global scope *report the configured
+fingerprint correctly* — patching what it returns. This stage tried the
+opposite: prevent Service Worker registration from being possible at all,
+so there is nothing left to fingerprint through that path. Two mechanisms
+were considered, per this stage's own instruction to check which behaves
+more like a genuine absence rather than a patched one before committing to
+either:
+
+**Mechanism A — `--disable-blink-features=ServiceWorker`, tested and
+rejected as non-functional.** This is a real Chromium command-line switch
+category (Blink runtime-enabled features), and a first direct test — a
+bare `BrowserWindow` loading a `data:text/html` URL — showed
+`'serviceWorker' in navigator === false`, which looked like a clean,
+engine-level win with zero JS footprint. **This result turned out to be a
+false positive of the test method, not the mechanism.** A follow-up test
+against a real `https://www.google.com` navigation, in an otherwise
+identical bare `BrowserWindow` (no `<webview>` involved, ruling out
+guest-view-specific causes), showed `navigator.serviceWorker` fully present
+and functional despite the switch being confirmed active
+(`app.commandLine.hasSwitch('disable-blink-features') === true`,
+`getSwitchValue() === 'ServiceWorker'`, read back directly from inside the
+real process). Root cause: `data:` URLs are opaque-origin documents that
+Chromium suppresses `navigator.serviceWorker` on for an entirely unrelated
+reason (Service Worker requires a real, non-opaque origin) — regardless of
+any blink-features flag. The flag itself does nothing measurable to
+`ServiceWorker`'s availability on a real page in this Chromium build
+(128.0.6613.186), almost certainly because `ServiceWorker` graduated out of
+experimental status years ago — Chromium's own feature-lifecycle convention
+compiles a stable, shipped feature's runtime toggle away to a constant
+`true`, specifically so it can no longer be disabled via this flag in
+production builds. Verified directly, not inferred from documentation or
+memory — this project's own build was tested both ways. This mechanism was
+abandoned at this point; no further testing was done on it.
+
+**Mechanism B — JS-level deletion of `Navigator.prototype.serviceWorker`,
+the one this stage actually proceeded with.** Verified first, in isolation,
+that the property is genuinely `configurable: true` on this Chromium build
+(a real check, not assumed from the WebIDL spec) and that `delete
+Navigator.prototype.serviceWorker` succeeds and produces a real absence —
+`'serviceWorker' in navigator` becomes `false` and `typeof
+navigator.serviceWorker` becomes `'undefined'`, the same as a genuinely
+absent API, not a getter overridden to return `undefined` (which would
+still show `true` for the `in` check — a real, detectable difference this
+stage deliberately avoided). Implemented as one more conditional patch
+inside `buildCoreScript()` in `spoofingScript.ts` (the exact same
+injection mechanism as every other patch — Canvas/Audio/WebGL/fonts/
+mediaDevices), guarded by `self.Navigator && self.Navigator.prototype` —
+which naturally scopes the patch to the main document only, since
+`self.Navigator` (the constructor) doesn't exist inside a Worker's global
+at all (workers have `WorkerNavigator`, which never had a `serviceWorker`
+property to begin with — Service Worker registration is always initiated
+from the controlling document, never from inside a worker's own scope, so
+propagating this patch into Worker contexts would be meaningless, not
+merely redundant). Gated behind a new testing-only env var,
+`PF_E2E_DISABLE_SW_EXPERIMENT=1`, same convention as every other
+experimental switch in this document.
+
+**Result 1 — the primary target (Worker-section GPU/UA/cores) is fixed,
+more cleanly than the fourth attempt's partial fix.** With
+`navigator.serviceWorker` genuinely absent, `navigator.serviceWorker.register(...)`
+throws a `TypeError` on property access before CreepJS's own try/catch
+around it can even attempt registration — and CreepJS's own documented
+fallback ordering (Service Worker first, then `SharedWorker`, then a plain
+`Worker`) takes over from there, landing on `SharedWorker`. Dedicated/
+shared Worker propagation was **already** a solved, previously-verified
+mechanism from an earlier stage of this document (`wrapWorkerCtor` in
+`spoofingScript.ts`) — completely unrelated to anything built this stage —
+so CreepJS's report simply inherits that already-correct path instead of
+the broken Service-Worker one. Confirmed directly, twice: CreepJS's
+"Worker" section (now labeled `SharedWorkerGlobalScope`, not
+`ServiceWorkerGlobalScope`, in the raw capture) reported the exact
+configured GPU vendor/renderer, User-Agent, `hardwareConcurrency`, and
+`deviceMemory` in both experiment runs — verified field-by-field against
+each run's own fingerprint-config table, not eyeballed. This is a cleaner
+result than the fourth attempt's: no separate leftover leak in the same
+execution the way the fourth attempt's WebGL sub-section was left broken.
+
+**Result 2 — a separate, pre-existing "WebGL" report row is unaffected,
+for better and worse.** CreepJS's distinct "WebGL" section (documented in
+the fourth attempt as reading from an independent path, not clearly tied
+to the Service-Worker-vs-SharedWorker fallback this stage's mechanism acts
+on) still reported the real host GPU in this stage's captures too —
+identical behavior to both the baseline and the fourth attempt. This is
+**not a new cost of this stage** — it's the same pre-existing, independently
+documented gap, unchanged either way, not made better or worse by removing
+Service Worker.
+
+**Result 3 — "like headless" unchanged again.** Bit-identical hash
+(`11583836`, `44% like headless`) across every baseline and experiment run
+this stage too — consistent with every attempt so far. Whatever produces
+this composite score is not reacting to any of the four different
+mechanisms tried across this document's five attempts.
+
+**Result 4 — the same "stealth" regression reappeared, with the identical
+result hash, despite a completely different mechanism.** `0% stealth` in
+baseline, `20% stealth` in the experiment — and the result hash
+(`4b82ddf4`) is **byte-identical to the fourth attempt's own experiment
+hash**, even though this stage's mechanism has nothing in common with the
+fourth's: no CDP session, no browser-level debugging, no
+`Target.setAutoAttach`, nothing but a single JS property deletion executed
+in the ordinary page-world injection path already used for every other
+spoofing patch. That the two completely different mechanisms produce the
+*exact same* stealth signature is itself informative, not just a repeated
+bad result: it strongly suggests CreepJS's "stealth" heuristic is checking
+something about Service Worker's *observable behavior* specifically (its
+presence, or how registration resolves/fails) as one of its stealth-tool
+signals, independent of *how* that behavior was altered — meaning this
+entire *class* of fix (anything that makes Service Worker behave
+differently from an untouched real browser, whether by hiding it, patching
+it, or intercepting its registration) may be caught by this same detector
+regardless of implementation, not just this stage's specific two
+approaches. That is a hypothesis stated honestly as a hypothesis, not
+verified further this stage (verifying it would need instrumenting
+CreepJS's own minified stealth-check logic directly, which was not
+attempted here).
+
+**Result 5 — a new, real reliability gap: the patch is not 100% reliable
+across real-world site navigation.** Three ordinary, real sites were
+visited (not fixtures) to check for gross breakage — `https://web.dev/`
+(itself a PWA, genuinely Service-Worker-dependent), `https://github.com/`,
+and `https://www.wikipedia.org/` — each probed for `'serviceWorker' in
+navigator` after a real navigation, run twice for reproducibility.
+`web.dev` and `wikipedia.org` correctly showed `hasSW: false` in both
+experiment runs; **`github.com` showed `hasSW: true` in both experiment
+runs** — the deletion patch did not take effect on that specific site,
+reproducibly. All three sites otherwise rendered real, substantial content
+with no visible breakage in any condition (title, body text, and — for
+GitHub — the actual homepage heading text all present and correctly
+localized to the profile's configured language in every case, including
+the failed-patch GitHub case). The most likely explanation, not
+confirmed by further instrumentation: GitHub's homepage involves a
+client-side locale-query-parameter redirect (`?locale=de-de` /
+`?locale=fr-fr` were both observed, matching the profile's configured
+locale) — an extra navigation step this project's preload-injected
+"append a `<script>` tag" technique (deliberately chosen over CDP
+`Page.addScriptToEvaluateOnNewDocument` during the earlier "CDP footprint
+reduction" stage specifically to reduce CDP surface — see above) may not
+consistently win a race against on every intermediate navigation the way a
+true engine-level `addScriptToEvaluateOnNewDocument` guarantee would. This
+was not root-caused with the same rigor as the original Service Worker gap
+or the fourth attempt's WebGL sub-leak (no temporary instrumentation was
+added to confirm the exact mechanism) — stated as an open, reproducible
+observation, not a confirmed root cause, consistent with this document's
+own standard of not asserting more than what was actually verified.
+
+**Result 6 — authenticated proxy support unaffected, verified twice
+directly** (same fake-auth-proxy fixture as every prior attempt, combined
+with `PF_E2E_DISABLE_SW_EXPERIMENT=1`): the 407 challenge completed and
+authenticated correctly in both runs — expected, since this mechanism
+touches nothing on the network/protocol layer at all, only a page-world JS
+property.
+
+**Result 7 — no measurable performance cost**, consistent with every prior
+attempt: CreepJS's own self-reported scan time was statistically
+indistinguishable between baseline (4807.1ms / 4677.9ms) and experiment
+(4870.3ms / 4801.4ms) runs.
+
+**Decision: reverted, not shipped — the same disqualifying stealth-score
+regression as the fourth attempt reappeared, now compounded by a real,
+reproducible site-compatibility gap.** Even setting the stealth-score
+question aside, a mitigation that silently doesn't apply on an ordinary,
+extremely common real site (GitHub, not an edge case) while claiming to —
+with no visible indication to the user that the patch didn't take effect
+that time — is a real, additional problem an antidetect browser feature
+cannot ship with quietly. Combined with Result 4's regression, this
+attempt does not clear the bar either. `spoofingScript.ts`'s
+`disableServiceWorker` field and patch, and `profileWindowEntry.ts`'s
+wiring of `PF_E2E_DISABLE_SW_EXPERIMENT`, were both fully reverted — no
+trace remains in shipped code, only this write-up.
+
+**What this adds to the fourth attempt's open question.** The fourth
+attempt's write-up asked whether the stealth-score reaction was specific
+to "a browser-level CDP session exists" and left that unresolved. This
+stage's result answers that question directly: **no** — the identical
+stealth signature appeared from a mechanism with zero CDP involvement,
+meaning the earlier hypothesis (narrow the CDP attach to avoid tripping the
+heuristic) would not have helped even if pursued. The open question now is
+narrower and harder: whatever CreepJS's stealth heuristic actually checks
+about Service Worker, it reacted identically to "absent" and to "present
+but paused/altered mid-registration" — two very different-looking states
+from the mechanism's own perspective — which suggests it may be checking
+something more fundamental (timing of registration relative to page load,
+or the exact shape of a `register()` rejection, or something else not yet
+identified) rather than any single implementation detail either of these
+two stages touched. Resolving that would need reading CreepJS's own
+(minified, third-party) stealth-check source directly — not attempted in
+either stage — before a sixth attempt targeting Service Worker specifically
+would have a real, non-speculative hypothesis to test, rather than another
+guess-and-check mechanism variation.
 
 ## Automated test coverage
 
