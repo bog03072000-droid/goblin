@@ -201,6 +201,17 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.spoofing.webglSpoof': 'Підмінити (експериментально)',
   'editor.fingerprint.spoofing.webglWarning':
     'Експериментально — підміняє реальний WebGL API, який використовують деякі ігри, карти й CAPTCHA. Може зламати сумісність із сайтами. Вимкнено за замовчуванням; вмикайте лише розуміючи ризик.',
+  'editor.fingerprint.spoofing.geolocationLabel': 'Геолокація',
+  'editor.fingerprint.spoofing.geolocationReal': 'Реальна (стандартний запит дозволу браузера)',
+  'editor.fingerprint.spoofing.geolocationSpoof': 'Підмінити (місто, узгоджене з локаллю)',
+  'editor.fingerprint.spoofing.geolocationBlocked': 'Заблоковано (відмова в дозволі)',
+  'editor.fingerprint.spoofing.geolocationTooltip':
+    'Реальна: підміни немає — застосовується стандартна поведінка Electron щодо запиту дозволу. Підмінити: повідомляє фіксовану координату міста, узгоджену з локаллю/таймзоною профілю, через CDP, а не довільну випадкову точку. Заблоковано: відмовляє в дозволі на геолокацію одразу, так само як натискання "Заблокувати" реальним користувачем.',
+  'editor.fingerprint.spoofing.permissionsLabel': 'Інші дозволи (камера, мікрофон, сповіщення, буфер обміну...)',
+  'editor.fingerprint.spoofing.permissionsReal': 'Реальні (стандартний запит дозволу браузера)',
+  'editor.fingerprint.spoofing.permissionsDenyAll': 'Відмовляти в усіх',
+  'editor.fingerprint.spoofing.permissionsTooltip':
+    'Реальні: підміни немає — запит дозволу від сайту проходить як зазвичай. Відмовляти в усіх: кожен запит дозволу, крім геолокації (камера, мікрофон, сповіщення, буфер обміну тощо), автоматично відхиляється без запиту.',
   'editor.fingerprint.row.seed': 'Сід',
   'editor.fingerprint.picker.title': 'Явний вибір',
   'editor.fingerprint.picker.hint':

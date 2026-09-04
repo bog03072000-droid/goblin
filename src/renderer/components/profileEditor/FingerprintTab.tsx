@@ -58,6 +58,8 @@ export const FIELD_GROUPS: Array<{
       ['editor.fingerprint.row.fontsMode', 'fontsMode'],
       ['editor.fingerprint.row.mediaDevicesMode', 'mediaDevicesMode'],
       ['editor.fingerprint.spoofing.webglLabel', 'webglSpoofingMode'],
+      ['editor.fingerprint.spoofing.geolocationLabel', 'geolocationMode'],
+      ['editor.fingerprint.spoofing.permissionsLabel', 'permissionsMode'],
     ],
   },
 ];
@@ -90,7 +92,10 @@ const MANUAL_FIELD_KEYS: Array<
 ];
 
 export type SpoofingPatch = Partial<
-  Pick<Fingerprint, 'canvasMode' | 'audioMode' | 'fontsMode' | 'mediaDevicesMode' | 'webglSpoofingMode'>
+  Pick<
+    Fingerprint,
+    'canvasMode' | 'audioMode' | 'fontsMode' | 'mediaDevicesMode' | 'webglSpoofingMode' | 'geolocationMode' | 'permissionsMode'
+  >
 >;
 
 export function FingerprintTab({
@@ -285,6 +290,29 @@ export function FingerprintTab({
               {t('editor.fingerprint.spoofing.webglWarning')}
             </div>
           )}
+        </label>
+        <label className="block">
+          {t('editor.fingerprint.spoofing.geolocationLabel')}
+          <select
+            value={fingerprint.geolocationMode}
+            onChange={(e) => onUpdateSpoofing({ geolocationMode: e.target.value as Fingerprint['geolocationMode'] })}
+            title={t('editor.fingerprint.spoofing.geolocationTooltip')}
+          >
+            <option value="real">{t('editor.fingerprint.spoofing.geolocationReal')}</option>
+            <option value="spoof">{t('editor.fingerprint.spoofing.geolocationSpoof')}</option>
+            <option value="blocked">{t('editor.fingerprint.spoofing.geolocationBlocked')}</option>
+          </select>
+        </label>
+        <label className="block">
+          {t('editor.fingerprint.spoofing.permissionsLabel')}
+          <select
+            value={fingerprint.permissionsMode}
+            onChange={(e) => onUpdateSpoofing({ permissionsMode: e.target.value as Fingerprint['permissionsMode'] })}
+            title={t('editor.fingerprint.spoofing.permissionsTooltip')}
+          >
+            <option value="real">{t('editor.fingerprint.spoofing.permissionsReal')}</option>
+            <option value="deny-all">{t('editor.fingerprint.spoofing.permissionsDenyAll')}</option>
+          </select>
         </label>
       </div>
 

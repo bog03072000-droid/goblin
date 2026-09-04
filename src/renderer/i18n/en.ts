@@ -199,6 +199,17 @@ const en = {
   'editor.fingerprint.spoofing.webglSpoof': 'Spoof (experimental)',
   'editor.fingerprint.spoofing.webglWarning':
     'Experimental — overrides a real WebGL API used by some games, map renderers, and CAPTCHAs. May break page compatibility. Off by default; enable only if you understand the risk.',
+  'editor.fingerprint.spoofing.geolocationLabel': 'Geolocation',
+  'editor.fingerprint.spoofing.geolocationReal': 'Real (default browser permission prompt)',
+  'editor.fingerprint.spoofing.geolocationSpoof': 'Spoof (locale-coherent city)',
+  'editor.fingerprint.spoofing.geolocationBlocked': 'Blocked (deny permission)',
+  'editor.fingerprint.spoofing.geolocationTooltip':
+    "Real: no override installed — Electron's own permission-request default applies. Spoof: reports a fixed, locale-coherent city coordinate (matching this profile's timezone/locale) via CDP, not an arbitrary random point. Blocked: denies the geolocation permission outright, the same outcome a real user clicking \"Block\" gets.",
+  'editor.fingerprint.spoofing.permissionsLabel': 'Other Permissions (camera, mic, notifications, clipboard, ...)',
+  'editor.fingerprint.spoofing.permissionsReal': 'Real (default browser permission prompt)',
+  'editor.fingerprint.spoofing.permissionsDenyAll': 'Deny all',
+  'editor.fingerprint.spoofing.permissionsTooltip':
+    'Real: no override — the site\'s permission request goes through as it normally would. Deny all: every non-geolocation permission request (camera, microphone, notifications, clipboard, etc.) is denied automatically, without prompting.',
   'editor.fingerprint.row.seed': 'Seed',
   'editor.fingerprint.picker.title': 'Explicit selection',
   'editor.fingerprint.picker.hint':
