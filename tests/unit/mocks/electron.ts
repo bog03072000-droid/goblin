@@ -25,3 +25,26 @@ export const dialog = {
     throw new Error('dialog.showOpenDialog is not available in unit tests — call the underlying method directly');
   },
 };
+
+type IpcListener = (event: unknown, ...args: unknown[]) => unknown;
+
+/** Real Electron's ipcMain.handle() registers a listener per channel and
+ * routes invoke() calls to it — this stub just keeps the registered
+ * listeners in a plain Map so registerIpc.test.ts can look one up by
+ * channel name and call it directly, the same shape a real renderer's
+ * `invoke(channel, payload)` would trigger (event first, then the raw
+ * payload), without needing a real IPC round-trip. */
+export const ipcMain = {
+  _handlers: new Map<string, IpcListener>(),
+  handle(channel: string, listener: IpcListener): void {
+    this._handlers.set(channel, listener);
+  },
+  on(channel: string, listener: IpcListener): void {
+    this._handlers.set(channel, listener);
+  },
+};
+
+export const shell = {
+  openPath: async (): Promise<string> => '',
+  showItemInFolder: (): void => {},
+};
