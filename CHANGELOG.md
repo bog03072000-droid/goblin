@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 — Service Worker fingerprint leak closed by default, entire spoofing injection moved to CDP
+
+- **`serviceWorkerMode` now defaults to `'disabled'` (protection ON) for every
+  new profile** — the same reversal `webglSpoofingMode` went through earlier:
+  a silent fingerprint leak on every profile was judged the worse of the two
+  real risks, compatibility included. Existing profiles created before this
+  release keep whatever mode they already had.
+- This is the outcome of eight independent attempts to close a real,
+  reproducible gap: spoofing (navigator fields, canvas/audio noise, WebGL
+  vendor/renderer) reached the main document and every dedicated/shared
+  Worker, but not a page's own Service Worker or a same-page `<iframe>`'s own
+  WebGL context — exactly the path a Service-Worker-based fingerprint probe
+  (part of how CreepJS reads its report) uses to see the real GPU and real
+  navigator values instead of the configured ones. The first three attempts
+  broke real proxy authentication; the fourth and fifth each fixed the
+  Service Worker side alone but both introduced the same new CreepJS
+  "stealth" detection signal (`hasBadWebGL`, a cross-context GPU mismatch);
+  the seventh closed the matching iframe-side gap and, combined with the
+  fifth's Service Worker removal, brought CreepJS's stealth score back to
+  the exact same hash as a clean baseline, verified twice with real
+  captures. See `docs/FINGERPRINT_AUDIT.md` for the full technical history
+  of all eight attempts.
+- **Eighth attempt, this release: moved the entire spoofing script injection
+  off the CSP-vulnerable preload `<script>`-element technique, onto CDP
+  `Page.addScriptToEvaluateOnNewDocument`.** Investigating why the Service
+  Worker fix was unreliable specifically on `github.com`/`x.com` found
+  something bigger than a single-site quirk: both sites' real CSP
+  `script-src` directives block inline `<script>` elements outright, which
+  silently blocked the *entire* spoofing script there, not just the Service
+  Worker piece (confirmed directly via the always-on `deviceMemory` field
+  leaking its real value on both sites). `Page.addScriptToEvaluateOnNewDocument`
+  is exempt from a page's own CSP (the same mechanism Puppeteer/Playwright's
+  `addInitScript()` uses) and was verified live against CreepJS, twice, with
+  the exact same clean stealth-score hash as before — proving not every
+  additional CDP domain carries the same detectable cost the fourth attempt's
+  `Target.setAutoAttach` did. This closes the github.com/x.com reliability
+  gap as a side effect and is now the sole, unconditional injection mechanism
+  for every profile's spoofing script.
+- Added RTL unit tests for the largest fully/near-fully uncovered UI
+  components — `ProfilesToolbar.tsx`, `BulkToolbar.tsx`, `LogsPage.tsx`,
+  `DownloadsPage.tsx`, `ProfileContextMenu.tsx` — raising overall statement
+  coverage from 63.5% to 67.83%.
+
 ## Unreleased — proxy rotation pool per group
 
 - Groups can now carry a proxy rotation pool (migration 007:
