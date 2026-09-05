@@ -27,10 +27,14 @@ jobs:
         run: npm run rebuild:node
       # Runs the exact same unit/integration suite as `npm test` plus a
       # coverage-threshold gate (see vitest.config.ts's `coverage.thresholds`
-      # — 70% statements, currently a REAL, deliberately-red gate against a
-      # measured 54.45% baseline, not a decorative target already cleared)
-      # — replaces the plain `npm test` step rather than running both, since
-      # that would just execute the same tests twice.
+      # — 70% statements). Was a deliberately-red gate against a measured
+      # 54.45%, then 63.5%, then 67.83% baseline across several stages —
+      # crossed for the first time at 70.64% once ProfilesToolbar.tsx,
+      # BulkToolbar.tsx, LogsPage.tsx, DownloadsPage.tsx,
+      # ProfileContextMenu.tsx, profileWindowArgs.ts, and three renderer
+      # hooks got real unit tests. Replaces the plain `npm test` step rather
+      # than running both, since that would just execute the same tests
+      # twice.
       - run: npm run test:coverage
 
   # Real Electron/Chromium E2E suite — blocking, since this is the only
@@ -118,3 +122,64 @@ jobs:
         with:
           name: performance-reports
           path: tests/performance/*_RAW.md
+
+  # Real macOS packaging + smoke test — best-effort, not required (continue-
+  # on-error), same non-blocking pattern as `performance` above. This repo's
+  # build.mac config (package.json) has existed since the "GoblinAnty
+  # rebrand" stage but was, until this job, NEVER actually run on a real
+  # macOS host: electron-builder refuses macOS packaging from any
+  # non-macOS host categorically (confirmed directly, documented in
+  # CHANGELOG.md), so a Windows dev machine — the only environment this
+  # project has otherwise ever built/tested on — cannot verify it at all.
+  # `macos-latest` is a genuine macOS host, and Actions minutes on it are
+  # free and unlimited for this public repository, so this is the first
+  # real opportunity to find out whether `npm run package:mac` (unsigned,
+  # per package.json's `identity: null`) actually produces a launchable
+  # .app — not assumed, whatever this job's first real run reports is the
+  # first honest data point on that question.
+  package-macos:
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+      - name: Build unsigned macOS package
+        run: npm run package:mac
+      # Minimal smoke test: launches the actual packaged .app (not the
+      # source tree, unlike the `e2e` job above — this is specifically
+      # checking that what electron-builder produced is a launchable
+      # binary) and confirms the process is still alive a few seconds
+      # later, i.e. it didn't crash on startup. Not a full E2E pass —
+      # just answers "does the packaged artifact even start" for the
+      # first time.
+      - name: Smoke test — launch the packaged .app and confirm it stays up
+        shell: bash
+        run: |
+          APP_PATH=$(find dist -maxdepth 1 -name "*.app" | head -n1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found under dist/ — package:mac did not produce one"
+            exit 1
+          fi
+          echo "Found: $APP_PATH"
+          open -n "$APP_PATH"
+          sleep 8
+          if ! pgrep -f "$(basename "$APP_PATH" .app)" > /dev/null; then
+            echo "Packaged app is not running after launch — it likely crashed on startup"
+            exit 1
+          fi
+          echo "Packaged app is running."
+          pkill -f "$(basename "$APP_PATH" .app)" || true
+      - name: Upload the unsigned macOS package
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-package-unsigned
+          path: |
+            dist/*.zip
+            dist/*.app
+          retention-days: 7

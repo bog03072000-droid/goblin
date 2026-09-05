@@ -23,10 +23,14 @@ was actually run from this Windows environment and refused outright**:
 https://electron.build/multi-platform-build` — confirmed directly, not
 assumed; electron-builder blocks macOS packaging from any non-macOS host
 categorically, regardless of target format (`zip` included, not just
-`dmg`). The config exists and is ready for whoever has real macOS hardware
-or a macOS CI runner to try — it has never actually produced a build, let
-alone been launched or clicked through. Linux is not targeted at all — no
-`build.linux` config, no plan to add one.
+`dmg`). A `package-macos` job now runs `npm run package:mac` on a real
+`macos-latest` GitHub Actions runner (`.github/workflows/ci.yml`) — the
+first real macOS host this config has ever touched — and smoke-tests that
+the resulting `.app` actually launches, but this is genuinely untested
+until that job has run at least once (`continue-on-error: true`, so it
+cannot yet be presented as a passing check with real history behind it,
+only as a real attempt this stage newly makes). Linux is not targeted at
+all — no `build.linux` config, no plan to add one.
 
 ## What it does today
 
@@ -139,7 +143,7 @@ database) lives in the OS user-data directory (`%APPDATA%/GoblinAnty`),
 never inside the install directory, so uninstalling the app does not delete
 profile data unless the user explicitly removes that folder.
 
-## Build a macOS package (config only — cannot run from this environment)
+## Build a macOS package (cannot run from this Windows environment — see CI instead)
 
 ```bash
 npm run package:mac
@@ -147,14 +151,16 @@ npm run package:mac
 
 `build.mac` in `package.json` is configured (`zip` target, unsigned via
 `identity: null`, since there's no Apple Developer identity available
-here) and its JSON is valid. That's the extent of what's actually been
-verified: running this command on this Windows machine fails immediately
-with `Build for macOS is supported only on macOS` — electron-builder
-refuses macOS packaging from any non-macOS host, confirmed directly, not
-assumed. The config is ready for someone with real macOS hardware (or a
-macOS CI runner) to run this same command and continue from there — it has
-never actually produced a `.zip`, let alone been launched or clicked
-through.
+here) and its JSON is valid. Running this command on this Windows machine
+fails immediately with `Build for macOS is supported only on macOS` —
+electron-builder refuses macOS packaging from any non-macOS host,
+confirmed directly, not assumed. `.github/workflows/ci.yml`'s
+`package-macos` job now runs this exact command on a real `macos-latest`
+GitHub Actions runner and smoke-tests the resulting `.app`
+(`continue-on-error: true` — informational, not a merge gate, until it has
+a real pass/fail history) — check that job's latest run for the actual,
+current answer to "does this produce a launchable build" rather than
+trusting this paragraph, which will go stale the moment that changes.
 
 ## Profile storage
 
