@@ -52,7 +52,15 @@
 > iframe too"**, **"Default flip"**, and **"Eighth attempt — moved the
 > entire spoofing injection off the CSP-vulnerable preload technique, onto
 > CDP"** below for the full technical history if you need it — most
-> readers won't.
+> readers won't. A ninth, separate investigation then asked a question one
+> layer below all of the above: TLS ClientHello (JA3/JA4) fingerprinting,
+> which operates below JavaScript entirely and nothing above this line
+> touches. Real captures confirmed JA4 is identical across every profile —
+> the correct, expected outcome, since it exactly matches genuine
+> Chromium 128's own public JA4 database entry, meaning Goblin's TLS layer
+> is indistinguishable from a real, unmodified Chromium install. No code
+> change was needed or made. See **"Ninth investigation — TLS ClientHello
+> (JA3/JA4) fingerprinting"** below.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -1707,6 +1715,146 @@ target: since the whole spoofing script (including the Service Worker
 deletion and iframe-WebGL propagation from the seventh attempt) now
 reaches every page regardless of CSP, github.com and x.com are no longer
 special cases.
+
+## Ninth investigation — TLS ClientHello (JA3/JA4) fingerprinting, a layer below everything else in this document
+
+**Why this is a different question from everything above.** Every prior
+stage in this document operates at the JS/renderer layer: `navigator.*`,
+`canvas`/`WebGL` reads, Worker propagation. TLS fingerprinting
+(JA3/JA4) operates one layer down, at the actual TCP/TLS handshake —
+Chromium's network stack negotiates cipher suites and extensions before a
+single byte of page JavaScript runs, using BoringSSL, not V8. No amount of
+`Page.addScriptToEvaluateOnNewDocument` or `Emulation.*` touches this layer
+at all. This investigation asks a question never asked before in this
+document: does Goblin's per-profile spoofing (navigator fields, canvas
+noise, WebGL vendor strings — all real and verified above) survive being
+completely bypassed by a detector that ignores JavaScript and reads the raw
+TLS handshake instead?
+
+**Method.** Real captures only, same standard as every attempt above: two
+real profiles (independently generated fingerprints — one claiming a macOS
+navigator identity, one claiming Linux, deliberately picked to maximize any
+JS-level difference between them) were started as real per-profile
+Electron/Chromium child processes, each navigated its real `<webview>` to
+`https://tls.peet.ws/api/all` — a public TLS-fingerprint echo service that
+reports the exact ClientHello it received, including computed JA3 and JA4
+hashes — and the raw JSON response was read back and compared. No canned
+data, no assumptions from documentation.
+
+**Result 1 — JA3 differs between profiles, but this is Chromium's own
+behavior, already present before Goblin, not a Goblin-introduced signal.**
+
+```
+Profile A (macOS UA): ja3_hash = a8e621a8265f85b0628b23350b45523f
+Profile B (Linux UA): ja3_hash = ae4fceb906d78da224d9a5c3db861bd5
+```
+
+This looks at first glance like exactly the kind of gap this audit exists
+to catch. It is not: since Chrome 110 (shipped Chromium 109, January 2023),
+Chrome randomizes the *order* of TLS extensions on every single connection
+(the one fixed exception being `pre_shared_key`, which TLS 1.3 requires
+last) — a deliberate, public Chromium change specifically intended to stop
+servers from hard-coding extension order. JA3 hashes extensions in
+wire order with no normalization, so this permutation gives every
+connection from the *same* installation of the *same* browser a
+different JA3, whether or not Goblin's spoofing is involved at all. The
+raw `ja3` strings above confirm this directly — the same cipher list, same
+elliptic-curve list, same point-format list, but a different extension
+*order* each time (`35-45-65037-17513-...` vs `5-17513-13-10-35-...`).
+This is not a per-profile fingerprint; it is Chromium 128 (the exact
+version this project ships, confirmed by both captures' `Chrome/128.0.0.0`
+User-Agent) behaving exactly like every other real Chrome 128 install on
+the internet. Modern TLS fingerprinting tooling has already adapted to
+this — see Result 2.
+
+**Result 2 — JA4 (the modern successor, designed to survive Chrome's own
+permutation) is byte-identical between the two profiles, and matches a
+public database's real "Chromium Browser" entry exactly.**
+
+```
+Profile A: ja4 = t13d1516h2_8daaf6152771_02713d6af862
+Profile B: ja4 = t13d1516h2_8daaf6152771_02713d6af862   (identical)
+```
+
+JA4 sorts cipher suites and extensions into a canonical order and strips
+GREASE values before hashing specifically to be immune to the permutation
+that broke JA3 — so an identical JA4 across profiles on the same machine is
+the *expected*, *correct* outcome of that design, not a Goblin-specific
+weakness. More importantly: `t13d1516h2_8daaf6152771_02713d6af862` is not
+just "some value" — it is catalogued in the public JA4 database
+(ja4db.com) under "Chromium Browser" verbatim. Goblin's embedded
+Electron 32.3.3 / Chromium 128 build produces the exact same TLS
+fingerprint as the reference entry for real Chromium — meaning a detector
+reading only the TLS layer cannot distinguish a Goblin profile's browser
+from a genuine Chromium 128 install, on this axis, at all. This is a
+materially different (better) answer than this investigation expected
+going in: Electron does not carry its own distinct, worse TLS signature
+the way some CEF-based or headless-automation tooling does (confirmed by
+the same captures' `peetprint_hash` — a third, independent composite
+fingerprint tls.peet.ws computes — also identical between both profiles).
+
+**Result 3 — no command-line flag or public Electron/Chromium API exists
+to change this per-profile, and none should be added.** BoringSSL's
+cipher-suite list and Chromium's TLS extension set are compiled in, not
+exposed as a `--` switch the way `--lang` or `--proxy-server` are
+(confirmed by the absence of any such flag in Chromium's own
+`net/socket/ssl_client_socket_impl.cc`-level configuration surface, and by
+the complete absence of any prior art for "randomize my own Chromium
+build's JA4" in the TLS-fingerprinting literature searched for this
+investigation — tools that *do* present a different, chosen TLS
+fingerprint, like Go's `uTLS`, work by reimplementing an entire independent
+TLS stack that mimics a *target* browser's handshake byte-for-byte, not by
+configuring Chromium's own real stack, which is a categorically different
+and vastly larger undertaking than anything else in this document). More
+fundamentally: unlike every JS-level field in this document, TLS-layer
+uniqueness across profiles would be the wrong goal even if it were
+achievable — real Chrome users of the same Chrome version, on the same OS,
+already share an identical JA4 with each other. A detector using JA4 to
+tell two *real* Chrome users apart gets nothing; its actual purpose is
+telling automation frameworks and non-browser HTTP clients apart from any
+browser, a bar this project already clears by using a real, unmodified
+Chromium network stack. Making Goblin's profiles differ from each other
+here would make them *more* fingerprintable, not less, since it would mean
+diverging from what every genuine Chrome installation on earth does.
+
+**Result 4 — the one real, ongoing maintenance risk this surfaced (not a
+bug, but worth stating plainly).** `platformProfiles.ts`'s three platform
+profiles all hardcode `browserVersion: '128.0.0.0'`, which today correctly
+matches this project's actual installed Electron 32.3.3 / Chromium 128
+build — confirmed directly by both captures' own `Chrome/128.0.0.0`
+User-Agent strings lining up with the JA4's real Chromium-128-shaped
+extension set. This consistency is currently accidental-by-correctness,
+not enforced: if Electron is upgraded in a future stage without also
+updating `browserVersion` here, the spoofed User-Agent would claim a Chrome
+version the real TLS handshake's extension set doesn't match — a new,
+real, and easily automatable detection signal (compare the UA's claimed
+Chrome major version against a JA4 database lookup) that does not exist
+today but could be silently introduced by an Electron version bump alone.
+Not fixed here since there is nothing to fix in the current build — flagged
+as a check to add to this project's Electron-upgrade process specifically.
+
+**Result 5 — the one honest residual risk that IS real, and has no fix.**
+Every profile run from one Goblin installation, on one physical machine,
+shares this exact same JA4, because it is a property of the shared
+Electron binary, not of any per-profile configuration. This is not a
+unique-identifying signal on its own (millions of real Chrome 128 users
+share it too), but a fraud-detection system doing cross-account linkage
+across its *entire userbase* (not single-session bot scoring) could use
+"identical JA4 across accounts claiming to be different people, from the
+same operator" as one weak corroborating signal among many, same as it
+already can for a real person who happens to run two accounts from one
+real Chrome install. This is a structural property of running multiple
+browser identities from one machine, not a Goblin-specific defect — stated
+here for completeness rather than left undiscovered.
+
+**Verdict: no code change made.** The investigation the user asked for
+(“is TLS fingerprinting identical across profiles, and if so is there a
+realistic fix”) is answered in full: yes, JA4 is identical across profiles
+(Result 2), it should be (Result 3), no mechanism exists to change it
+short of replacing Chromium's entire TLS stack (Result 3), and Goblin's
+existing behavior already matches genuine Chromium exactly (Result 2) —
+the single best achievable outcome at this layer, arrived at with zero
+lines of new code because none were needed.
 
 ## Automated test coverage
 
