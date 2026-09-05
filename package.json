@@ -3,6 +3,7 @@
   "version": "0.3.0",
   "description": "Multi-profile Chromium browser with persistent isolated profiles, proxy management, and coherent fingerprint configuration.",
   "author": "GoblinAnty",
+  "license": "MIT",
   "private": true,
   "main": "dist-electron/main/main.js",
   "type": "commonjs",

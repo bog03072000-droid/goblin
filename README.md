@@ -333,3 +333,7 @@ palette addition instead of a redesign.
   capped). Real-world load testing measured ~585MB and ~5 OS processes per
   simultaneously running profile — see `docs/LOAD_TEST.md` for the full
   methodology and numbers.
+
+## License
+
+[MIT](LICENSE).
