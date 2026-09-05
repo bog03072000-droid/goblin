@@ -202,7 +202,7 @@ const en = {
   'editor.fingerprint.spoofing.webglLabel': 'WebGL Vendor/Renderer Spoofing',
   'editor.fingerprint.spoofing.webglSpoof': 'Spoof (experimental)',
   'editor.fingerprint.spoofing.webglWarning':
-    'Experimental — overrides a real WebGL API used by some games, map renderers, and CAPTCHAs. May break page compatibility. Off by default; enable only if you understand the risk.',
+    'Experimental — overrides a real WebGL API used by some games, map renderers, and CAPTCHAs. May break page compatibility. On by default; disable if you hit a real compatibility problem.',
   'editor.fingerprint.spoofing.geolocationLabel': 'Geolocation',
   'editor.fingerprint.spoofing.geolocationReal': 'Real (default browser permission prompt)',
   'editor.fingerprint.spoofing.geolocationSpoof': 'Spoof (locale-coherent city)',
@@ -215,12 +215,12 @@ const en = {
   'editor.fingerprint.spoofing.permissionsTooltip':
     'Real: no override — the site\'s permission request goes through as it normally would. Deny all: every non-geolocation permission request (camera, microphone, notifications, clipboard, etc.) is denied automatically, without prompting.',
   'editor.fingerprint.spoofing.serviceWorkerLabel': 'Service Worker',
-  'editor.fingerprint.spoofing.serviceWorkerReal': 'Real (default, Service Worker works normally)',
-  'editor.fingerprint.spoofing.serviceWorkerDisabled': 'Disabled (experimental)',
+  'editor.fingerprint.spoofing.serviceWorkerReal': 'Real (Service Worker works normally)',
+  'editor.fingerprint.spoofing.serviceWorkerDisabled': 'Disabled (experimental, default)',
   'editor.fingerprint.spoofing.serviceWorkerTooltip':
-    'Real: no change — sites can register Service Workers normally. Disabled: navigator.serviceWorker is genuinely removed, closing a real fingerprint leak (some fingerprinting scripts read your real GPU and device info through a Service Worker even when the rest of the fingerprint is spoofed) — but any site that actually relies on a Service Worker (offline caching, push notifications, background sync) will lose that functionality.',
+    'Disabled (default): navigator.serviceWorker is genuinely removed, closing a real fingerprint leak (some fingerprinting scripts read your real GPU and device info through a Service Worker even when the rest of the fingerprint is spoofed) — but any site that actually relies on a Service Worker (offline caching, push notifications, background sync) will lose that functionality. Real: no change — sites can register Service Workers normally, at the cost of that leak.',
   'editor.fingerprint.spoofing.serviceWorkerWarning':
-    'Experimental — closes a real fingerprint leak, but offline caching, push notifications, and background sync will stop working on any site that relies on them.',
+    'Experimental — on by default, closes a real fingerprint leak, but offline caching, push notifications, and background sync will stop working on any site that relies on them. Switch to Real if you hit a real compatibility problem.',
   'editor.fingerprint.row.seed': 'Seed',
   'editor.fingerprint.picker.title': 'Explicit selection',
   'editor.fingerprint.picker.hint':

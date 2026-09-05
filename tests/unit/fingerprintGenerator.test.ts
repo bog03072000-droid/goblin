@@ -31,12 +31,19 @@ describe('fingerprint generator', () => {
     expect(fp.platform).toBe('MacIntel');
   });
 
+  it('defaults webglSpoofingMode to "spoof" and serviceWorkerMode to "disabled" — both closed by default, not opt-in, because leaving either "off" silently leaked a correlatable real fingerprint on every profile (see docs/FINGERPRINT_AUDIT.md)', () => {
+    for (let i = 0; i < 20; i++) {
+      const fp = generateFingerprint({ seed: `spoof-default-${i}` });
+      expect(fp.webglSpoofingMode).toBe('spoof');
+      expect(fp.serviceWorkerMode).toBe('disabled');
+    }
+  });
+
   it('defaults geolocation/permissions to real/real (off) and carries a coordinate coherent with the picked locale/timezone, not an arbitrary point', () => {
     for (let i = 0; i < 20; i++) {
       const fp = generateFingerprint({ seed: `geo-${i}` });
       expect(fp.geolocationMode).toBe('real');
       expect(fp.permissionsMode).toBe('real');
-      expect(fp.serviceWorkerMode).toBe('real');
       const matchingLocale = LOCALE_PROFILES.find((l) => l.locale === fp.locale && l.timezone === fp.timezone);
       expect(matchingLocale, `no LOCALE_PROFILE matched locale=${fp.locale} timezone=${fp.timezone}`).toBeTruthy();
       expect(fp.geolocationLatitude).toBe(matchingLocale!.latitude);

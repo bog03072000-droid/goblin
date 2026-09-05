@@ -29,18 +29,19 @@ export type GeolocationMode = z.infer<typeof GeolocationModeSchema>;
 // want in any combination (e.g. spoofed location + no camera/mic access).
 export const PermissionsModeSchema = z.enum(['real', 'deny-all']);
 export type PermissionsMode = z.infer<typeof PermissionsModeSchema>;
-// Off by default ('real', matches every existing profile's current
-// behavior exactly — no change unless explicitly opted into). 'disabled'
-// deletes navigator.serviceWorker outright (a genuine absence, not an
-// overridden getter — see docs/FINGERPRINT_AUDIT.md's "Fifth attempt" and
-// "Seventh attempt" write-ups) and — only in combination with that, never
-// on its own — extends webglSpoofingMode's getParameter() override into
-// same-page iframes too, which closes a real, verified fingerprint leak
-// AND a real, verified new detection signal that appeared when only one of
-// the two was fixed. Real compatibility risk: any site that actually uses
-// a Service Worker (offline caching, push notifications, background sync)
-// won't get that functionality with this on — documented in the
-// Fingerprint tab's own UI warning, same convention as webglSpoofingMode.
+// 'disabled' by default (unlike every other mode field above except
+// webglSpoofingMode) — same reasoning, same later reversal: leaving this
+// 'real' meant every new profile silently leaked a correlatable real
+// GPU/core fingerprint through Service Worker + iframe-WebGL (see
+// docs/FINGERPRINT_AUDIT.md's "Seventh attempt" — verified closed, live,
+// against CreepJS, twice). 'disabled' deletes navigator.serviceWorker
+// outright (a genuine absence, not an overridden getter — see the "Fifth
+// attempt" write-up) and — only in combination with that, never on its
+// own — extends webglSpoofingMode's getParameter() override into same-page
+// iframes too. Real, unchanged compatibility risk: any site that actually
+// uses a Service Worker (offline caching, push notifications, background
+// sync) won't get that functionality — documented in the Fingerprint tab's
+// own UI warning; the user can still opt back to 'real' per profile.
 export const ServiceWorkerModeSchema = z.enum(['real', 'disabled']);
 export type ServiceWorkerMode = z.infer<typeof ServiceWorkerModeSchema>;
 

@@ -1,40 +1,44 @@
 # Fingerprint Reality Audit
 
-> **Status: real gap, now closeable via an opt-in profile setting
-> (`serviceWorkerMode: 'disabled'`), off by default.** Spoofing (navigator
-> fields, canvas/audio noise, WebGL vendor/renderer) is genuinely applied
-> and E2E-verified for the main document and every dedicated/shared
-> Worker. By default it does **not** reach a Service Worker's own global
-> scope, nor a same-page `<iframe>`'s own WebGL context — two real,
-> reproducible gaps that together let a Service-Worker-based fingerprint
-> probe (this is exactly how CreepJS reads part of its report) see this
-> machine's real GPU and real navigator values instead of the configured
-> ones. Seven independent attempts were made before this closed cleanly:
-> the first three broke a real proxy-authentication regression (core
-> functionality); the fourth and fifth each fixed the Service Worker side
-> alone but both introduced the exact same new, reproducible CreepJS
-> "stealth" detection signal (a cross-context GPU mismatch, `hasBadWebGL`
-> — confirmed by reading CreepJS's actual source in the sixth stage, not
-> guessed); the seventh closed the *other* side of that exact mismatch (a
-> hidden iframe CreepJS injects into the page, never previously reached by
-> this project's spoofing injection) and, only in combination with the
-> fifth attempt's Service Worker deletion, brought CreepJS's "stealth"
-> score back to the exact same hash as a clean, untouched baseline —
-> verified twice, with real captures, alongside proxy-auth, real-site
-> browsing, and performance checks all coming back clean. This is now
-> shipped as `serviceWorkerMode` on the Fingerprint tab's Spoofing panel,
-> default `'real'` (off — no behavior change for any existing or new
-> profile unless explicitly opted in), with a real, stated compatibility
-> cost (offline caching, push notifications, background sync stop working
-> on any site that relies on them) and one known, unresolved reliability
-> gap inherited from the fifth attempt (the deletion patch doesn't reliably
-> apply on every real site — confirmed on github.com specifically). See
-> **"Confirmed, real, honest limitation: Service Workers"**, **"Third and
-> final attempt"**, **"Fourth attempt — browser-level Target.setAutoAttach"**,
-> **"Fifth attempt — remove Service Worker entirely"**, **"Sixth
-> investigation — root-causing the stealth regression precisely"**, and
-> **"Seventh attempt — patch WebGL inside the iframe too"** below for the
-> full technical history if you need it — most readers won't.
+> **Status: real gap, closed by default since this stage
+> (`serviceWorkerMode: 'disabled'` for every new profile).** Spoofing
+> (navigator fields, canvas/audio noise, WebGL vendor/renderer) is
+> genuinely applied and E2E-verified for the main document and every
+> dedicated/shared Worker. Before this stage, it did **not** reach a
+> Service Worker's own global scope, nor a same-page `<iframe>`'s own
+> WebGL context — two real, reproducible gaps that together let a
+> Service-Worker-based fingerprint probe (this is exactly how CreepJS reads
+> part of its report) see this machine's real GPU and real navigator
+> values instead of the configured ones. Seven independent attempts were
+> made before this closed cleanly: the first three broke a real
+> proxy-authentication regression (core functionality); the fourth and
+> fifth each fixed the Service Worker side alone but both introduced the
+> exact same new, reproducible CreepJS "stealth" detection signal (a
+> cross-context GPU mismatch, `hasBadWebGL` — confirmed by reading
+> CreepJS's actual source in the sixth stage, not guessed); the seventh
+> closed the *other* side of that exact mismatch (a hidden iframe CreepJS
+> injects into the page, never previously reached by this project's
+> spoofing injection) and, only in combination with the fifth attempt's
+> Service Worker deletion, brought CreepJS's "stealth" score back to the
+> exact same hash as a clean, untouched baseline — verified twice, with
+> real captures. Shipped first as an opt-in toggle, then — once verified
+> clean against proxy-auth, real-site browsing (8 real sites, including a
+> broader pass with a completely default profile), and performance —
+> flipped to the default for every new profile, the same reversal
+> `webglSpoofingMode` went through earlier: a silent leak on every profile
+> was judged the worse of the two real risks. Existing profiles created
+> before this stage keep whatever they had. One known, unresolved
+> reliability gap remains: the deletion patch doesn't reliably apply on
+> every real site — confirmed on both `github.com` and, newly, `x.com`
+> (`twitter.com`), both sites that redirect at the top level during load,
+> suggesting a real pattern rather than a single site's quirk; not yet
+> root-caused or fixed. See **"Confirmed, real, honest limitation: Service
+> Workers"**, **"Third and final attempt"**, **"Fourth attempt — browser-
+> level Target.setAutoAttach"**, **"Fifth attempt — remove Service Worker
+> entirely"**, **"Sixth investigation — root-causing the stealth regression
+> precisely"**, **"Seventh attempt — patch WebGL inside the iframe too"**,
+> and **"Default flip"** below for the full technical history if you need
+> it — most readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -1372,7 +1376,7 @@ direction the hypothesis pointed in (spoof `toString` on whatever the
 Service Worker patch touches) would not have helped, because nothing
 about `Function.prototype.toString` was ever the trigger.
 
-## Seventh attempt — patch WebGL inside the iframe too, SHIPPED as an opt-in profile setting (`serviceWorkerMode`)
+## Seventh attempt — patch WebGL inside the iframe too, SHIPPED as a profile setting (`serviceWorkerMode`)
 
 **The real fix, found by acting on the sixth investigation's own root
 cause instead of stopping at diagnosis.** The sixth investigation
@@ -1495,6 +1499,77 @@ of the fix. A profile with this toggle on may therefore still leak via
 Service Worker on some specific sites, even though the mechanism is
 correct in general and verified against the real target (CreepJS) this
 whole investigation was built around.
+
+## Default flip — `serviceWorkerMode` is now `'disabled'` for every new profile, not opt-in
+
+**The judgment call.** The seventh attempt shipped this as an opt-in
+toggle, off by default, deliberately conservative pending real-world
+verification. Once verified live against CreepJS twice with no
+regression on the other named risks (proxy-auth, real-site browsing,
+performance), leaving it off by default meant every new profile still
+carried the exact correlatable leak this whole investigation exists to
+close — the same reasoning, and the same reversal, `webglSpoofingMode`
+went through earlier in this document's history: a silent leak on every
+profile was judged the worse of the two real risks, once the fix was
+actually proven rather than merely built.
+
+`generateFingerprint()` (`src/main/fingerprint/generator.ts`) now sets
+`serviceWorkerMode: 'disabled'` unconditionally for every newly generated
+fingerprint. `webglSpoofingMode` was already `'spoof'` by default from
+its own earlier stage, so a new profile today gets both mitigations
+together automatically — exactly the combination the seventh attempt
+proved necessary (either alone regresses `hasBadWebGL`). Existing
+profiles created before this stage are unaffected (`serviceWorkerMode` is
+a stored per-fingerprint column, not recomputed) — this only changes what
+a *newly created* profile starts with.
+
+**UI wording updated to match.** The Fingerprint tab's Service Worker
+toggle's option labels and warning banner previously read as an opt-in
+("Real (default, ...)" / "Disabled (experimental)"); now correctly say
+"Real (Service Worker works normally)" / "Disabled (experimental,
+default)", and the warning banner states "on by default" and points at
+switching back to Real as the escape hatch, rather than reading as if the
+user had just turned on something unusual. In the same pass, a genuinely
+pre-existing, unrelated stale-text bug was found and fixed:
+`webglSpoofingMode`'s own warning banner still said "Off by default" long
+after that default flipped to `'spoof'` in an earlier stage — corrected
+to "On by default" in both `en.ts` and `uk.ts` while in the area, since it
+was directly adjacent and the same class of mistake this stage was about
+to make if left unchecked.
+
+**A real, useful side effect of broader real-site testing, not a new
+regression.** Because this is no longer an opt-in path only a testing
+profile ever exercised, a broader set of real sites was checked with a
+completely default, untouched profile (no toggles set at all):
+`web.dev`, `github.com`, `wikipedia.org`, `nytimes.com`, `twitter.com`
+(redirects to `x.com`), `web.telegram.org`, `mail.google.com` (redirected
+to a marketing page, not authenticated), and `reddit.com` (served a
+bot-check challenge page, unrelated to this feature — Reddit does this to
+many automated-looking clients regardless). All eight rendered real,
+substantial content with no crashes and no broken pages. Two of the
+eight — `github.com` and, newly observed, **`twitter.com`/`x.com`** —
+showed `'serviceWorkerMode' in navigator === true` despite the default
+now being `'disabled'`: the same reliability gap the fifth attempt found
+on `github.com` alone, now confirmed on a second, unrelated site that
+also happens to redirect at the top level during load (`twitter.com` →
+`x.com`, same shape as `github.com`'s own locale-query-parameter
+redirect). This strengthens rather than changes the fifth attempt's
+existing hypothesis — a real pattern across at least two sites, not a
+single site's quirk — and is picked up as evidence for the following
+investigation rather than treated as a new, separate problem. No new
+category of failure appeared (no crash, no broken rendering, no new
+CreepJS-detectable signal, no proxy-auth regression) — this is the same
+already-documented, already-queued gap, observed more broadly because
+this stage looked at more real sites than any prior one did.
+
+Every unit test asserting the old `'real'` default was updated to assert
+`'disabled'` (`fingerprintGenerator.test.ts`); the E2E test that
+demonstrated the original Service Worker leak by relying on the *default*
+profile was restructured to explicitly opt back to `serviceWorkerMode:
+'real'` first, since that leak is no longer the default behavior to
+demonstrate — see `fingerprintEnforcement.spec.ts`'s "opting BACK to
+serviceWorkerMode 'real'" test, which now serves as the opt-out
+regression case rather than the default one.
 
 ## Automated test coverage
 

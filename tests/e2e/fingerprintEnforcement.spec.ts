@@ -196,7 +196,10 @@ test('webglSpoofingMode "spoof" actually overrides the observed vendor/renderer,
   await row.getByRole('button', { name: 'Edit' }).click();
   await window.getByText('fingerprint', { exact: true }).click();
   await window.getByLabel('WebGL Vendor/Renderer Spoofing').selectOption({ label: 'Spoof (experimental)' });
-  await expect(window.locator('.banner-warn')).toBeVisible(); // the compatibility-risk warning
+  // serviceWorkerMode: 'disabled' is now also default, so its own
+  // banner-warn is visible here too — matching by specific text avoids the
+  // strict-mode violation two simultaneous .banner-warn elements cause.
+  await expect(window.getByText('overrides a real WebGL API')).toBeVisible(); // the compatibility-risk warning
   await window.getByRole('button', { name: 'Close' }).click();
 
   await row.getByRole('button', { name: 'Start', exact: true }).click();
@@ -299,7 +302,7 @@ async function connectToShellAt(port: number): Promise<Page> {
   throw new Error(`Could not find browser-shell.html page via CDP: ${String(lastErr)}`);
 }
 
-test('honest gap, verified in this test suite (not just an external capture someone has to notice): WebGL vendor/renderer spoofing does not reach a real Service Worker registered against a real http(s) script — same root cause as the documented Service Worker gap above, confirmed to leak the real GPU here too', async () => {
+test('opting BACK to serviceWorkerMode "real" (away from the now-default "disabled") reproduces the original, honest gap: WebGL vendor/renderer spoofing does not reach a real Service Worker registered against a real http(s) script', async () => {
   const { server, port } = await startServiceWorkerFixtureServer();
   try {
     // dirsBefore must be captured BEFORE profile creation, not just before
@@ -319,7 +322,17 @@ test('honest gap, verified in this test suite (not just an external capture some
 
     // Default is webglSpoofingMode: 'spoof' since the fingerprint-default
     // stage — no manual toggle needed, this profile is spoofed like any
-    // other new profile a real user would create.
+    // other new profile a real user would create. serviceWorkerMode is now
+    // ALSO 'disabled' by default (see the seventh attempt) — this test
+    // deliberately opts back to 'real' to prove the original, pre-fix gap
+    // is still exactly what it always was for a user who explicitly turns
+    // the new default protection off, not silently different or "fixed
+    // anyway" some other way.
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await window.getByText('fingerprint', { exact: true }).click();
+    await window.getByLabel('Service Worker').selectOption({ label: 'Real (Service Worker works normally)' });
+    await window.getByRole('button', { name: 'Close' }).click();
+
     await row.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
     const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
@@ -353,14 +366,14 @@ test('honest gap, verified in this test suite (not just an external capture some
       await new Promise((r) => setTimeout(r, 500));
     }
 
-    // The honest assertion: the Service Worker's own WebGL read is NOT the
-    // configured spoofed value — it's the real host GPU, exactly like the
-    // navigator-field leak documented above for the same root cause. If
-    // this ever starts passing (observed === configured), that means the
-    // Service Worker gap has actually been closed — update this test (and
-    // FINGERPRINT_AUDIT.md's Service Worker section) to assert the
-    // opposite, rather than leaving a now-stale "known gap" assertion in
-    // place.
+    // The honest assertion, now scoped to the explicit opt-out: with
+    // serviceWorkerMode set back to 'real', the Service Worker's own WebGL
+    // read is NOT the configured spoofed value — it's the real host GPU,
+    // exactly like the navigator-field leak documented above for the same
+    // root cause, and exactly like every profile used to behave before the
+    // seventh attempt flipped the default. This is the correct, current
+    // behavior for this opt-out case — not a stale "known gap" left in
+    // place after the default changed underneath it.
     expect(swResult).toBeTruthy();
     expect(swResult?.error).toBeUndefined();
     expect(swResult?.vendor).not.toBe(configuredWebglVendor);
@@ -463,12 +476,16 @@ test('serviceWorkerMode "disabled" genuinely removes navigator.serviceWorker AND
 
     await row.getByRole('button', { name: 'Edit' }).click();
     await window.getByText('fingerprint', { exact: true }).click();
-    // webglSpoofingMode is already 'spoof' by default (see the test above) —
-    // the fix requires BOTH to be active together, never just one (see
-    // docs/FINGERPRINT_AUDIT.md's "Seventh attempt": enabling only the
-    // iframe-WebGL propagation without also disabling Service Worker
-    // creates a NEW, real detection signal instead of closing the gap).
-    await window.getByLabel('Service Worker').selectOption({ label: 'Disabled (experimental)' });
+    // Both webglSpoofingMode: 'spoof' AND serviceWorkerMode: 'disabled' are
+    // now the real defaults for every new profile — the explicit selection
+    // below is redundant (this profile already has it) but kept for
+    // clarity and to keep asserting the UI control itself still works, not
+    // just the underlying default. The fix requires BOTH active together,
+    // never just one (see docs/FINGERPRINT_AUDIT.md's "Seventh attempt":
+    // enabling only the iframe-WebGL propagation without also disabling
+    // Service Worker creates a NEW, real detection signal instead of
+    // closing the gap).
+    await window.getByLabel('Service Worker').selectOption({ label: 'Disabled (experimental, default)' });
     // webglSpoofingMode's own banner-warn is also visible by default here
     // (see above) — matching by its specific text avoids the strict-mode
     // violation two simultaneous .banner-warn elements would otherwise be.

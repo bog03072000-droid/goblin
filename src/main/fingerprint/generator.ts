@@ -108,13 +108,19 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     geolocationLatitude: locale.latitude,
     geolocationLongitude: locale.longitude,
     permissionsMode: 'real',
-    // Off by default: a real, verified compatibility cost (offline caching,
-    // push notifications, background sync stop working on any site that
-    // actually uses a Service Worker), unlike webglSpoofingMode's silent,
-    // always-present leak — see docs/FINGERPRINT_AUDIT.md's "Fifth" and
-    // "Seventh attempt" write-ups for the full trade-off and why this is
-    // opt-in rather than another silent default flip.
-    serviceWorkerMode: 'real',
+    // Disabled by default, same reasoning and same later reversal as
+    // webglSpoofingMode above: leaving this "real" meant every new profile
+    // silently leaked a correlatable real GPU/core fingerprint through
+    // Service Worker + iframe-WebGL (see docs/FINGERPRINT_AUDIT.md's
+    // "Seventh attempt" — verified closed, live, against CreepJS, twice) —
+    // a silent leak on every profile was judged the worse of the two real
+    // risks, exactly the judgment call that flipped webglSpoofingMode's own
+    // default earlier. The real, stated compatibility cost (offline
+    // caching, push notifications, background sync stop working on any
+    // site that actually uses a Service Worker) hasn't changed and hasn't
+    // gone away — the user can still opt back to 'real' per profile via
+    // the Fingerprint tab, same as webglSpoofingMode's own opt-out.
+    serviceWorkerMode: 'disabled',
     seed: options.seed,
   };
 }

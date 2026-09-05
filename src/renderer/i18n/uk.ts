@@ -204,7 +204,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.spoofing.webglLabel': 'Спуфінг WebGL Vendor/Renderer',
   'editor.fingerprint.spoofing.webglSpoof': 'Підмінити (експериментально)',
   'editor.fingerprint.spoofing.webglWarning':
-    'Експериментально — підміняє реальний WebGL API, який використовують деякі ігри, карти й CAPTCHA. Може зламати сумісність із сайтами. Вимкнено за замовчуванням; вмикайте лише розуміючи ризик.',
+    'Експериментально — підміняє реальний WebGL API, який використовують деякі ігри, карти й CAPTCHA. Може зламати сумісність із сайтами. Увімкнено за замовчуванням; вимкніть, якщо зіткнетесь із реальною проблемою сумісності.',
   'editor.fingerprint.spoofing.geolocationLabel': 'Геолокація',
   'editor.fingerprint.spoofing.geolocationReal': 'Реальна (стандартний запит дозволу браузера)',
   'editor.fingerprint.spoofing.geolocationSpoof': 'Підмінити (місто, узгоджене з локаллю)',
@@ -217,12 +217,12 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.spoofing.permissionsTooltip':
     'Реальні: підміни немає — запит дозволу від сайту проходить як зазвичай. Відмовляти в усіх: кожен запит дозволу, крім геолокації (камера, мікрофон, сповіщення, буфер обміну тощо), автоматично відхиляється без запиту.',
   'editor.fingerprint.spoofing.serviceWorkerLabel': 'Service Worker',
-  'editor.fingerprint.spoofing.serviceWorkerReal': 'Реальний (за замовчуванням, Service Worker працює нормально)',
-  'editor.fingerprint.spoofing.serviceWorkerDisabled': 'Вимкнено (експериментально)',
+  'editor.fingerprint.spoofing.serviceWorkerReal': 'Реальний (Service Worker працює нормально)',
+  'editor.fingerprint.spoofing.serviceWorkerDisabled': 'Вимкнено (експериментально, за замовчуванням)',
   'editor.fingerprint.spoofing.serviceWorkerTooltip':
-    'Реальний: без змін — сайти можуть реєструвати Service Worker як зазвичай. Вимкнено: navigator.serviceWorker дійсно видаляється, що закриває реальний витік відбитка (деякі скрипти фінгерпринтингу читають ваш справжній GPU та інформацію про пристрій саме через Service Worker, навіть коли решта відбитка підмінена) — але будь-який сайт, що дійсно покладається на Service Worker (офлайн-кешування, push-сповіщення, фонова синхронізація), втратить цю функціональність.',
+    'Вимкнено (за замовчуванням): navigator.serviceWorker дійсно видаляється, що закриває реальний витік відбитка (деякі скрипти фінгерпринтингу читають ваш справжній GPU та інформацію про пристрій саме через Service Worker, навіть коли решта відбитка підмінена) — але будь-який сайт, що дійсно покладається на Service Worker (офлайн-кешування, push-сповіщення, фонова синхронізація), втратить цю функціональність. Реальний: без змін — сайти можуть реєструвати Service Worker як зазвичай, ціною цього витоку.',
   'editor.fingerprint.spoofing.serviceWorkerWarning':
-    'Експериментально — закриває реальний витік відбитка, але офлайн-кешування, push-сповіщення та фонова синхронізація перестануть працювати на сайтах, які на них покладаються.',
+    'Експериментально — увімкнено за замовчуванням, закриває реальний витік відбитка, але офлайн-кешування, push-сповіщення та фонова синхронізація перестануть працювати на сайтах, які на них покладаються. Перемкніть на "Реальний", якщо зіткнетесь із реальною проблемою сумісності.',
   'editor.fingerprint.row.seed': 'Сід',
   'editor.fingerprint.picker.title': 'Явний вибір',
   'editor.fingerprint.picker.hint':
