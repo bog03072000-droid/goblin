@@ -146,3 +146,50 @@ export function webrtcModeToPolicy(
 export function applyWebrtcPolicy(wc: WebContents, mode: WebrtcMode): void {
   wc.setWebRTCIPHandlingPolicy(webrtcModeToPolicy(mode));
 }
+
+/**
+ * The authoritative way `buildSpoofingScript()`'s output (canvas/audio/
+ * webgl/deviceMemory/fonts/mediaDevices/Worker-propagation/Service-Worker-
+ * deletion) gets into every profile's real browsing, for every site —
+ * moved here from a preload-injected "<script> element with textContent"
+ * technique (see docs/FINGERPRINT_AUDIT.md's "Eighth attempt") after
+ * finding a real, verified gap: a site with a strict `script-src` CSP
+ * directive (no `'unsafe-inline'`, no matching `nonce-`/`hash-` source —
+ * confirmed directly on github.com's and x.com's real response headers)
+ * silently blocked that inline `<script>` element from executing at all,
+ * meaning the *entire* spoofing script never ran there, not just one
+ * field. `Page.addScriptToEvaluateOnNewDocument` is a genuine Chromium/
+ * CDP-native mechanism (the same one Puppeteer/Playwright's own
+ * `page.addInitScript()` uses) that runs in the page's own main world
+ * before any of the page's own scripts, and — documented Chromium
+ * behavior, not assumed — is exempt from the page's own CSP `script-src`
+ * restriction, since it's injected by the debugger/browser side, not by
+ * page-authored means.
+ *
+ * This re-enables CDP's `Page` domain on the already-attached debugger
+ * session (`enforceFingerprint` above already attaches for `Emulation.*`)
+ * — the exact domain the project's own earlier "CDP footprint reduction"
+ * stage removed, and the same general risk category (more enabled CDP
+ * domains) that caused the fourth attempt's stealth-score regression.
+ * Verified this stage, live against CreepJS, twice: this specific
+ * mechanism (registering a script via `Page.addScriptToEvaluateOnNewDocument`)
+ * produces the exact same clean stealth-score hash as an untouched
+ * baseline — unlike the fourth attempt's `Target.setAutoAttach`, which did
+ * regress it. Not every CDP domain carries the same detectable cost; this
+ * one, empirically, does not. See docs/FINGERPRINT_AUDIT.md's "Eighth
+ * attempt" write-up for the full verification.
+ *
+ * Registered once per webview attach — Chromium re-runs a registered script
+ * automatically on every subsequent navigation of that target (redirects
+ * included) for as long as the debugger stays attached, so this needs no
+ * re-registration per navigation the way the preload's own per-navigation
+ * re-injection did — closing, as a side effect, whatever timing risk a
+ * redirect might have posed to the old technique too.
+ */
+export async function injectSpoofingScriptViaCdp(wc: WebContents, script: string): Promise<void> {
+  if (!wc.debugger.isAttached()) {
+    wc.debugger.attach('1.3');
+  }
+  await wc.debugger.sendCommand('Page.enable');
+  await wc.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: script });
+}

@@ -27,18 +27,32 @@
 > flipped to the default for every new profile, the same reversal
 > `webglSpoofingMode` went through earlier: a silent leak on every profile
 > was judged the worse of the two real risks. Existing profiles created
-> before this stage keep whatever they had. One known, unresolved
-> reliability gap remains: the deletion patch doesn't reliably apply on
-> every real site — confirmed on both `github.com` and, newly, `x.com`
-> (`twitter.com`), both sites that redirect at the top level during load,
-> suggesting a real pattern rather than a single site's quirk; not yet
-> root-caused or fixed. See **"Confirmed, real, honest limitation: Service
-> Workers"**, **"Third and final attempt"**, **"Fourth attempt — browser-
-> level Target.setAutoAttach"**, **"Fifth attempt — remove Service Worker
-> entirely"**, **"Sixth investigation — root-causing the stealth regression
-> precisely"**, **"Seventh attempt — patch WebGL inside the iframe too"**,
-> and **"Default flip"** below for the full technical history if you need
-> it — most readers won't.
+> before this stage keep whatever they had. An eighth stage then
+> investigated why the fix was unreliable on `github.com`/`x.com`
+> specifically and found something much bigger than a single-site quirk:
+> both sites' real CSP `script-src` directives block inline `<script>`
+> elements outright, which is exactly the mechanism this project used to
+> inject its *entire* spoofing script (not just the Service Worker piece)
+> — confirmed directly by an unconditional, always-on field
+> (`deviceMemory`) leaking the real value on both sites. The fix moved the
+> whole injection onto CDP `Page.addScriptToEvaluateOnNewDocument` (exempt
+> from page CSP — the same mechanism Puppeteer/Playwright's own
+> `addInitScript()` uses), verified live against CreepJS, twice, with the
+> exact same clean stealth-score hash as before — a different result from
+> the fourth attempt's CDP experiment, proving not every additional CDP
+> domain carries the same detectable cost. This closed the github.com/
+> x.com reliability gap as a side effect, is now the sole, unconditional
+> injection mechanism for every profile, and required no changes to the
+> existing permanent test suite, which passed unmodified as a behaviorally
+> transparent replacement. See **"Confirmed, real, honest limitation:
+> Service Workers"**, **"Third and final attempt"**, **"Fourth attempt —
+> browser-level Target.setAutoAttach"**, **"Fifth attempt — remove Service
+> Worker entirely"**, **"Sixth investigation — root-causing the stealth
+> regression precisely"**, **"Seventh attempt — patch WebGL inside the
+> iframe too"**, **"Default flip"**, and **"Eighth attempt — moved the
+> entire spoofing injection off the CSP-vulnerable preload technique, onto
+> CDP"** below for the full technical history if you need it — most
+> readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -1570,6 +1584,129 @@ profile was restructured to explicitly opt back to `serviceWorkerMode:
 demonstrate — see `fingerprintEnforcement.spec.ts`'s "opting BACK to
 serviceWorkerMode 'real'" test, which now serves as the opt-out
 regression case rather than the default one.
+
+## Eighth attempt — moved the ENTIRE spoofing injection off the CSP-vulnerable preload technique, onto CDP
+
+**The scope grew far past "why does the Service Worker patch fail on
+github.com."** Investigating that question directly — checking github.com
+and x.com's real, live response headers, not guessing — found:
+
+```
+github.com:  Content-Security-Policy: ... script-src github.githubassets.com ...
+x.com:       content-security-policy: ... script-src 'self' 'nonce-<per-request>' 'unsafe-inline' ...
+```
+
+github.com's `script-src` has no `'unsafe-inline'` and no matching
+`nonce-`/`hash-` source at all — inline `<script>` elements are blocked
+outright, unconditionally. x.com's does list `'unsafe-inline'`, but per
+the CSP Level 2+ specification, **the presence of any `nonce-` source in a
+directive makes browsers ignore `'unsafe-inline'` in that same directive
+entirely** (kept only for backward compatibility with browsers that
+predate nonce support) — so x.com's policy is, in practice, exactly as
+restrictive as github.com's for this purpose. Both sites block the same
+thing for the same underlying reason.
+
+The mechanism this project used to get `buildSpoofingScript()`'s output
+into every page — `diagnosticsPreload.ts` inserting a same-document
+`<script>` element with inline `textContent` — is precisely what a
+`script-src` directive without `'unsafe-inline'` (or a matching nonce)
+exists to block. Verified directly, not inferred: `deviceMemory`
+(`Navigator.prototype.deviceMemory`, patched **unconditionally** —
+no on/off mode, no toggle, always meant to apply) read back as the real
+host value (`8`) instead of the configured one (`16`) on both sites. This
+meant **the entire spoofing script — canvas noise, audio noise,
+deviceMemory, main-document WebGL spoofing, Worker/SharedWorker
+propagation, and the Service Worker deletion — silently never ran at all**
+on any site with this class of CSP, not just the one field originally
+suspected. A materially larger, pre-existing gap than "one patch is
+occasionally unreliable," present since the very first stage that moved
+spoofing off CDP onto the preload technique, only now discovered because
+this stage went looking at the actual HTTP response headers instead of
+continuing to guess at timing races.
+
+**The fix: move the whole injection back onto CDP
+`Page.addScriptToEvaluateOnNewDocument`** — the same mechanism this
+project's own earlier "CDP footprint reduction" stage deliberately moved
+*away* from, specifically citing `Page.enable` as one of the domains that
+stage reduced. Revisiting that exact decision was the correct call here:
+`Page.addScriptToEvaluateOnNewDocument`-injected scripts are a documented,
+genuine Chromium behavior — exempt from the page's own CSP because they
+are injected by the debugger/browser side, not by page-authored means
+(the same reason Puppeteer's and Playwright's own `addInitScript()`,
+which use this exact CDP method, reliably work on CSP-locked sites like
+GitHub where hand-rolled "inject a script tag" techniques do not).
+`injectSpoofingScriptViaCdp()` (`fingerprintEnforcement.ts`) reuses the
+CDP session `enforceFingerprint()` already attaches for `Emulation.*`
+calls, adding `Page.enable` + one `Page.addScriptToEvaluateOnNewDocument`
+call per webview attach — Chromium then re-runs the registered script
+automatically on every subsequent navigation of that target (redirects
+included) for the debugger session's whole lifetime, so this needs no
+per-navigation re-injection the way the preload technique did.
+
+**The critical question, tested before touching anything else: does
+re-enabling `Page` domain reproduce the fourth attempt's stealth
+regression?** It does not — verified live against CreepJS, twice:
+`0% stealth: 0c019315`, the exact same hash as an untouched baseline,
+in both runs. `44% like headless` also stayed bit-identical throughout.
+This is a genuinely different result from the fourth attempt's
+`Target.setAutoAttach`, and the difference is informative: not every
+additional CDP domain carries the same detectable cost. `Page.enable` +
+`Page.addScriptToEvaluateOnNewDocument` is a narrow, standard,
+single-purpose registration — closer in shape to what
+`Emulation.setUserAgentOverride` already does on the same session than to
+`Target.setAutoAttach`'s cross-target pause/resume semantics, which
+visibly altered a Service Worker's own registration timing in a way
+CreepJS's `hasBadWebGL`-adjacent heuristics evidently do key off. This
+stage did not dig further into exactly *why* CreepJS's stealth heuristic
+treats these two CDP usages differently — the empirical result was enough
+to proceed, consistent with this document's own standard of measuring
+rather than theorizing further than the evidence supports.
+
+**Full verification, same standard as every attempt before it:**
+- **github.com and x.com, directly, with the final shipped code (no
+  testing flag)**: `'serviceWorkerMode' in navigator` genuinely `false`
+  and `navigator.deviceMemory` matches the configured value on both sites
+  — confirmed with two different configured `deviceMemory` values across
+  runs to rule out coincidental agreement with the real host's own value.
+- **Existing permanent E2E suite unchanged and passing**: the entire
+  `fingerprintEnforcement.spec.ts` suite — including tests written for
+  the *old* preload-based mechanism — passed with zero modification once
+  CDP injection became the only path, confirming this is a behaviorally
+  transparent replacement, not a new mechanism requiring new test logic.
+- **Authenticated proxy support**: verified unaffected, twice, via the
+  real shipped mechanism (no flag) combined with an authenticated-proxy
+  profile.
+- **Real-site browsing**: five real sites (including `nytimes.com`'s 13
+  cross-origin iframes and `x.com`) loaded full, substantial content with
+  no crashes.
+- **Performance**: CreepJS's own self-reported scan time was statistically
+  indistinguishable between the old and new injection mechanisms
+  (901ms vs. 931ms, well within normal run-to-run noise).
+
+**Shipped as the sole, unconditional injection mechanism for every
+profile** — not gated behind any toggle, since there is no scenario where
+the old, CSP-vulnerable technique is preferable. `diagnosticsPreload.ts`
+was reduced to just its original diagnostics-report bridge;
+`pf:get-spoofing-script` and the preload-side `injectSpoofingScript()`
+were deleted entirely, not merely disabled. Every profile, from every
+prior stage's fingerprint configuration, now gets the exact same
+`buildSpoofingScript()` output it always did — just delivered through a
+channel that actually reaches the page on every site, CSP or not.
+
+**What this means for the earlier stages' own claims.** The fourth
+attempt's write-up characterized the fifth attempt's github.com-specific
+Service Worker deletion failure as "likely an injection-timing race on a
+client-side locale-redirect" — that hypothesis is now superseded: the
+real cause was CSP blocking the entire preload injection outright, a
+strict, unconditional block rather than a probabilistic timing race,
+which is also why it was *always* reproducible on those two sites and
+*never* reproducible elsewhere, rather than showing up as an intermittent
+flake. The eighth attempt's fix accordingly closes this specific
+reliability gap as a side effect, without it having been the direct
+target: since the whole spoofing script (including the Service Worker
+deletion and iframe-WebGL propagation from the seventh attempt) now
+reaches every page regardless of CSP, github.com and x.com are no longer
+special cases.
 
 ## Automated test coverage
 

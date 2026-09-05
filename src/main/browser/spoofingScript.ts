@@ -35,11 +35,14 @@ export function buildFakeMediaDevices(seed: string): FakeMediaDevice[] {
 const RESTRICTED_FONT_ALLOWLIST = ['Arial', 'Times New Roman', 'Courier New', 'Segoe UI', 'Verdana'];
 
 /**
- * Builds a JS source string injected into the page's MAIN world via a
- * preload script's classic "append a <script> element, then remove it"
- * technique (see diagnosticsPreload.ts) — NOT CDP anymore (see
- * docs/FINGERPRINT_AUDIT.md, "CDP footprint reduction" section, for why this
- * moved off `Page.addScriptToEvaluateOnNewDocument`).
+ * Builds a JS source string injected into the page's MAIN world via CDP
+ * `Page.addScriptToEvaluateOnNewDocument` (`injectSpoofingScriptViaCdp()`
+ * in fingerprintEnforcement.ts) — moved there from a preload-injected
+ * "append a <script> element" technique after finding a real, verified
+ * gap: that technique was silently blocked outright by any site with a
+ * strict `script-src` CSP directive, confirmed on github.com and x.com's
+ * real response headers (see docs/FINGERPRINT_AUDIT.md's "Eighth attempt").
+ * CDP-injected scripts are exempt from the page's own CSP.
  *
  * Written against `self`, not `window`, throughout — `self` refers to the
  * same global in a normal document AND inside a Worker/SharedWorker global

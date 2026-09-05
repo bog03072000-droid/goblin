@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { enforceFingerprint, applyWebrtcPolicy, applyPermissionPolicy } from './fingerprintEnforcement';
+import { enforceFingerprint, applyWebrtcPolicy, applyPermissionPolicy, injectSpoofingScriptViaCdp } from './fingerprintEnforcement';
 import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
 import type { WebrtcMode, Fingerprint, GeolocationMode, PermissionsMode } from '../../shared/schemas/fingerprint';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
@@ -262,15 +262,6 @@ export function runProfileWindowProcess(): void {
     };
     const spoofingScript = buildSpoofingScript(spoofableFingerprint);
 
-    // Answered synchronously (event.returnValue, not an async invoke) because
-    // diagnosticsPreload.js must have this script in hand and injected before
-    // the guest page's own scripts get a chance to run — an async round trip
-    // would race that. One profile == one OS process here (see the module
-    // doc comment), so a single global handler for this channel is safe.
-    ipcMain.on('pf:get-spoofing-script', (event) => {
-      event.returnValue = spoofingScript;
-    });
-
     const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
     const diagnosticsUrl = `profileforge://fingerprint-test?config=${configB64}`;
 
@@ -371,6 +362,10 @@ export function runProfileWindowProcess(): void {
       let explicitNavigationSeen = false;
       webviewContents.on('did-start-navigation', (navEvent) => {
         if (navEvent.url && navEvent.url !== 'about:blank') explicitNavigationSeen = true;
+      });
+
+      injectSpoofingScriptViaCdp(webviewContents, spoofingScript).catch((err: unknown) => {
+        console.error('[ProfileForge] CDP spoofing-script injection failed:', err);
       });
 
       const fp = args.fingerprintConfig;
