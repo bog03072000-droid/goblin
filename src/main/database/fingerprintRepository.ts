@@ -30,6 +30,7 @@ interface FingerprintRow {
   geolocation_latitude: number;
   geolocation_longitude: number;
   permissions_mode: string;
+  service_worker_mode: string;
   seed: string;
   created_at: string;
   updated_at: string;
@@ -73,6 +74,7 @@ function rowToFingerprint(row: FingerprintRow): Fingerprint {
     geolocationLatitude: row.geolocation_latitude,
     geolocationLongitude: row.geolocation_longitude,
     permissionsMode: row.permissions_mode as Fingerprint['permissionsMode'],
+    serviceWorkerMode: row.service_worker_mode as Fingerprint['serviceWorkerMode'],
     seed: row.seed,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -93,13 +95,13 @@ export class FingerprintRepository {
           hardware_concurrency, device_memory, webgl_vendor, webgl_renderer,
           canvas_mode, audio_mode, webrtc_mode, fonts_mode, media_devices_mode,
           webgl_spoofing_mode, geolocation_mode, geolocation_latitude, geolocation_longitude,
-          permissions_mode, seed, created_at, updated_at
+          permissions_mode, service_worker_mode, seed, created_at, updated_at
         ) VALUES (@id, @name, @os, @osVersion, @browserVersion, @userAgent, @platform, @locale,
           @languages, @timezone, @screenWidth, @screenHeight, @deviceScaleFactor,
           @hardwareConcurrency, @deviceMemory, @webglVendor, @webglRenderer,
           @canvasMode, @audioMode, @webrtcMode, @fontsMode, @mediaDevicesMode,
           @webglSpoofingMode, @geolocationMode, @geolocationLatitude, @geolocationLongitude,
-          @permissionsMode, @seed, @createdAt, @updatedAt)`,
+          @permissionsMode, @serviceWorkerMode, @seed, @createdAt, @updatedAt)`,
       )
       .run({
         id,
@@ -134,7 +136,7 @@ export class FingerprintRepository {
           fonts_mode=@fontsMode, media_devices_mode=@mediaDevicesMode,
           webgl_spoofing_mode=@webglSpoofingMode, geolocation_mode=@geolocationMode,
           geolocation_latitude=@geolocationLatitude, geolocation_longitude=@geolocationLongitude,
-          permissions_mode=@permissionsMode, seed=@seed,
+          permissions_mode=@permissionsMode, service_worker_mode=@serviceWorkerMode, seed=@seed,
           updated_at=@updatedAt WHERE id=@id`,
       )
       .run({

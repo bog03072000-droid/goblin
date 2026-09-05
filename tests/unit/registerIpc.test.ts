@@ -43,6 +43,7 @@ function makeFingerprintInput() {
     geolocationLatitude: 0,
     geolocationLongitude: 0,
     permissionsMode: 'real' as const,
+    serviceWorkerMode: 'real' as const,
     seed: 'seed',
   };
 }

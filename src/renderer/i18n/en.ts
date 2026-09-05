@@ -214,6 +214,13 @@ const en = {
   'editor.fingerprint.spoofing.permissionsDenyAll': 'Deny all',
   'editor.fingerprint.spoofing.permissionsTooltip':
     'Real: no override — the site\'s permission request goes through as it normally would. Deny all: every non-geolocation permission request (camera, microphone, notifications, clipboard, etc.) is denied automatically, without prompting.',
+  'editor.fingerprint.spoofing.serviceWorkerLabel': 'Service Worker',
+  'editor.fingerprint.spoofing.serviceWorkerReal': 'Real (default, Service Worker works normally)',
+  'editor.fingerprint.spoofing.serviceWorkerDisabled': 'Disabled (experimental)',
+  'editor.fingerprint.spoofing.serviceWorkerTooltip':
+    'Real: no change — sites can register Service Workers normally. Disabled: navigator.serviceWorker is genuinely removed, closing a real fingerprint leak (some fingerprinting scripts read your real GPU and device info through a Service Worker even when the rest of the fingerprint is spoofed) — but any site that actually relies on a Service Worker (offline caching, push notifications, background sync) will lose that functionality.',
+  'editor.fingerprint.spoofing.serviceWorkerWarning':
+    'Experimental — closes a real fingerprint leak, but offline caching, push notifications, and background sync will stop working on any site that relies on them.',
   'editor.fingerprint.row.seed': 'Seed',
   'editor.fingerprint.picker.title': 'Explicit selection',
   'editor.fingerprint.picker.hint':

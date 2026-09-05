@@ -61,6 +61,7 @@ function makeFingerprint(overrides: Partial<Fingerprint> = {}): Fingerprint {
     geolocationLatitude: 0,
     geolocationLongitude: 0,
     permissionsMode: 'real',
+    serviceWorkerMode: 'real',
     seed: 'seed',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

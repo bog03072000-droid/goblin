@@ -236,6 +236,7 @@ export function ProfileCreateModal({
           geolocationLatitude: fingerprint.geolocationLatitude,
           geolocationLongitude: fingerprint.geolocationLongitude,
           permissionsMode: fingerprint.permissionsMode,
+          serviceWorkerMode: fingerprint.serviceWorkerMode,
           seed: fingerprint.seed,
         },
       });

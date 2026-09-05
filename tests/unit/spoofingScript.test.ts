@@ -12,6 +12,10 @@ function baseFp(overrides: Partial<SpoofableFingerprint> = {}): SpoofableFingerp
     webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics)',
     fontsMode: 'system',
     mediaDevicesMode: 'real',
+    serviceWorkerMode: 'real',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36',
+    platform: 'Win32',
+    hardwareConcurrency: 8,
     ...overrides,
   };
 }
@@ -70,6 +74,25 @@ describe('buildSpoofingScript', () => {
     expect(spoofed).toContain('patchWebGL');
     expect(spoofed).toContain('Fake Vendor Inc.');
     expect(spoofed).toContain('Fake Renderer 9000');
+  });
+
+  it('includes the Service Worker deletion only when serviceWorkerMode is "disabled"', () => {
+    expect(buildSpoofingScript(baseFp({ serviceWorkerMode: 'real' }))).not.toContain('disableServiceWorker');
+    expect(buildSpoofingScript(baseFp({ serviceWorkerMode: 'disabled' }))).toContain('disableServiceWorker');
+  });
+
+  it('the iframe-WebGL-propagation patch is ONLY ever included when BOTH webglSpoofingMode is "spoof" AND serviceWorkerMode is "disabled" — never on its own (see docs/FINGERPRINT_AUDIT.md\'s "Seventh attempt": enabling it alone creates a new, real CreepJS-detectable mismatch)', () => {
+    const neither = buildSpoofingScript(baseFp({ webglSpoofingMode: 'off', serviceWorkerMode: 'real' }));
+    expect(neither).not.toContain('propagateWebglToIframes');
+
+    const webglOnly = buildSpoofingScript(baseFp({ webglSpoofingMode: 'spoof', serviceWorkerMode: 'real' }));
+    expect(webglOnly).not.toContain('propagateWebglToIframes');
+
+    const swOnly = buildSpoofingScript(baseFp({ webglSpoofingMode: 'off', serviceWorkerMode: 'disabled' }));
+    expect(swOnly).not.toContain('propagateWebglToIframes');
+
+    const both = buildSpoofingScript(baseFp({ webglSpoofingMode: 'spoof', serviceWorkerMode: 'disabled' }));
+    expect(both).toContain('propagateWebglToIframes');
   });
 
   it('includes the fonts restriction only when fontsMode is "restricted"', () => {

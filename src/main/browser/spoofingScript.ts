@@ -66,6 +66,7 @@ export type SpoofableFingerprint = Pick<
   | 'webglRenderer'
   | 'fontsMode'
   | 'mediaDevicesMode'
+  | 'serviceWorkerMode'
   | 'userAgent'
   | 'platform'
   | 'hardwareConcurrency'
@@ -174,6 +175,85 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
   }
 
   if (fp.webglSpoofingMode === 'spoof') {
+    // The iframe-propagation sub-block below is ONLY ever included when
+    // serviceWorkerMode is also 'disabled' — never on its own. Verified
+    // this stage (see docs/FINGERPRINT_AUDIT.md's "Seventh attempt"):
+    // patching WebGL inside iframes WITHOUT also disabling Service Worker
+    // makes CreepJS's own cross-context GPU consistency check (its
+    // "stealth" score's hasBadWebGL) go from false to true — main-thread
+    // GPU becomes correctly spoofed while the Service Worker side still
+    // leaks the real one, creating a mismatch that didn't exist before.
+    // Only combining both closes the gap without opening this one —
+    // confirmed empirically, twice, both flipping back to the clean
+    // 0%-stealth baseline hash.
+    const iframePropagationScript = fp.serviceWorkerMode === 'disabled'
+      ? `
+    // Propagates the exact same getParameter() override into any same-page
+    // <iframe> the page itself creates — a real, separate JS realm with its
+    // own native WebGLRenderingContext this project's injection had never
+    // reached before this stage (see the sixth investigation's root-cause
+    // finding: CreepJS's own "WebGL" report row reads a hidden iframe it
+    // injects into the page, not the main document's own canvas). Patches
+    // any iframe already present, then watches for new ones via
+    // MutationObserver — a blank/about:blank iframe (no src) has a real,
+    // synchronously-accessible contentWindow the instant it's attached to
+    // the DOM, so there is no 'load' event to wait for in the common case;
+    // the load listener below only covers an iframe that later navigates
+    // somewhere real.
+    if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+      (function propagateWebglToIframes() {
+        function patchWin(win) {
+          try {
+            patch(win.WebGLRenderingContext && win.WebGLRenderingContext.prototype);
+            patch(win.WebGL2RenderingContext && win.WebGL2RenderingContext.prototype);
+          } catch (e) {}
+        }
+        // Recursive: a real capture found CreepJS's own
+        // anti-fingerprinting-evasion helper builds an iframe-inside-an-
+        // iframe specifically to get a window further removed from the
+        // parent's own reach — the actual realm it reads WebGL from is the
+        // INNER iframe, not the outer one a single-level observer would
+        // catch. watchDoc() is applied to the top document AND
+        // (recursively) to every iframe's own contentDocument as soon as
+        // it's reachable, so nesting depth doesn't matter.
+        function handleIframe(iframe) {
+          try {
+            if (iframe.contentWindow) {
+              patchWin(iframe.contentWindow);
+              if (iframe.contentDocument) watchDoc(iframe.contentDocument);
+            }
+            iframe.addEventListener('load', function () {
+              try {
+                patchWin(iframe.contentWindow);
+                if (iframe.contentDocument) watchDoc(iframe.contentDocument);
+              } catch (e) {}
+            });
+          } catch (e) {}
+        }
+        function watchDoc(doc) {
+          try {
+            Array.prototype.forEach.call(doc.querySelectorAll('iframe'), handleIframe);
+          } catch (e) {}
+          try {
+            var mo = new MutationObserver(function (mutations) {
+              mutations.forEach(function (m) {
+                Array.prototype.forEach.call(m.addedNodes || [], function (node) {
+                  if (!node) return;
+                  if (node.tagName === 'IFRAME') handleIframe(node);
+                  if (node.querySelectorAll) {
+                    Array.prototype.forEach.call(node.querySelectorAll('iframe'), handleIframe);
+                  }
+                });
+              });
+            });
+            mo.observe(doc.documentElement || doc, { childList: true, subtree: true });
+          } catch (e) {}
+        }
+        watchDoc(document);
+      })();
+    }
+`
+      : '';
     parts.push(`
   (function patchWebGL() {
     var VENDOR = ${JSON.stringify(fp.webglVendor)};
@@ -189,6 +269,7 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
     }
     patch(self.WebGLRenderingContext && self.WebGLRenderingContext.prototype);
     patch(self.WebGL2RenderingContext && self.WebGL2RenderingContext.prototype);
+${iframePropagationScript}
   })();
 `);
   }
@@ -228,6 +309,18 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
             return { deviceId: d.deviceId, kind: d.kind, label: d.label, groupId: d.groupId, toJSON: function () { return this; } };
           }));
         };
+      }
+    } catch (e) {}
+  })();
+`);
+  }
+
+  if (fp.serviceWorkerMode === 'disabled') {
+    parts.push(`
+  (function disableServiceWorker() {
+    try {
+      if (self.Navigator && self.Navigator.prototype) {
+        delete self.Navigator.prototype.serviceWorker;
       }
     } catch (e) {}
   })();

@@ -1,41 +1,40 @@
 # Fingerprint Reality Audit
 
-> **Status: known limitation, by design decision — not planned for v0.1-0.2.**
-> Spoofing (navigator fields, canvas/audio noise, WebGL vendor/renderer) is
-> genuinely applied and E2E-verified for the main document and every
-> dedicated/shared Worker. It does **not** reach a Service Worker's own
-> global scope in shipped code — a real, reproducible gap that lets a
-> Service-Worker-based fingerprint probe (this is exactly how CreepJS reads
-> part of its report) see this machine's real GPU and real navigator values
-> instead of the configured ones. Five independent, concrete fix attempts
-> were built and reverted: the first three broke a real
-> proxy-authentication regression (core functionality, not a trade this
-> project makes); the fourth (a browser-level CDP `Target.setAutoAttach`
-> session) and fifth (JS-level deletion of `navigator.serviceWorker`, no
-> CDP at all) both genuinely did NOT break proxy auth and DID fix the
-> Worker-section navigator/UA/GPU leak (the fifth more cleanly than the
-> fourth), but both introduced the **exact same** new, reproducible CreepJS
-> "stealth" detection signal (0% → 20%, byte-identical result hash across
-> two unrelated mechanisms) that wasn't present before — a disqualifying
-> outcome under this project's own decision rule, even though the other
-> named risks (proxy-auth, "like headless") came back clean both times. The
-> fifth attempt also uncovered a separate, real reliability gap (the patch
-> silently didn't apply on a real, ordinary site — github.com — in 2/2
-> reproductions). A sixth stage read CreepJS's actual source directly and
-> found the exact mechanism: the "stealth" regression is
-> `hasBadWebGL` (a cross-context GPU consistency check), not
-> `Function.prototype.toString` tamper-detection as one hypothesis
-> suggested — verified empirically (`hasToStringProxy: false` in every
-> single run, baseline and experiment alike) and traced to its true root
-> cause, a separate, pre-existing leak: CreepJS reads its main-thread GPU
-> value through a hidden `<iframe>` it injects into the page itself, a
-> realm this project's spoofing injection has never reached. This is a
-> final decision, not an open investigation: see **"Confirmed, real,
-> honest limitation: Service Workers"**, **"Third and final attempt"**,
-> **"Fourth attempt — browser-level Target.setAutoAttach"**, **"Fifth
-> attempt — remove Service Worker entirely"**, and **"Sixth investigation
-> — root-causing the stealth regression precisely"** below for the full
-> technical history if you need it — most readers won't.
+> **Status: real gap, now closeable via an opt-in profile setting
+> (`serviceWorkerMode: 'disabled'`), off by default.** Spoofing (navigator
+> fields, canvas/audio noise, WebGL vendor/renderer) is genuinely applied
+> and E2E-verified for the main document and every dedicated/shared
+> Worker. By default it does **not** reach a Service Worker's own global
+> scope, nor a same-page `<iframe>`'s own WebGL context — two real,
+> reproducible gaps that together let a Service-Worker-based fingerprint
+> probe (this is exactly how CreepJS reads part of its report) see this
+> machine's real GPU and real navigator values instead of the configured
+> ones. Seven independent attempts were made before this closed cleanly:
+> the first three broke a real proxy-authentication regression (core
+> functionality); the fourth and fifth each fixed the Service Worker side
+> alone but both introduced the exact same new, reproducible CreepJS
+> "stealth" detection signal (a cross-context GPU mismatch, `hasBadWebGL`
+> — confirmed by reading CreepJS's actual source in the sixth stage, not
+> guessed); the seventh closed the *other* side of that exact mismatch (a
+> hidden iframe CreepJS injects into the page, never previously reached by
+> this project's spoofing injection) and, only in combination with the
+> fifth attempt's Service Worker deletion, brought CreepJS's "stealth"
+> score back to the exact same hash as a clean, untouched baseline —
+> verified twice, with real captures, alongside proxy-auth, real-site
+> browsing, and performance checks all coming back clean. This is now
+> shipped as `serviceWorkerMode` on the Fingerprint tab's Spoofing panel,
+> default `'real'` (off — no behavior change for any existing or new
+> profile unless explicitly opted in), with a real, stated compatibility
+> cost (offline caching, push notifications, background sync stop working
+> on any site that relies on them) and one known, unresolved reliability
+> gap inherited from the fifth attempt (the deletion patch doesn't reliably
+> apply on every real site — confirmed on github.com specifically). See
+> **"Confirmed, real, honest limitation: Service Workers"**, **"Third and
+> final attempt"**, **"Fourth attempt — browser-level Target.setAutoAttach"**,
+> **"Fifth attempt — remove Service Worker entirely"**, **"Sixth
+> investigation — root-causing the stealth regression precisely"**, and
+> **"Seventh attempt — patch WebGL inside the iframe too"** below for the
+> full technical history if you need it — most readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -1372,6 +1371,130 @@ the "final attempt in this direction" question the user posed: the
 direction the hypothesis pointed in (spoof `toString` on whatever the
 Service Worker patch touches) would not have helped, because nothing
 about `Function.prototype.toString` was ever the trigger.
+
+## Seventh attempt — patch WebGL inside the iframe too, SHIPPED as an opt-in profile setting (`serviceWorkerMode`)
+
+**The real fix, found by acting on the sixth investigation's own root
+cause instead of stopping at diagnosis.** The sixth investigation
+identified, precisely, *why* `hasBadWebGL` flips true: fixing the Worker
+side's GPU reporting (attempts four and five) while the separate,
+pre-existing "WebGL" report row — read via an `OffscreenCanvas` inside a
+hidden `<iframe>` CreepJS injects into the page itself, never previously
+reached by this project's spoofing injection — still leaks the real GPU,
+creates a mismatch that didn't exist in the honest, both-sides-real
+baseline. The obvious next question, asked directly: **what if the iframe
+side gets patched too?**
+
+**Mechanism.** `spoofingScript.ts`'s existing `patchWebGL()` IIFE now
+optionally includes a second sub-block, `propagateWebglToIframes()`, that:
+finds every `<iframe>` already on the page and patches its
+`WebGLRenderingContext`/`WebGL2RenderingContext` prototypes the same way
+the main document's are patched; watches for new iframes via a
+`MutationObserver`; and — the detail that mattered — recurses **into every
+iframe's own `contentDocument`**, not just the top document. Reading
+`getBehemothIframe()`'s actual source (see the sixth investigation) showed
+CreepJS's real technique nests THREE levels deep below the top document
+(iframe1 → iframeA → iframeB = `PHANTOM_DARKNESS`), not one; a
+single-level observer patches the wrong (unused) iframe and silently does
+nothing. `watchDoc()` is written to apply itself recursively to any depth
+for exactly this reason.
+
+**Critical constraint, verified empirically before shipping anything:**
+this sub-block is included **only when `serviceWorkerMode` is also
+`'disabled'`** — never when `webglSpoofingMode: 'spoof'` is on by itself
+(which is every default profile). Tested directly: enabling the
+iframe-WebGL patch alone, with Service Worker untouched, flips
+`hasBadWebGL` from `false` to `true` in the *opposite* direction — main
+thread now correctly spoofed, Service Worker side still leaking the real
+GPU, same kind of new mismatch as before, same stealth regression. Only
+combining both — closing the Service Worker side (deleting
+`navigator.serviceWorker`, from the fifth attempt) *and* the iframe side
+together — makes both sides agree again. `buildCoreScript()` builds the
+iframe-propagation sub-script only when `fp.serviceWorkerMode ===
+'disabled'`, textually nested inside the same `patchWebGL()` closure so it
+shares its `patch()` helper and `VENDOR`/`RENDERER` constants — there was
+never a risk of these two shipping independently by accident, since they
+are one conditional block, not two independently-toggled ones.
+
+**Empirical verification — the exact same clean-baseline stealth hash,
+reproduced twice.** Real CreepJS runs, both conditions:
+
+| Condition | Worker-section GPU | WebGL-section GPU | `hasBadWebGL` | stealth |
+|---|---|---|---|---|
+| Baseline (both off) | real | real | false | `0% stealth: 0c019315` |
+| iframe patch alone, SW untouched | real | **configured** | **true** | `20% stealth: 4b82ddf4` (same hash as attempts 4 & 5) |
+| Both together (shipped combination) | **configured** | **configured** | false | `0% stealth: 0c019315` — **identical hash to the clean baseline** |
+
+Confirmed twice for the shipped combination, with different random
+fingerprints each time (AMD Radeon RX 6600 and Intel UHD in the two runs)
+— both runs' Worker-section and WebGL-section GPU strings matched each
+other and the configured fingerprint exactly, and both produced the exact
+`0c019315` hash. `44% like headless` stayed bit-identical across every
+condition, consistent with every attempt so far.
+
+**Full standard verification battery, same as every prior stage:**
+- **Authenticated proxy support**: verified unaffected, twice, via the
+  real shipped UI toggle (not a testing-only env var) combined with an
+  authenticated-proxy profile — expected, since neither mechanism touches
+  the network/protocol layer.
+- **Real-site browsing**: `web.dev`, `github.com`, `wikipedia.org`, and
+  `nytimes.com` (13 real, mostly cross-origin ad/embed iframes) all loaded
+  full, substantial content with `serviceWorkerMode: 'disabled'` active —
+  no errors, no visible breakage. The `MutationObserver`/iframe-patching
+  code is wrapped in the same defensive `try`/`catch` pattern as every
+  other patch in this file, so a cross-origin iframe throwing on property
+  access (expected, harmless) doesn't propagate.
+- **Performance**: CreepJS's own self-reported scan time showed no
+  measurable cost from the additional patching (same-session comparisons
+  stayed in the same range across conditions; absolute values varied more
+  between *sessions* than between conditions within a session, consistent
+  with ordinary machine-load noise this document has noted before).
+
+**Shipped as a real, opt-in profile setting — `serviceWorkerMode: 'real' |
+'disabled'`, default `'real'` (off, no behavior change for any existing or
+new profile unless explicitly opted in).** Full wiring, matching
+`webglSpoofingMode`'s own precedent exactly: a new
+`ServiceWorkerModeSchema` field on `Fingerprint`
+(`src/shared/schemas/fingerprint.ts`), migration
+`011_service_worker_mode.sql`, `FingerprintRepository` read/write,
+`generator.ts` default, `browserLauncher.ts`/`profileWindowEntry.ts`
+plumbing (the testing-only `PF_E2E_DISABLE_SW_EXPERIMENT` env var used
+during attempts five through seven's investigation phase is gone — this is
+real per-profile configuration now, not a test flag), and a new toggle in
+the Fingerprint tab's Spoofing panel (`FingerprintTab.tsx`) with the same
+compatibility-risk warning-banner convention as the WebGL toggle: *"closes
+a real fingerprint leak, but offline caching, push notifications, and
+background sync will stop working on any site that relies on them"* — an
+honest statement, not a hedge, since disabling Service Worker really does
+remove that functionality wholesale, not selectively.
+
+**A permanent E2E regression test**, not another throwaway investigation
+script: `fingerprintEnforcement.spec.ts` gained a fixture that replicates
+CreepJS's exact three-level nested-iframe structure (confirmed against the
+real source, not approximated) and asserts the configured GPU is observed
+through it — with one honest note about the fixture's own construction,
+not the shipped mechanism: reading WebGL in the *exact same synchronous
+tick* as building the nested iframes raced the `MutationObserver` (a
+microtask) and observed the real GPU even though the live CreepJS site
+(which has substantial async work between construction and use) did not —
+the fixture was corrected to defer its read via `setTimeout`, matching how
+a real page actually behaves, and is not a caveat about the real target
+this fix was built for. `navigator.serviceWorker` absence is asserted the
+same honest way as the fifth attempt (`'serviceWorker' in navigator ===
+false`, not just a falsy read).
+
+**What's still open, unrelated to this fix.** Fonts' CSS-measurement gap
+and the WebRTC "best available, not true disable" limitation are
+unchanged, as always. The fifth attempt's own separate finding — the
+Service Worker deletion patch didn't reliably apply on `github.com`
+specifically, likely an injection-timing race on a client-side
+locale-redirect — is a real, independent reliability gap in the
+`serviceWorkerMode: 'disabled'` mechanism itself, not resolved by this
+stage, and not re-tested here since this stage's focus was the WebGL side
+of the fix. A profile with this toggle on may therefore still leak via
+Service Worker on some specific sites, even though the mechanism is
+correct in general and verified against the real target (CreepJS) this
+whole investigation was built around.
 
 ## Automated test coverage
 

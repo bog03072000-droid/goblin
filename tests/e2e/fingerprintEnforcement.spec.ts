@@ -372,3 +372,161 @@ test('honest gap, verified in this test suite (not just an external capture some
     server.close();
   }
 });
+
+/**
+ * A fixture that replicates CreepJS's own exact nested-iframe technique
+ * (`getPhantomIframe()` + `getBehemothIframe()`, confirmed by reading its
+ * real source at https://abrahamjuliot.github.io/creepjs/creep.js — see
+ * docs/FINGERPRINT_AUDIT.md's "Sixth investigation" and "Seventh attempt"
+ * write-ups): three levels of iframe nesting below the top document
+ * (top -> iframe1 -> iframeA -> iframeB), matching getPhantomIframe()'s own
+ * iframe plus getBehemothIframe()'s two further nested ones, and reads
+ * WebGL vendor/renderer from an OffscreenCanvas created via the innermost
+ * iframe's own window. This is the exact path that leaked the real GPU in
+ * every capture this whole document has ever taken, independent of Service
+ * Worker — confirmed by reading CreepJS's source, not assumed.
+ */
+function startNestedIframeWebglFixtureServer(): Promise<{ server: http.Server; port: number }> {
+  const pageHtml = `<!doctype html><html><body><script>
+    window.__nestedIframeResult = null;
+    window.__hasServiceWorker = ('serviceWorker' in navigator);
+    try {
+      // Exact structure per creep.js's getPhantomIframe() + getBehemothIframe():
+      // top document -> iframe1 (getPhantomIframe) -> iframeA -> iframeB
+      // (both from getBehemothIframe) = PHANTOM_DARKNESS, three levels below
+      // the top document, not one.
+      var div = document.createElement('div');
+      div.innerHTML = '<div><iframe></iframe></div>';
+      document.body.appendChild(div);
+      var iframe1 = div.firstChild.firstChild;
+      var win1 = iframe1.contentWindow;
+
+      var divA = win1.document.createElement('div');
+      divA.innerHTML = '<div><iframe></iframe></div>';
+      win1.document.body.appendChild(divA);
+      var iframeA = divA.firstChild.firstChild;
+      var winA = iframeA.contentWindow;
+
+      var divB = winA.document.createElement('div');
+      divB.innerHTML = '<div><iframe></iframe></div>';
+      winA.document.body.appendChild(divB);
+      var iframeB = divB.firstChild.firstChild;
+      var winB = iframeB.contentWindow;
+
+      // Real CreepJS also separates iframe construction (getPhantomIframe(),
+      // synchronous, near the very top of its own script) from the actual
+      // WebGL read (getCanvasWebgl(), called much later via Promise.all in
+      // its async fingerprint() function) — real async work happens in
+      // between on the real site. This setTimeout mirrors that separation
+      // rather than reading in the exact same synchronous tick as
+      // construction, which is what actually lets a MutationObserver-based
+      // patch (a microtask, not a synchronous side effect of appendChild)
+      // reach the nested realm before it's used — confirmed necessary
+      // empirically: reading synchronously right after construction raced
+      // the patch and observed the real GPU even though the live CreepJS
+      // site (which has this same separation) did not.
+      setTimeout(function () {
+        try {
+          var canvas = new winB.OffscreenCanvas(256, 256);
+          var gl = canvas.getContext('webgl');
+          var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+          window.__nestedIframeResult = {
+            vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : 'no-extension',
+            renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : 'no-extension',
+          };
+        } catch (e) {
+          window.__nestedIframeResult = { error: String(e) };
+        }
+      }, 0);
+    } catch (e) {
+      window.__nestedIframeResult = { error: String(e) };
+    }
+  </script></body></html>`;
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(pageHtml);
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: (server.address() as AddressInfo).port }));
+  });
+}
+
+test('serviceWorkerMode "disabled" genuinely removes navigator.serviceWorker AND (only in that combination) closes the separate iframe-WebGL leak — the seventh investigation\'s fix, verified end to end', async () => {
+  const { server, port } = await startNestedIframeWebglFixtureServer();
+  try {
+    await window.getByText('Profiles', { exact: true }).click();
+    await window.getByPlaceholder('New profile name').fill('E2E SW Disabled Profile');
+    await window.getByRole('button', { name: 'Custom setup' }).click();
+    await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+    const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E SW Disabled Profile' }) });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await window.getByText('fingerprint', { exact: true }).click();
+    // webglSpoofingMode is already 'spoof' by default (see the test above) —
+    // the fix requires BOTH to be active together, never just one (see
+    // docs/FINGERPRINT_AUDIT.md's "Seventh attempt": enabling only the
+    // iframe-WebGL propagation without also disabling Service Worker
+    // creates a NEW, real detection signal instead of closing the gap).
+    await window.getByLabel('Service Worker').selectOption({ label: 'Disabled (experimental)' });
+    // webglSpoofingMode's own banner-warn is also visible by default here
+    // (see above) — matching by its specific text avoids the strict-mode
+    // violation two simultaneous .banner-warn elements would otherwise be.
+    await expect(window.getByText('closes a real fingerprint leak')).toBeVisible(); // the compatibility-risk warning
+    const configFp = await window.locator('table tr').evaluateAll((trs) =>
+      Object.fromEntries(
+        trs
+          .map((tr) => Array.from(tr.querySelectorAll('th, td')).map((c) => c.textContent?.trim() ?? ''))
+          .filter((r) => r.length === 2),
+      ),
+    ) as unknown as Record<string, string>;
+    await window.getByRole('button', { name: 'Close' }).click();
+
+    await row.getByRole('button', { name: 'Start', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+    const shell = await connectToShellAt(REMOTE_DEBUG_PORT);
+    const address = shell.locator('#address');
+    await address.fill(`http://127.0.0.1:${port}/`);
+    await address.press('Enter');
+    await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${port}`), { timeout: 15_000 });
+
+    const webview = shell.locator('webview').first();
+    await webview.waitFor({ state: 'attached', timeout: 15_000 });
+
+    const evalIn = async (expr: string) =>
+      webview.evaluate(
+        (el, e) => (el as unknown as { executeJavaScript: (s: string) => Promise<unknown> }).executeJavaScript(e),
+        expr,
+      );
+
+    // A genuine absence, not an overridden getter that still reports
+    // present — see docs/FINGERPRINT_AUDIT.md's "Fifth attempt" for why
+    // that distinction was deliberate.
+    expect(await evalIn('window.__hasServiceWorker')).toBe(false);
+    expect(await evalIn('typeof navigator.serviceWorker')).toBe('undefined');
+
+    let nestedResult: { vendor?: string; renderer?: string; error?: string } | null = null;
+    for (let i = 0; i < 20; i++) {
+      nestedResult = (await evalIn('JSON.stringify(window.__nestedIframeResult)').then((s) =>
+        s ? JSON.parse(s as string) : null,
+      )) as typeof nestedResult;
+      if (nestedResult) break;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // The actual fix: the same nested-iframe path that leaked the real GPU
+    // in every prior capture (including with webglSpoofingMode alone) now
+    // reports the configured value, only because both mitigations are on
+    // together.
+    expect(nestedResult).toBeTruthy();
+    expect(nestedResult?.error).toBeUndefined();
+    expect(nestedResult?.vendor).toBe(configFp['WebGL Vendor']);
+    expect(nestedResult?.renderer).toBe(configFp['WebGL Renderer']);
+
+    await row.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+  } finally {
+    server.close();
+  }
+});

@@ -75,6 +75,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
       geolocationLatitude: params.fingerprint.geolocationLatitude,
       geolocationLongitude: params.fingerprint.geolocationLongitude,
       permissionsMode: params.fingerprint.permissionsMode,
+      serviceWorkerMode: params.fingerprint.serviceWorkerMode,
       seed: params.fingerprint.seed,
     }),
   ).toString('base64');

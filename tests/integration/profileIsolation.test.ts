@@ -120,6 +120,7 @@ class FingerprintRepositoryHelper {
       geolocationLatitude: 40.7128,
       geolocationLongitude: -74.006,
       permissionsMode: 'real',
+      serviceWorkerMode: 'real',
       seed,
     }).id;
   }

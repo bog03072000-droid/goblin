@@ -29,6 +29,20 @@ export type GeolocationMode = z.infer<typeof GeolocationModeSchema>;
 // want in any combination (e.g. spoofed location + no camera/mic access).
 export const PermissionsModeSchema = z.enum(['real', 'deny-all']);
 export type PermissionsMode = z.infer<typeof PermissionsModeSchema>;
+// Off by default ('real', matches every existing profile's current
+// behavior exactly — no change unless explicitly opted into). 'disabled'
+// deletes navigator.serviceWorker outright (a genuine absence, not an
+// overridden getter — see docs/FINGERPRINT_AUDIT.md's "Fifth attempt" and
+// "Seventh attempt" write-ups) and — only in combination with that, never
+// on its own — extends webglSpoofingMode's getParameter() override into
+// same-page iframes too, which closes a real, verified fingerprint leak
+// AND a real, verified new detection signal that appeared when only one of
+// the two was fixed. Real compatibility risk: any site that actually uses
+// a Service Worker (offline caching, push notifications, background sync)
+// won't get that functionality with this on — documented in the
+// Fingerprint tab's own UI warning, same convention as webglSpoofingMode.
+export const ServiceWorkerModeSchema = z.enum(['real', 'disabled']);
+export type ServiceWorkerMode = z.infer<typeof ServiceWorkerModeSchema>;
 
 export const FingerprintSchema = z.object({
   id: z.string().uuid(),
@@ -63,6 +77,7 @@ export const FingerprintSchema = z.object({
   geolocationLatitude: z.number().min(-90).max(90),
   geolocationLongitude: z.number().min(-180).max(180),
   permissionsMode: PermissionsModeSchema,
+  serviceWorkerMode: ServiceWorkerModeSchema,
   seed: z.string().min(1),
   createdAt: z.string(),
   updatedAt: z.string(),

@@ -42,6 +42,7 @@ export async function validateFingerprintPreview(source: Fingerprint): Promise<F
     geolocationLatitude: source.geolocationLatitude,
     geolocationLongitude: source.geolocationLongitude,
     permissionsMode: source.permissionsMode,
+    serviceWorkerMode: source.serviceWorkerMode,
     seed: source.seed,
   });
 }

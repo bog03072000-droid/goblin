@@ -60,6 +60,7 @@ export const FIELD_GROUPS: Array<{
       ['editor.fingerprint.spoofing.webglLabel', 'webglSpoofingMode'],
       ['editor.fingerprint.spoofing.geolocationLabel', 'geolocationMode'],
       ['editor.fingerprint.spoofing.permissionsLabel', 'permissionsMode'],
+      ['editor.fingerprint.spoofing.serviceWorkerLabel', 'serviceWorkerMode'],
     ],
   },
 ];
@@ -94,7 +95,14 @@ const MANUAL_FIELD_KEYS: Array<
 export type SpoofingPatch = Partial<
   Pick<
     Fingerprint,
-    'canvasMode' | 'audioMode' | 'fontsMode' | 'mediaDevicesMode' | 'webglSpoofingMode' | 'geolocationMode' | 'permissionsMode'
+    | 'canvasMode'
+    | 'audioMode'
+    | 'fontsMode'
+    | 'mediaDevicesMode'
+    | 'webglSpoofingMode'
+    | 'geolocationMode'
+    | 'permissionsMode'
+    | 'serviceWorkerMode'
   >
 >;
 
@@ -142,6 +150,7 @@ const PROTECTION_PILLS: Array<{
   { labelKey: 'editor.fingerprint.row.mediaDevicesMode', active: (fp) => fp.mediaDevicesMode !== 'real' },
   { labelKey: 'editor.fingerprint.spoofing.webglLabel', active: (fp) => fp.webglSpoofingMode !== 'off' },
   { labelKey: 'editor.fingerprint.spoofing.geolocationLabel', active: (fp) => fp.geolocationMode !== 'real' },
+  { labelKey: 'editor.fingerprint.spoofing.serviceWorkerLabel', active: (fp) => fp.serviceWorkerMode !== 'real' },
 ];
 
 export function FingerprintTab({
@@ -406,6 +415,22 @@ export function FingerprintTab({
             <option value="real">{t('editor.fingerprint.spoofing.permissionsReal')}</option>
             <option value="deny-all">{t('editor.fingerprint.spoofing.permissionsDenyAll')}</option>
           </select>
+        </label>
+        <label className="block">
+          {t('editor.fingerprint.spoofing.serviceWorkerLabel')}
+          <select
+            value={fingerprint.serviceWorkerMode}
+            onChange={(e) => onUpdateSpoofing({ serviceWorkerMode: e.target.value as Fingerprint['serviceWorkerMode'] })}
+            title={t('editor.fingerprint.spoofing.serviceWorkerTooltip')}
+          >
+            <option value="real">{t('editor.fingerprint.spoofing.serviceWorkerReal')}</option>
+            <option value="disabled">{t('editor.fingerprint.spoofing.serviceWorkerDisabled')}</option>
+          </select>
+          {fingerprint.serviceWorkerMode === 'disabled' && (
+            <div className="banner banner-warn mt-8 mb-0 text-xs">
+              {t('editor.fingerprint.spoofing.serviceWorkerWarning')}
+            </div>
+          )}
         </label>
       </div>
 

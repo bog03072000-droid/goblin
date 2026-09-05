@@ -36,6 +36,7 @@ describe('fingerprint generator', () => {
       const fp = generateFingerprint({ seed: `geo-${i}` });
       expect(fp.geolocationMode).toBe('real');
       expect(fp.permissionsMode).toBe('real');
+      expect(fp.serviceWorkerMode).toBe('real');
       const matchingLocale = LOCALE_PROFILES.find((l) => l.locale === fp.locale && l.timezone === fp.timezone);
       expect(matchingLocale, `no LOCALE_PROFILE matched locale=${fp.locale} timezone=${fp.timezone}`).toBeTruthy();
       expect(fp.geolocationLatitude).toBe(matchingLocale!.latitude);

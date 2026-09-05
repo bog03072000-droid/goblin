@@ -258,6 +258,7 @@ export function runProfileWindowProcess(): void {
       userAgent: args.userAgent,
       platform: String(fpForSpoofing['platform'] ?? 'Win32'),
       hardwareConcurrency: Number(fpForSpoofing['hardwareConcurrency'] ?? 8),
+      serviceWorkerMode: (fpForSpoofing['serviceWorkerMode'] as Fingerprint['serviceWorkerMode']) ?? 'real',
     };
     const spoofingScript = buildSpoofingScript(spoofableFingerprint);
 

@@ -108,6 +108,13 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     geolocationLatitude: locale.latitude,
     geolocationLongitude: locale.longitude,
     permissionsMode: 'real',
+    // Off by default: a real, verified compatibility cost (offline caching,
+    // push notifications, background sync stop working on any site that
+    // actually uses a Service Worker), unlike webglSpoofingMode's silent,
+    // always-present leak — see docs/FINGERPRINT_AUDIT.md's "Fifth" and
+    // "Seventh attempt" write-ups for the full trade-off and why this is
+    // opt-in rather than another silent default flip.
+    serviceWorkerMode: 'real',
     seed: options.seed,
   };
 }

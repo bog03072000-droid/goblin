@@ -77,6 +77,7 @@ export class ImportExportService {
         geolocationLatitude: fingerprint.geolocationLatitude,
         geolocationLongitude: fingerprint.geolocationLongitude,
         permissionsMode: fingerprint.permissionsMode,
+        serviceWorkerMode: fingerprint.serviceWorkerMode,
         seed: fingerprint.seed,
       },
       // Password is never included in an export, by design (see SECURITY.md) —
