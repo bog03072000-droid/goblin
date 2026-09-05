@@ -25,6 +25,12 @@ const PATTERNS: Array<[RegExp, TranslationKey]> = [
   [/Profile storage directory is missing/, 'errors.profileStorageMissing'],
   [/Corrupted fingerprint data/, 'errors.corruptedProfileData'],
   [/ENOENT|Failed to launch|spawn .* ENOENT/, 'errors.launchFailed'],
+  // Fallback for the low-memory soft limit (memoryGuard.ts) reaching this
+  // generic path instead of ProfilesPage.tsx's own specific confirm-and-
+  // retry handling — e.g. a future caller of profiles:start that doesn't
+  // go through runAction(). Rare in practice but better than the fully
+  // generic "unexpected error" message.
+  [/LOW_MEMORY:/, 'errors.lowMemory'],
   [/"code":\s*"/, 'errors.invalidInput'],
 ];
 

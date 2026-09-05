@@ -75,9 +75,9 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:regenerateAutomationToken', (p) => ({ token: deps.profiles.regenerateAutomationToken(p.id) }));
   handle('profiles:delete', (p) => deps.profileManager.delete(p.id));
   handle('profiles:restoreDeleted', (p) => deps.profileManager.restoreDeleted(p.id));
-  handle('profiles:start', (p) => deps.profileManager.start(p.id));
+  handle('profiles:start', (p) => deps.profileManager.start(p.id, { acknowledgeLowMemory: p.acknowledgeLowMemory }));
   handle('profiles:stop', (p) => deps.profileManager.stop(p.id));
-  handle('profiles:restart', (p) => deps.profileManager.restart(p.id));
+  handle('profiles:restart', (p) => deps.profileManager.restart(p.id, { acknowledgeLowMemory: p.acknowledgeLowMemory }));
   handle('profiles:clone', (p) => deps.profileManager.clone(p.id, p.mode, p.name));
   handle('profiles:clearCache', (p) => deps.profileManager.clearCache(p.id));
   handle('profiles:cookies:list', (p) => deps.profileManager.listCookies(p.id));

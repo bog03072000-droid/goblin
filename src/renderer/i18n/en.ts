@@ -35,6 +35,7 @@ const en = {
   'errors.profileStorageMissing': "This profile's storage folder is missing or was moved/deleted outside the app.",
   'errors.corruptedProfileData': "This profile's fingerprint data is corrupted and could not be read.",
   'errors.launchFailed': 'Failed to launch the browser process for this profile.',
+  'errors.lowMemory': 'Not enough free memory to safely start another profile right now.',
 
   'profiles.searchPlaceholder': 'Search profiles...',
   'profiles.status.all': 'All statuses',
@@ -114,6 +115,8 @@ const en = {
   'profiles.confirmDelete': 'Delete profile "{name}"? This cannot be undone.',
   'profiles.bulk.confirmDelete': 'Delete {count} selected profile(s)? You\'ll have a short window to undo, but restoring many at once is less convenient than restoring one.',
   'profiles.msg.deleted': 'Profile "{name}" deleted.',
+  'profiles.msg.lowMemoryConfirm':
+    'Only {freeMemMb}MB of RAM is free. Starting another profile (~{estimatedCostMb}MB) risks destabilizing this machine. Start anyway?',
   'profiles.bulk.msg.deleted': '{count} profile(s) deleted.',
   'profiles.msg.deleteRestored': 'Profile restored.',
   'profiles.bulk.msg.deleteRestored': '{count} profile(s) restored.',

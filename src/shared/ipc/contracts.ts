@@ -30,9 +30,9 @@ export const IpcRequestSchemas = {
   'profiles:regenerateAutomationToken': z.object({ id: ProfileIdSchema }),
   'profiles:delete': z.object({ id: ProfileIdSchema }),
   'profiles:restoreDeleted': z.object({ id: ProfileIdSchema }),
-  'profiles:start': z.object({ id: ProfileIdSchema }),
+  'profiles:start': z.object({ id: ProfileIdSchema, acknowledgeLowMemory: z.boolean().optional() }),
   'profiles:stop': z.object({ id: ProfileIdSchema }),
-  'profiles:restart': z.object({ id: ProfileIdSchema }),
+  'profiles:restart': z.object({ id: ProfileIdSchema, acknowledgeLowMemory: z.boolean().optional() }),
   'profiles:clone': z.object({
     id: ProfileIdSchema,
     mode: z.enum(['config', 'full']),

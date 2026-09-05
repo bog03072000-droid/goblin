@@ -37,6 +37,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'errors.profileStorageMissing': 'Папку сховища цього профілю не знайдено — можливо, її перемістили або видалили поза застосунком.',
   'errors.corruptedProfileData': 'Дані відбитку цього профілю пошкоджені, їх не вдалося прочитати.',
   'errors.launchFailed': 'Не вдалося запустити процес браузера для цього профілю.',
+  'errors.lowMemory': 'Недостатньо вільної памʼяті, щоб безпечно запустити ще один профіль зараз.',
 
   'profiles.searchPlaceholder': 'Пошук профілів...',
   'profiles.status.all': 'Усі статуси',
@@ -116,6 +117,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.confirmDelete': 'Видалити профіль "{name}"? Цю дію неможливо скасувати.',
   'profiles.bulk.confirmDelete': 'Видалити вибрані профілі ({count})? У вас буде короткий час на скасування, але відновлювати одразу багато профілів менш зручно, ніж один.',
   'profiles.msg.deleted': 'Профіль "{name}" видалено.',
+  'profiles.msg.lowMemoryConfirm':
+    'Вільно лише {freeMemMb}МБ ОЗП. Запуск ще одного профілю (~{estimatedCostMb}МБ) може дестабілізувати систему. Запустити попри це?',
   'profiles.bulk.msg.deleted': 'Видалено профілів: {count}.',
   'profiles.msg.deleteRestored': 'Профіль відновлено.',
   'profiles.bulk.msg.deleteRestored': 'Відновлено профілів: {count}.',

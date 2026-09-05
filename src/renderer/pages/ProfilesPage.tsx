@@ -4,6 +4,7 @@ import type { Template } from '@shared/schemas/template';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { callApi } from '../services/api';
+import { parseLowMemoryError } from '@shared/utils/lowMemory';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
 import { ProfileCreateModal } from '../components/ProfileCreateModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -174,7 +175,23 @@ export function ProfilesPage(): JSX.Element {
   async function runAction(id: string, action: 'profiles:start' | 'profiles:stop' | 'profiles:restart'): Promise<void> {
     setBusyId(id);
     await rowAction.run(async () => {
-      await callApi(action, { id });
+      try {
+        await callApi(action, { id });
+      } catch (err) {
+        // Soft memory limit (see ProfileManager.start()'s memoryGuard.ts) —
+        // only 'profiles:start'/'profiles:restart' can ever throw this, and
+        // only when the user hasn't already acknowledged it. A confirm()
+        // dialog with the real free-memory number, then a one-shot retry
+        // that acknowledges it, beats either silently blocking the start or
+        // silently proceeding into what docs/LOAD_TEST.md found to be a
+        // real risk of destabilizing the machine.
+        const details = parseLowMemoryError(err instanceof Error ? err.message : String(err));
+        if (details && confirm(t('profiles.msg.lowMemoryConfirm', { freeMemMb: details.freeMemMb, estimatedCostMb: details.estimatedCostMb }))) {
+          await callApi(action, { id, acknowledgeLowMemory: true });
+        } else {
+          throw err;
+        }
+      }
       await refresh();
     });
     setBusyId(null);

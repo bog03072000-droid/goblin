@@ -250,11 +250,11 @@ describe('registerIpc', () => {
       await invoke('profiles:restoreDeleted', { id: PROFILE_ID });
       expect(deps.profileManager.restoreDeleted).toHaveBeenCalledWith(PROFILE_ID);
       await invoke('profiles:start', { id: PROFILE_ID });
-      expect(deps.profileManager.start).toHaveBeenCalledWith(PROFILE_ID);
+      expect(deps.profileManager.start).toHaveBeenCalledWith(PROFILE_ID, { acknowledgeLowMemory: undefined });
       await invoke('profiles:stop', { id: PROFILE_ID });
       expect(deps.profileManager.stop).toHaveBeenCalledWith(PROFILE_ID);
       await invoke('profiles:restart', { id: PROFILE_ID });
-      expect(deps.profileManager.restart).toHaveBeenCalledWith(PROFILE_ID);
+      expect(deps.profileManager.restart).toHaveBeenCalledWith(PROFILE_ID, { acknowledgeLowMemory: undefined });
       await invoke('profiles:clearCache', { id: PROFILE_ID });
       expect(deps.profileManager.clearCache).toHaveBeenCalledWith(PROFILE_ID);
     });

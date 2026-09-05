@@ -1,6 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { ProfileRepository } from '../database/profileRepository';
 import type { FingerprintRepository } from '../database/fingerprintRepository';
@@ -14,6 +15,7 @@ import { ProfileLifecycleManager } from './profileLifecycleManager';
 import type { BulkResult } from './bulkResult';
 import { launchProfileProcess, isTransientSpawnError, type LaunchParams } from '../browser/browserLauncher';
 import { checkBrowserCompatibility } from '../fingerprint/browserCompatibility';
+import { checkMemoryHeadroom, safeAdditionalStartCount, LowMemoryError } from './memoryGuard';
 import {
   createProfileStorage,
   clearProfileCache,
@@ -95,11 +97,29 @@ export class ProfileManager {
    * instead of the normal start page, so Electron's `will-download` fires
    * again naturally when that URL serves a file. Only usable when the
    * profile isn't already running — there is no back-channel into an
-   * already-running profile's separate OS process to redirect it. */
-  start(id: string, opts?: { initialUrl?: string }): Profile {
+   * already-running profile's separate OS process to redirect it.
+   *
+   * `acknowledgeLowMemory` skips the headroom check below — set by
+   * bulkStart() (which already throttles its own chunk size against real
+   * headroom, see safeAdditionalStartCount()) and by the renderer's retry
+   * after the user confirms the LowMemoryError's warning dialog. */
+  start(id: string, opts?: { initialUrl?: string; acknowledgeLowMemory?: boolean }): Profile {
     const profile = this.mustGet(id);
     if (profile.status === 'RUNNING' || this.running.has(id)) {
       throw new Error('Profile is already running');
+    }
+    // Soft limit, not a hard block: docs/LOAD_TEST.md found this machine
+    // reliably destabilizes once more than ~2 real profiles run at once,
+    // at ~585MB each — this used to only be discoverable via an actual
+    // crash. Thrown before any state changes, so the caller can decide
+    // (via the confirm dialog this surfaces in the renderer) and retry
+    // with acknowledgeLowMemory instead of the profile being left
+    // half-started.
+    if (!opts?.acknowledgeLowMemory) {
+      const headroom = checkMemoryHeadroom(os.freemem());
+      if (!headroom.safe) {
+        throw new LowMemoryError(headroom);
+      }
     }
     // The directory can go missing if it was moved/deleted outside the app
     // (e.g. by hand, an antivirus quarantine, or a failed backup restore).
@@ -321,11 +341,11 @@ export class ProfileManager {
     return this.mustGet(id);
   }
 
-  async restart(id: string): Promise<Profile> {
+  async restart(id: string, opts?: { acknowledgeLowMemory?: boolean }): Promise<Profile> {
     if (this.running.has(id) || this.mustGet(id).status === 'RUNNING') {
       await this.stop(id);
     }
-    return this.start(id);
+    return this.start(id, opts);
   }
 
   clearCache(id: string): void {
@@ -435,34 +455,67 @@ export class ProfileManager {
     return { succeeded, failed };
   }
 
-  /** Runs `action` over `ids` in small chunks of `concurrency`, pausing
-   * 250ms between chunks — shared by bulkStart/bulkRestart so bulk-launching
-   * dozens of stored profiles never tries to spin up dozens of real Chromium
-   * processes in the same instant. Was two nearly-identical copies of this
-   * exact loop (one per caller) before being extracted here. */
+  /** Runs `action` over `ids` in small chunks, pausing 250ms between chunks
+   * — shared by bulkStart/bulkRestart so bulk-launching dozens of stored
+   * profiles never tries to spin up dozens of real Chromium processes in
+   * the same instant. Was two nearly-identical copies of this exact loop
+   * (one per caller) before being extracted here.
+   *
+   * `memoryAware: true` (bulkStart/bulkRestart — both launch a real
+   * Chromium process per id) recomputes the actual chunk size from live
+   * headroom via safeAdditionalStartCount() instead of always using the
+   * full requested `concurrency` — see memoryGuard.ts's doc comment for
+   * why a fixed concurrency=4 regardless of free RAM was itself the gap
+   * docs/LOAD_TEST.md's own measurement exposed. A throttled run (chunk
+   * size smaller than requested at least once) logs one activity-log entry
+   * so it's visible in the Logs page rather than only inferable from the
+   * batch taking longer than expected. */
   private async runChunked(
     ids: string[],
     concurrency: number,
     action: (id: string) => void | Promise<void>,
+    memoryAware = false,
   ): Promise<BulkResult> {
     const succeeded: string[] = [];
     const failed: Array<{ id: string; message: string }> = [];
-    for (let i = 0; i < ids.length; i += concurrency) {
-      const chunk = ids.slice(i, i + concurrency);
+    let everThrottled = false;
+    let i = 0;
+    while (i < ids.length) {
+      const chunkSize = memoryAware ? safeAdditionalStartCount(os.freemem(), concurrency) : concurrency;
+      if (memoryAware && chunkSize < concurrency) everThrottled = true;
+      const chunk = ids.slice(i, i + chunkSize);
       const result = await this.bulkRun(chunk, action);
       succeeded.push(...result.succeeded);
       failed.push(...result.failed);
-      if (i + concurrency < ids.length) {
+      i += chunkSize;
+      if (i < ids.length) {
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
+    }
+    if (everThrottled) {
+      this.logs.record(
+        'PROFILE_STARTED',
+        null,
+        `Bulk start/restart throttled below the requested concurrency of ${concurrency} based on available memory (see docs/LOAD_TEST.md) — some profiles launched more slowly than usual to avoid destabilizing the machine`,
+      );
     }
     return { succeeded, failed };
   }
 
   bulkStart(ids: string[], concurrency = 4): Promise<BulkResult> {
-    return this.runChunked(ids, concurrency, (id) => {
-      this.start(id);
-    });
+    return this.runChunked(
+      ids,
+      concurrency,
+      (id) => {
+        // The chunk size above already reflects live headroom for however
+        // many profiles are about to be launched together — acknowledged
+        // here so an individual start() doesn't redundantly re-check (and
+        // potentially reject) against the same headroom its own launch was
+        // already budgeted against.
+        this.start(id, { acknowledgeLowMemory: true });
+      },
+      true,
+    );
   }
 
   bulkStop(ids: string[]): Promise<BulkResult> {
@@ -472,7 +525,7 @@ export class ProfileManager {
   /** Same chunked-with-a-pause shape as bulkStart, for the same reason: a
    * restart re-launches a real Chromium process per profile. */
   bulkRestart(ids: string[], concurrency = 4): Promise<BulkResult> {
-    return this.runChunked(ids, concurrency, (id) => this.restart(id).then(() => undefined));
+    return this.runChunked(ids, concurrency, (id) => this.restart(id, { acknowledgeLowMemory: true }).then(() => undefined), true);
   }
 
   bulkDelete(ids: string[]): Promise<BulkResult> {
