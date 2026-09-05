@@ -327,6 +327,11 @@ const en = {
   'proxy.table.username': 'Username',
   'proxy.table.status': 'Status',
   'proxy.table.actions': 'Actions',
+  'proxy.geolocate': 'Check location',
+  'proxy.geolocate.result': '{country} ({timezone})',
+  'proxy.geolocate.failed': 'Could not determine location',
+  'proxy.geolocate.mismatchWarning':
+    '{count} profile(s) using this proxy have a different timezone than its detected location ({country}) — their traffic and claimed timezone may not match.',
   'proxy.status.ok': 'OK ({ms}ms)',
   'proxy.status.failed': 'Failed: {error}',
   'proxy.status.autoOk': 'OK · {ms}ms · {when}',

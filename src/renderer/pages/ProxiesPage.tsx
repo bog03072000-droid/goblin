@@ -1,11 +1,19 @@
 import { Fragment, useEffect, useState } from 'react';
-import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp, ListPlus } from 'lucide-react';
+import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp, ListPlus, MapPin } from 'lucide-react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult, ProxyCheckHistoryEntry } from '@shared/schemas/proxy';
+import type { ProfileListItem } from '@shared/schemas/profile';
+import type { Fingerprint } from '@shared/schemas/fingerprint';
 import { callApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EditProxyModal } from '../components/EditProxyModal';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useTranslation } from '../i18n';
+
+interface ProxyGeolocation {
+  country: string;
+  countryCode: string;
+  timezone: string;
+}
 
 /** "3m ago" / "2h ago" / "just now" — used for the proxy health-check badge's
  * timestamp so it stays readable without a full date. */
@@ -68,6 +76,18 @@ export function ProxiesPage(): JSX.Element {
   const [history, setHistory] = useState<Record<string, ProxyCheckHistoryEntry[]>>({});
   const historyAction = useAsyncAction();
   const { error, run } = useAsyncAction();
+  // Proxy geolocation (IP -> country/timezone) — on-demand per proxy, not
+  // fetched automatically for every stored proxy on page load, since the
+  // free geolocation API this uses is rate-limited (see
+  // proxyGeolocation.ts). `null` after a lookup means "checked, but the
+  // service couldn't determine a location" — distinct from "never checked".
+  const [geo, setGeo] = useState<Record<string, ProxyGeolocation | null>>({});
+  const [geoPendingId, setGeoPendingId] = useState<string | null>(null);
+  // Profiles using each proxy are fetched lazily alongside a geolocation
+  // check (not on page load, not kept around afterward) purely to answer
+  // "does any profile using this proxy claim a different timezone than the
+  // proxy's detected location" — only the resulting count is kept in state.
+  const [mismatchedProfileCount, setMismatchedProfileCount] = useState<Record<string, number>>({});
   const portInvalid = !Number.isInteger(form.port) || form.port < 1 || form.port > 65535;
 
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -117,6 +137,36 @@ export function ProxiesPage(): JSX.Element {
         return rest;
       });
     });
+  }
+
+  /** Geolocates the proxy's own host (see proxyGeolocation.ts's doc comment
+   * for what this does and doesn't verify), then cross-references every
+   * profile directly assigned to this proxy against its detected timezone
+   * — a mismatch is a real, actionable signal that a profile's claimed
+   * timezone/locale doesn't match where its proxy traffic appears to
+   * originate, one of the more detectable inconsistencies a fingerprinting
+   * site can check for. Only ever triggered by this button, never
+   * automatically, since the underlying API is rate-limited. */
+  async function checkGeolocation(proxyId: string): Promise<void> {
+    setGeoPendingId(proxyId);
+    await run(async () => {
+      const [result, allProfiles] = await Promise.all([
+        callApi<'proxy:geolocate', ProxyGeolocation | null>('proxy:geolocate', { id: proxyId }),
+        callApi<'profiles:list', ProfileListItem[]>('profiles:list', {}),
+      ]);
+      setGeo((prev) => ({ ...prev, [proxyId]: result }));
+      const usingThisProxy = allProfiles.filter((p) => p.proxyId === proxyId);
+      if (result && usingThisProxy.length > 0) {
+        const fingerprints = await Promise.all(
+          usingThisProxy.map((p) => callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId })),
+        );
+        const mismatches = fingerprints.filter((fp) => fp && fp.timezone !== result.timezone).length;
+        setMismatchedProfileCount((prev) => ({ ...prev, [proxyId]: mismatches }));
+      } else {
+        setMismatchedProfileCount((prev) => ({ ...prev, [proxyId]: 0 }));
+      }
+    });
+    setGeoPendingId(null);
   }
 
   async function remove(id: string): Promise<void> {
@@ -281,6 +331,7 @@ export function ProxiesPage(): JSX.Element {
               <th>{t('proxy.table.port')}</th>
               <th>{t('proxy.table.username')}</th>
               <th>{t('proxy.table.status')}</th>
+              <th>{t('proxy.geolocate')}</th>
               <th>{t('proxy.table.actions')}</th>
             </tr>
           </thead>
@@ -318,6 +369,30 @@ export function ProxiesPage(): JSX.Element {
                   )}
                 </td>
                 <td>
+                  {geo[p.id] ? (
+                    <span
+                      className={`pill ${mismatchedProfileCount[p.id] ? 'warn' : 'on'}`}
+                      title={
+                        mismatchedProfileCount[p.id]
+                          ? t('proxy.geolocate.mismatchWarning', {
+                              count: mismatchedProfileCount[p.id]!,
+                              country: geo[p.id]!.country,
+                            })
+                          : undefined
+                      }
+                    >
+                      {t('proxy.geolocate.result', { country: geo[p.id]!.country, timezone: geo[p.id]!.timezone })}
+                    </span>
+                  ) : p.id in geo ? (
+                    <span className="pill danger">{t('proxy.geolocate.failed')}</span>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" onClick={() => void checkGeolocation(p.id)} disabled={geoPendingId === p.id}>
+                      <MapPin size={13} strokeWidth={2.25} />
+                      {geoPendingId === p.id ? t('common.loading') : t('proxy.geolocate')}
+                    </button>
+                  )}
+                </td>
+                <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>
                     <Wifi size={13} strokeWidth={2.25} />
                     {t('proxy.test')}
@@ -343,7 +418,7 @@ export function ProxiesPage(): JSX.Element {
               </tr>
               {expandedHistoryId === p.id && (
                 <tr className="proxy-history-row">
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     {historyAction.pending && !history[p.id] ? (
                       <p className="text-dim text-sm m-0">{t('common.loading')}</p>
                     ) : !history[p.id] || history[p.id]!.length === 0 ? (
@@ -379,7 +454,7 @@ export function ProxiesPage(): JSX.Element {
             ))}
             {proxies.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-dim">
+                <td colSpan={8} className="text-dim">
                   {t('proxy.empty.none')}
                 </td>
               </tr>

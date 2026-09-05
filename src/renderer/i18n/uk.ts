@@ -329,6 +329,11 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'proxy.table.username': "Ім'я користувача",
   'proxy.table.status': 'Статус',
   'proxy.table.actions': 'Дії',
+  'proxy.geolocate': 'Перевірити локацію',
+  'proxy.geolocate.result': '{country} ({timezone})',
+  'proxy.geolocate.failed': 'Не вдалося визначити локацію',
+  'proxy.geolocate.mismatchWarning':
+    'У {count} профіл(ів), що використовують цей проксі, часовий пояс відрізняється від визначеної локації проксі ({country}) — трафік і заявлений часовий пояс можуть не збігатися.',
   'proxy.status.ok': 'OK ({ms}мс)',
   'proxy.status.failed': 'Помилка: {error}',
   'proxy.status.autoOk': 'OK · {ms}мс · {when}',

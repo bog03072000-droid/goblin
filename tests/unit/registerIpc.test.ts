@@ -5,9 +5,14 @@ vi.mock('../../src/main/proxy/proxyTester', () => ({
   testProxyConnection: vi.fn(async () => ({ success: true, latencyMs: 12, error: null })),
 }));
 
+vi.mock('../../src/main/proxy/proxyGeolocation', () => ({
+  geolocateHost: vi.fn(async () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' })),
+}));
+
 const { ipcMain } = await import('electron');
 const { registerIpc } = await import('../../src/main/ipc/registerIpc');
 const { testProxyConnection } = await import('../../src/main/proxy/proxyTester');
+const { geolocateHost } = await import('../../src/main/proxy/proxyGeolocation');
 
 const PROFILE_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_ID = '22222222-2222-2222-2222-222222222222';
@@ -362,6 +367,18 @@ describe('registerIpc', () => {
     it('proxy:checkHistory delegates to proxies.listCheckHistory', async () => {
       await invoke('proxy:checkHistory', { id: OTHER_ID });
       expect(deps.proxies.listCheckHistory).toHaveBeenCalledWith(OTHER_ID);
+    });
+
+    it('proxy:geolocate looks up the proxy and geolocates its host', async () => {
+      const result = await invoke('proxy:geolocate', { id: OTHER_ID });
+      expect(geolocateHost).toHaveBeenCalledWith('1.2.3.4');
+      expect(result).toEqual({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' });
+    });
+
+    it('proxy:geolocate rejects when the proxy no longer exists', async () => {
+      deps.proxies.getById.mockReturnValue(null);
+      await expect(invoke('proxy:geolocate', { id: OTHER_ID })).rejects.toThrow('Proxy not found');
+      expect(geolocateHost).not.toHaveBeenCalled();
     });
   });
 

@@ -311,4 +311,75 @@ describe('ProxiesPage', () => {
       expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
     });
   });
+
+  describe('geolocation', () => {
+    it('shows the country/timezone pill after a successful check', async () => {
+      mockInvoke({
+        'proxy:list': () => [makeProxy({})],
+        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'profiles:list': () => [],
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      expect(await screen.findByText('Germany (Europe/Berlin)')).toBeInTheDocument();
+    });
+
+    it('shows a failure pill when the API cannot determine a location', async () => {
+      mockInvoke({
+        'proxy:list': () => [makeProxy({})],
+        'proxy:geolocate': () => null,
+        'profiles:list': () => [],
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      expect(await screen.findByText('Could not determine location')).toBeInTheDocument();
+    });
+
+    it('flags a mismatch when a profile assigned to this proxy has a different timezone', async () => {
+      const invoke = mockInvoke({
+        'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
+        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'profiles:list': () => [{ id: 'p1', proxyId: 'proxy-1', fingerprintId: 'fp1' }],
+        'fingerprint:get': () => ({ timezone: 'America/New_York' }),
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      expect(pill.className).toContain('warn');
+      expect(pill).toHaveAttribute('title', expect.stringContaining('1 profile(s)'));
+      expect(invoke).toHaveBeenCalledWith('fingerprint:get', { id: 'fp1' });
+    });
+
+    it('does not flag a mismatch when the assigned profile\'s timezone matches', async () => {
+      mockInvoke({
+        'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
+        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'profiles:list': () => [{ id: 'p1', proxyId: 'proxy-1', fingerprintId: 'fp1' }],
+        'fingerprint:get': () => ({ timezone: 'Europe/Berlin' }),
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      expect(pill.className).toContain('on');
+      expect(pill).not.toHaveAttribute('title');
+    });
+
+    it('ignores profiles assigned to a different proxy when checking for mismatches', async () => {
+      mockInvoke({
+        'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
+        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'profiles:list': () => [{ id: 'p1', proxyId: 'other-proxy', fingerprintId: 'fp1' }],
+        'fingerprint:get': () => ({ timezone: 'America/New_York' }),
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      expect(pill.className).toContain('on');
+    });
+  });
 });

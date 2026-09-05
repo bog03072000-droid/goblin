@@ -73,6 +73,7 @@ export const IpcRequestSchemas = {
   'proxy:delete': z.object({ id: z.string().uuid() }),
   'proxy:test': z.object({ id: z.string().uuid() }),
   'proxy:checkHistory': z.object({ id: z.string().uuid() }),
+  'proxy:geolocate': z.object({ id: z.string().uuid() }),
 
   'logs:list': z.object({
     limit: z.number().int().min(1).max(1000).default(200),

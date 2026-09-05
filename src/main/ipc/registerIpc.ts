@@ -17,6 +17,7 @@ import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
 import { PLATFORM_PROFILES, BROWSER_VERSIONS } from '../fingerprint/platformProfiles';
 import { testProxyConnection } from '../proxy/proxyTester';
+import { geolocateHost } from '../proxy/proxyGeolocation';
 
 export interface IpcDependencies {
   profileManager: ProfileManager;
@@ -148,6 +149,11 @@ export function registerIpc(deps: IpcDependencies): void {
   });
 
   handle('proxy:checkHistory', (p) => deps.proxies.listCheckHistory(p.id));
+  handle('proxy:geolocate', (p) => {
+    const proxy = deps.proxies.getById(p.id);
+    if (!proxy) throw new Error('Proxy not found');
+    return geolocateHost(proxy.host);
+  });
 
   handle('logs:list', (p) =>
     deps.logs.list({
