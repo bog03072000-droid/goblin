@@ -198,4 +198,50 @@ describe('LogsPage', () => {
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('logs:latestId', {}));
     await vi.waitFor(() => expect(screen.getByText('Entry 2')).toBeInTheDocument());
   });
+
+  it('"Export logs" calls logs:export with the current filters and shows the saved path', async () => {
+    const invoke = mockInvoke({
+      'profiles:list': () => [],
+      'logs:list': () => [],
+      'logs:export': () => '/exports/goblinanty-logs-export.csv',
+    });
+    renderPage();
+    await screen.findByText('No activity yet. Actions on your profiles will show up here.');
+
+    fireEvent.change(screen.getByDisplayValue('All events'), { target: { value: 'PROFILE_STARTED' } });
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('logs:list', expect.objectContaining({ eventType: 'PROFILE_STARTED' })));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export logs' }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('logs:export', { eventType: 'PROFILE_STARTED', profileId: undefined, search: undefined }),
+    );
+    expect(await screen.findByText('Exported to /exports/goblinanty-logs-export.csv')).toBeInTheDocument();
+  });
+
+  it('"Export logs" shows nothing when the user cancels the save dialog (null path)', async () => {
+    mockInvoke({ 'profiles:list': () => [], 'logs:list': () => [], 'logs:export': () => null });
+    renderPage();
+    await screen.findByText('No activity yet. Actions on your profiles will show up here.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export logs' }));
+
+    await waitFor(() => expect(screen.queryByText(/Exported to/)).not.toBeInTheDocument());
+  });
+
+  it('"Export logs" shows an error banner when the export fails', async () => {
+    const invoke = vi.fn((channel: string) => {
+      if (channel === 'profiles:list') return Promise.resolve([]);
+      if (channel === 'logs:list') return Promise.resolve([]);
+      if (channel === 'logs:export') return Promise.reject(new Error('disk full'));
+      throw new Error(`Unmocked channel: ${channel}`);
+    });
+    window.profileforge = { invoke, onUpdateAvailable: vi.fn(), installUpdate: vi.fn() } as unknown as Window['profileforge'];
+    renderPage();
+    await screen.findByText('No activity yet. Actions on your profiles will show up here.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export logs' }));
+
+    expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
+  });
 });

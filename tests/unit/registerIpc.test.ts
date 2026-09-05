@@ -9,10 +9,15 @@ vi.mock('../../src/main/proxy/proxyGeolocation', () => ({
   geolocateHost: vi.fn(async () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' })),
 }));
 
+vi.mock('../../src/main/logs/logsExport', () => ({
+  exportLogsToFile: vi.fn(async () => '/exports/logs.csv'),
+}));
+
 const { ipcMain } = await import('electron');
 const { registerIpc } = await import('../../src/main/ipc/registerIpc');
 const { testProxyConnection } = await import('../../src/main/proxy/proxyTester');
 const { geolocateHost } = await import('../../src/main/proxy/proxyGeolocation');
+const { exportLogsToFile } = await import('../../src/main/logs/logsExport');
 
 const PROFILE_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_ID = '22222222-2222-2222-2222-222222222222';
@@ -396,6 +401,16 @@ describe('registerIpc', () => {
     it('logs:latestId delegates to logs.latestId', async () => {
       await invoke('logs:latestId', {});
       expect(deps.logs.latestId).toHaveBeenCalled();
+    });
+
+    it('logs:export forwards the current filters (not limit/beforeId) to exportLogsToFile and returns its path', async () => {
+      const result = await invoke('logs:export', { eventType: 'PROFILE_CREATED', profileId: PROFILE_ID, search: 'x' });
+      expect(exportLogsToFile).toHaveBeenCalledWith(deps.logs, deps.profiles, {
+        eventType: 'PROFILE_CREATED',
+        profileId: PROFILE_ID,
+        search: 'x',
+      });
+      expect(result).toBe('/exports/logs.csv');
     });
 
     it('templates:list delegates to templates.list', async () => {

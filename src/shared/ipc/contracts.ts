@@ -83,6 +83,11 @@ export const IpcRequestSchemas = {
     search: z.string().optional(),
   }),
   'logs:latestId': z.object({}),
+  'logs:export': z.object({
+    eventType: ActivityEventTypeSchema.optional(),
+    profileId: z.string().optional(),
+    search: z.string().optional(),
+  }),
 
   'templates:list': z.object({}),
 

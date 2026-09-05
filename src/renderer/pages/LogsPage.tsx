@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Download } from 'lucide-react';
 import type { ActivityLogEntry, ActivityEventType } from '@shared/schemas/activityLog';
 import type { ProfileListItem } from '@shared/schemas/profile';
 import { callApi } from '../services/api';
@@ -39,6 +40,8 @@ export function LogsPage(): JSX.Element {
   const [live, setLive] = useState(false);
   const { error, run } = useAsyncAction();
   const loadMoreAction = useAsyncAction();
+  const exportAction = useAsyncAction();
+  const [exportedInfo, setExportedInfo] = useState<string | null>(null);
   const latestIdRef = useRef<number | null>(null);
 
   // Matches ProfilesPage's own 250ms debounce for the same reason: avoid
@@ -70,6 +73,24 @@ export function LogsPage(): JSX.Element {
     void loadFirstPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, eventTypeFilter, profileFilter]);
+
+  /** Exports every entry matching the CURRENT filters (search/event
+   * type/profile) — not just the page loaded on screen, which cursor
+   * pagination means is often a small fraction of what actually matches.
+   * The save dialog and file write both happen in the main process (see
+   * logsExport.ts); this just reports the chosen path back, or does
+   * nothing if the user cancelled the dialog. */
+  async function exportLogs(): Promise<void> {
+    setExportedInfo(null);
+    await exportAction.run(async () => {
+      const path = await callApi<'logs:export', string | null>('logs:export', {
+        eventType: (eventTypeFilter || undefined) as ActivityEventType | undefined,
+        profileId: profileFilter || undefined,
+        search: debouncedSearch || undefined,
+      });
+      if (path) setExportedInfo(path);
+    });
+  }
 
   async function loadMore(): Promise<void> {
     const lastId = entries[entries.length - 1]?.id;
@@ -141,9 +162,15 @@ export function LogsPage(): JSX.Element {
           <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
           {t('logs.live')}
         </label>
+        <button className="btn btn-ghost" onClick={() => void exportLogs()} disabled={exportAction.pending}>
+          <Download size={14} strokeWidth={2.25} />
+          {exportAction.pending ? t('common.loading') : t('logs.export')}
+        </button>
       </div>
       <div className="content">
         {error && <div className="banner banner-error">{error}</div>}
+        {exportAction.error && <div className="banner banner-error">{exportAction.error}</div>}
+        {exportedInfo && <div className="banner banner-success">{t('logs.export.success', { path: exportedInfo })}</div>}
         <div className="panel">
           <table>
             <thead>

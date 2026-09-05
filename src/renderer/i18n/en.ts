@@ -425,6 +425,8 @@ const en = {
   'logs.filter.allProfiles': 'All profiles',
   'logs.live': 'Live',
   'logs.loadMore': 'Load more',
+  'logs.export': 'Export logs',
+  'logs.export.success': 'Exported to {path}',
 } as const;
 
 export default en;

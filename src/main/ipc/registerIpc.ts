@@ -18,6 +18,7 @@ import { validateFingerprint } from '../fingerprint/validator';
 import { PLATFORM_PROFILES, BROWSER_VERSIONS } from '../fingerprint/platformProfiles';
 import { testProxyConnection } from '../proxy/proxyTester';
 import { geolocateHost } from '../proxy/proxyGeolocation';
+import { exportLogsToFile } from '../logs/logsExport';
 
 export interface IpcDependencies {
   profileManager: ProfileManager;
@@ -165,6 +166,9 @@ export function registerIpc(deps: IpcDependencies): void {
     }),
   );
   handle('logs:latestId', () => deps.logs.latestId());
+  handle('logs:export', (p) =>
+    exportLogsToFile(deps.logs, deps.profiles, { eventType: p.eventType, profileId: p.profileId, search: p.search }),
+  );
 
   handle('templates:list', () => deps.templates.list());
 

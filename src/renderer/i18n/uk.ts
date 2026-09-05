@@ -427,6 +427,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'logs.filter.allProfiles': 'Усі профілі',
   'logs.live': 'Наживо',
   'logs.loadMore': 'Завантажити ще',
+  'logs.export': 'Експортувати журнал',
+  'logs.export.success': 'Експортовано до {path}',
 };
 
 export default uk;
