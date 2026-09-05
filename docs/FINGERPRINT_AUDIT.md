@@ -21,11 +21,21 @@
 > named risks (proxy-auth, "like headless") came back clean both times. The
 > fifth attempt also uncovered a separate, real reliability gap (the patch
 > silently didn't apply on a real, ordinary site — github.com — in 2/2
-> reproductions). This is a final decision, not an open investigation: see
-> **"Confirmed, real, honest limitation: Service Workers"**, **"Third and
-> final attempt"**, **"Fourth attempt — browser-level Target.setAutoAttach"**,
-> and **"Fifth attempt — remove Service Worker entirely"** below for the
-> full technical history if you need it — most readers won't.
+> reproductions). A sixth stage read CreepJS's actual source directly and
+> found the exact mechanism: the "stealth" regression is
+> `hasBadWebGL` (a cross-context GPU consistency check), not
+> `Function.prototype.toString` tamper-detection as one hypothesis
+> suggested — verified empirically (`hasToStringProxy: false` in every
+> single run, baseline and experiment alike) and traced to its true root
+> cause, a separate, pre-existing leak: CreepJS reads its main-thread GPU
+> value through a hidden `<iframe>` it injects into the page itself, a
+> realm this project's spoofing injection has never reached. This is a
+> final decision, not an open investigation: see **"Confirmed, real,
+> honest limitation: Service Workers"**, **"Third and final attempt"**,
+> **"Fourth attempt — browser-level Target.setAutoAttach"**, **"Fifth
+> attempt — remove Service Worker entirely"**, and **"Sixth investigation
+> — root-causing the stealth regression precisely"** below for the full
+> technical history if you need it — most readers won't.
 
 **Method.** Every claim below is backed by one of: (a) an automated E2E test in
 `tests/e2e/fingerprintEnforcement.spec.ts` that starts a real per-profile
@@ -1235,6 +1245,133 @@ two stages touched. Resolving that would need reading CreepJS's own
 either stage — before a sixth attempt targeting Service Worker specifically
 would have a real, non-speculative hypothesis to test, rather than another
 guess-and-check mechanism variation.
+
+## Sixth investigation — root-causing the stealth regression precisely (not a new mitigation attempt)
+
+**What this was.** The fourth and fifth attempts' write-ups both ended on
+the same open question, framed by that point as needing CreepJS's own
+source read directly rather than guessed at. This stage did exactly that —
+downloaded the real, current `creep.js` from
+`https://abrahamjuliot.github.io/creepjs/creep.js` (not minified into one
+line; a normal, readable ~9700-line file) and located the exact function
+behind the "stealth" score, rather than continuing to infer it from
+rendered output. This produced a specific, testable hypothesis —
+`Function.prototype.toString` tamper-detection — which was then verified
+empirically, not assumed either way. No new mitigation was built or
+shipped this stage; this is a diagnosis, using attempt five's already-known
+mechanism (re-applied temporarily, then reverted again) purely as a probe
+to extract data the rendered page never showed before.
+
+**What the source actually shows.** `getHeadlessFeatures()` computes a
+`stealth` object with exactly five boolean keys — `hasIframeProxy`,
+`hasHighChromeIndex`, `hasBadChromeRuntime`, `hasToStringProxy`, and
+`hasBadWebGL` — and `stealthRating` is simply
+`(number of true keys / 5) * 100`. A rating of exactly 20% therefore means
+exactly one of these five flipped true; the rendered page has never shown
+*which* one, only the aggregate percentage plus an opaque hash, which is
+why this required reading the actual object, not just the score. Two of
+the five keys are the ones the original hypothesis named:
+
+- **`hasToStringProxy: (!!lieProps['Function.toString'])`** — reads a
+  named entry from a much larger `lieProps` table, itself built once at
+  page load by `getPrototypeLies()`, a generic scanner that walks a large
+  set of prototype properties checking each for proxy-wrapping/native-code
+  tampering. This is the check the original hypothesis pointed at.
+- **`hasBadWebGL: (gpu && workerGPU && (gpu !== workerGPU))`** — a direct
+  cross-context consistency check: `gpu` comes from
+  `getCanvasWebgl()`'s own `UNMASKED_RENDERER_WEBGL` read (the same value
+  CreepJS's separate "WebGL" report row displays), `workerGPU` from
+  `getBestWorkerScope()`'s own reading (the same value the "Worker" report
+  row displays) — this is CreepJS's own built-in check for exactly the
+  class of inconsistency this document's fourth and fifth attempts
+  produced: the worker-side GPU corrected, the other side not.
+
+**Checking the existing, already-working patches for any toString
+handling at all — there is none.** `grep`-ing `spoofingScript.ts` for any
+`.toString` reference or "native code" string returns nothing. None of the
+canvas, audio, WebGL, or navigator-identity overrides that have shipped
+and stayed at `0% stealth` in every capture (including this document's own
+very first CreepJS runs, long before any Service Worker attempt) spoof
+`Function.prototype.toString` in any way — they are all plain
+`proto.method = function () {...}` reassignments, exactly the shape a
+prototype scanner's native-code check would normally flag if it were
+actually catching this project's own patches. That every one of these
+already-shipped, always-on overrides has consistently produced
+`hasToStringProxy: false` (never once seen otherwise, across every capture
+in `docs/creepjs-results/`) is itself strong evidence against the
+hypothesis before even re-running anything: if lack of `toString`
+spoofing were what `hasToStringProxy` catches, the very first baseline
+capture — already running canvas noise, audio noise, and WebGL spoofing
+by default — would have shown it too, and it never has.
+
+**Empirical verification — the hypothesis is directly, conclusively
+disconfirmed.** Attempt five's `disableServiceWorker` patch (JS deletion
+of `Navigator.prototype.serviceWorker`) was reapplied verbatim, purely as
+a probe, with one addition: instead of reading only
+`document.body.innerText` (which excludes the stealth modal's contents,
+since they render with `visibility: hidden` until clicked — the actual
+reason no prior capture ever showed the per-key breakdown), the raw
+`innerHTML` around the stealth modal's content was extracted directly.
+Run three times for baseline and twice for the experiment condition, the
+exact same five-key breakdown every time:
+
+| Run | `hasIframeProxy` | `hasHighChromeIndex` | `hasBadChromeRuntime` | `hasToStringProxy` | `hasBadWebGL` | rating |
+|---|---|---|---|---|---|---|
+| Baseline ×3 | false | false | false | **false** | **false** | 0% |
+| Experiment ×2 | false | false | false | **false** | **true** | 20% |
+
+`hasToStringProxy` never once changed — `false` in every single run,
+baseline and experiment alike. The only key that ever moved is
+`hasBadWebGL`, exactly matching the mechanism traced from source before
+any of this was run: with `navigator.serviceWorker` made absent, CreepJS
+falls back to `SharedWorker` for its `workerGPU` reading (correctly
+spoofed by this project's already-shipped Worker propagation), while `gpu`
+(the separate "WebGL" report row, always real, unaffected by this or any
+prior attempt) stays the real host GPU — a genuine, newly-created
+mismatch between the two that didn't exist in the baseline, where *both*
+sides leaked the same real GPU and therefore agreed with each other.
+
+**A precise root cause for the long-standing "WebGL section" leak, as a
+side effect of this investigation.** Tracing where `gpu` actually comes
+from settled a question the fourth attempt's write-up left open ("not
+clearly tied to the Service-Worker-vs-SharedWorker fallback"). `getCanvasWebgl()`
+creates its probe canvas via `win = PHANTOM_DARKNESS` (falling back to the
+real `window` only on Brave or if unavailable) and
+`new win.OffscreenCanvas(256, 256)`. `PHANTOM_DARKNESS` — traced to
+`getPhantomIframe()` — is a **real, hidden `<iframe>` CreepJS injects into
+the page itself** (`document.body.appendChild` of a fragment containing
+`<div style="[ghost/off-screen styles]"><iframe></iframe></div>`), and
+`PHANTOM_DARKNESS` is that iframe's own `contentWindow`. An
+`OffscreenCanvas` constructed via `new win.OffscreenCanvas(...)` where
+`win` is a *different* window belongs to that window's own separate
+realm — its own native `WebGLRenderingContext` constructor and prototype,
+entirely distinct from the top-level webview document's. This project's
+spoofing injection (`diagnosticsPreload.js`'s script-tag technique, plus
+the `wrapWorkerCtor` propagation into Worker/SharedWorker) has never
+reached into an iframe a *page itself* creates — only the webview's own
+top document and the Workers it spawns. That gap, not any Service Worker
+mechanism, is the actual, now-precisely-located reason CreepJS's separate
+"WebGL" row has leaked the real GPU in every capture this whole document
+has ever taken, including ones with no Service Worker experiment active
+at all. Closing it would mean extending WebGL (and, for full consistency,
+canvas/audio/navigator) propagation to reach same-page iframes — an
+architecturally different, materially larger change than anything
+attempted in this document's five prior stages, none of which touched
+iframe propagation at all. Not attempted this stage; recorded here because
+it is now a real, verified prerequisite for `hasBadWebGL` to ever read
+`false` again with Service Worker's Worker-side leak also fixed — the two
+attempts that fixed the worker side without also fixing this side are
+exactly what exposed the mismatch this heuristic is built to catch.
+
+**No code shipped from this investigation.** The temporarily reapplied
+`disableServiceWorker` patch was reverted immediately after data
+collection, the same as every prior stage — this section exists purely to
+correct the record on *why* the stealth regression happens, with the
+actual mechanism now verified rather than hypothesized, and to close out
+the "final attempt in this direction" question the user posed: the
+direction the hypothesis pointed in (spoof `toString` on whatever the
+Service Worker patch touches) would not have helped, because nothing
+about `Function.prototype.toString` was ever the trigger.
 
 ## Automated test coverage
 
