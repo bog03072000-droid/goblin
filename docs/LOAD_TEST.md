@@ -231,6 +231,27 @@ erased.
 > original (mistaken) finding, not deleted — but treat "Result: WARN" as
 > historical, not current.
 
+> **Update (2026-09-06) — sensitivity checked, cross-hardware
+> re-measurement still not possible.** `ESTIMATED_MB_PER_RUNNING_PROFILE`
+> (585) and `SAFE_FREE_RAM_MARGIN_MB` (1536) both remain derived from the
+> single real machine measured above — no second physical machine with a
+> different RAM/CPU configuration was available in this development
+> environment, so an actual cross-hardware re-measurement could not be
+> done here. What was checked instead: `safeAdditionalStartCount()`'s
+> formula was run against a simulated matrix of realistic total-free-RAM
+> values (2/4/8/16/32/64 GB — `tests/unit/memoryGuard.test.ts`'s
+> sensitivity matrix) using the current constants, confirming the
+> recommendation scales monotonically (more free RAM never recommends
+> fewer concurrent starts) and never itself recommends a count that would
+> violate the safety margin, across that whole range — not just the
+> handful of boundary points the original tests covered. This verifies the
+> *formula's* correctness generally; it does not and cannot verify that
+> 585 MB/profile is the right number on a machine with, say, a different
+> GPU or a much older CPU. That remains this feature's one honestly
+> unresolved limitation — flagged in `memoryGuard.ts`'s own comment as
+> something a future session with access to different hardware should
+> re-measure.
+
 **This is the one place this report cannot give a clean PASS, and that is
 reported honestly rather than worked around.**
 

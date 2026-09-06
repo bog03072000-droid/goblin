@@ -56,6 +56,56 @@ describe('safeAdditionalStartCount', () => {
   });
 });
 
+/**
+ * Sensitivity matrix requested explicitly because ESTIMATED_MB_PER_RUNNING_PROFILE
+ * and SAFE_FREE_RAM_MARGIN_MB are both derived from a single real measurement
+ * on one machine (docs/LOAD_TEST.md) — no second physical machine with a
+ * different RAM configuration was available in this environment to
+ * re-measure against, so this cannot become a genuine hardware-diversity
+ * test. What it CAN honestly verify: that the formula itself behaves
+ * sensibly and monotonically across the realistic range of total-free-RAM a
+ * real user's machine might report, not just the handful of boundary points
+ * the tests above already cover for the current constant's exact value.
+ * If a future re-measurement on different hardware changes either
+ * constant, this matrix still documents the expected shape of the
+ * response curve to sanity-check against.
+ */
+describe('safeAdditionalStartCount — sensitivity across realistic machine RAM totals', () => {
+  const GB = 1024 * MB;
+  // Free RAM at the moment of a bulk-start click, not total installed RAM —
+  // already assumes the OS/other apps have claimed some share, same as any
+  // real os.freemem() reading would.
+  const scenarios: Array<{ label: string; freeMemBytes: number }> = [
+    { label: 'low-end machine, 2GB free', freeMemBytes: 2 * GB },
+    { label: 'typical machine, 4GB free', freeMemBytes: 4 * GB },
+    { label: 'typical machine, 8GB free', freeMemBytes: 8 * GB },
+    { label: 'well-provisioned machine, 16GB free', freeMemBytes: 16 * GB },
+    { label: 'workstation, 32GB free', freeMemBytes: 32 * GB },
+    { label: 'high-end workstation, 64GB free', freeMemBytes: 64 * GB },
+  ];
+
+  it.each(scenarios)('$label: never recommends a concurrency that would itself violate the safety margin', ({ freeMemBytes }) => {
+    const recommended = safeAdditionalStartCount(freeMemBytes, 100); // no artificial concurrency cap
+    const projectedAfter = freeMemBytes / MB - recommended * ESTIMATED_MB_PER_RUNNING_PROFILE;
+    expect(projectedAfter).toBeGreaterThanOrEqual(SAFE_FREE_RAM_MARGIN_MB - ESTIMATED_MB_PER_RUNNING_PROFILE);
+  });
+
+  it('recommended concurrency is monotonically non-decreasing as free RAM increases', () => {
+    const recommendations = scenarios.map((s) => safeAdditionalStartCount(s.freeMemBytes, 100));
+    for (let i = 1; i < recommendations.length; i++) {
+      expect(recommendations[i]!).toBeGreaterThanOrEqual(recommendations[i - 1]!);
+    }
+  });
+
+  it('a low-end 2GB-free machine is still recommended at least 1 (never fully stalls the queue)', () => {
+    expect(safeAdditionalStartCount(2 * GB, 4)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a high-end 64GB-free machine is capped at the requested concurrency, not left unbounded', () => {
+    expect(safeAdditionalStartCount(64 * GB, 4)).toBe(4);
+  });
+});
+
 describe('LowMemoryError', () => {
   it('carries the headroom details and formats a parseable message', () => {
     const headroom = checkMemoryHeadroom(500 * MB);

@@ -14,6 +14,20 @@ import { formatLowMemoryError } from '../../shared/utils/lowMemory';
 export const ESTIMATED_MB_PER_RUNNING_PROFILE = 585;
 
 /**
+ * Honest limitation, not fixed: both this constant and SAFE_FREE_RAM_MARGIN_MB
+ * below are derived from ONE real measurement on ONE physical machine
+ * (docs/LOAD_TEST.md's 31.1GB-RAM test box) — no second machine with a
+ * different RAM/CPU/OS configuration was available in this development
+ * environment to re-measure against and confirm the constant generalizes.
+ * The FORMULA that consumes them (safeAdditionalStartCount(), below) is
+ * verified to behave sensibly and monotonically across a wide simulated
+ * range of free-RAM totals (tests/unit/memoryGuard.test.ts's sensitivity
+ * matrix), so a future re-measurement on different hardware only ever
+ * requires updating these two numbers, not the surrounding logic — but the
+ * numbers themselves have a sample size of one.
+ */
+
+/**
  * Same LOAD_TEST.md finding: the test machine (31.1GB total RAM) was
  * observed to become unreliable once ambient free memory dropped to
  * ~1-2GB, shared with the OS and other running applications. This margin
