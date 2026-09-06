@@ -523,6 +523,15 @@ th {
 td { transition: background var(--ease), box-shadow var(--ease); }
 tr:hover td { background: rgba(124, 179, 66, 0.05); }
 tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
+/* Same treatment as the hover state above, but keyed off a REAL keyboard
+   focus landing inside the row (its checkbox or any action button) rather
+   than any focus at all — :has(:focus-visible), not :focus-within, so a
+   mouse click into a button doesn't also trigger it (already covered by
+   :hover). Previously a keyboard user tabbing across many rows' action
+   buttons had no row-level "you are here" cue, only the individual
+   button's own default outline. */
+tr:has(:focus-visible) td { background: rgba(124, 179, 66, 0.05); }
+tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
 
 /* ---------- Proxy check-history panel (ProxiesPage.tsx) ---------- */
 .proxy-history-row td { background: var(--char); padding: 10px 14px; }

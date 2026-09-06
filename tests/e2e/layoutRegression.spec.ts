@@ -70,3 +70,42 @@ test('Profiles/Proxies/Downloads/Logs pages are NOT centered or width-capped (un
     expect(style.marginLeft).toBe('0px');
   }
 });
+
+test('a profile row highlights when keyboard focus lands on one of its buttons, not on mouse hover alone', async () => {
+  await window.getByText('Profiles', { exact: true }).click();
+  await window.getByPlaceholder('New profile name').fill('Layout Focus Row');
+  await window.getByRole('button', { name: 'New Profile', exact: true }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'Layout Focus Row' }) });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const firstCell = row.locator('td').first();
+
+  const unfocusedBackground = await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  // Real keyboard Tab presses, not a programmatic .focus() call — this
+  // exercises the actual :has(:focus-visible) selector the same way a real
+  // keyboard user would. Clicks the row's checkbox first, then Tab moves
+  // focus onward within the same row, not out of it.
+  const checkbox = row.locator('input[type="checkbox"]');
+  await checkbox.click();
+  await window.keyboard.press('Tab');
+  const startButton = row.getByRole('button', { name: 'Start', exact: true });
+  await expect(startButton).toBeFocused();
+
+  // `td { transition: background ... }` (global.css) means the new
+  // background animates in rather than applying instantly — polling
+  // (rather than a fixed sleep) waits exactly as long as the real
+  // transition takes, no more, no less, and would still fail if the rule
+  // never actually applied at all.
+  await expect
+    .poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor))
+    .toBe('rgba(124, 179, 66, 0.05)');
+
+  // Tabbing further, off the row's own buttons and onto whatever follows,
+  // removes the highlight again — this isn't a permanent "was ever
+  // focused" state. (The row's last action button is "Delete".)
+  for (let i = 0; i < 8; i++) {
+    await window.keyboard.press('Tab');
+  }
+  await expect(startButton).not.toBeFocused();
+  await expect.poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(unfocusedBackground);
+});
