@@ -201,27 +201,28 @@ export function ProfilesToolbar({
         value={newTags}
         onChange={(e) => onNewTagsChange(e.target.value)}
       />
-      {/* Primary/default action: creates a profile immediately with an
-          auto-generated fingerprint (the old "Quick create" behavior) — most
-          profile creation doesn't need per-field fingerprint/proxy tuning up
-          front, so that's now the one-click path under the familiar "New
-          Profile" label instead of a secondary button next to it. */}
-      <button
-        className="btn btn-primary"
-        onClick={onQuickCreate}
-        disabled={quickCreatePending}
-        title={t('profiles.quickCreate.hint')}
-      >
-        <UserPlus size={14} strokeWidth={2.25} />
-        {t('profiles.create')}
-      </button>
-      {/* Secondary action: the full multi-tab config modal (fingerprint
-          overrides, proxy assignment, manual mode) — nothing written until
-          its own "Create profile" confirms, same as before this swap. */}
-      <button className="btn btn-ghost" onClick={onCreate} title={t('profiles.customSetup.hint')}>
-        <SlidersHorizontal size={14} strokeWidth={2.25} />
-        {t('profiles.customSetup')}
-      </button>
+      {/* Grouped as one progressive flow, not two unrelated buttons: quick
+          create is the default one-click path (most profile creation needs
+          no per-field tuning), and the "Need more control?" prompt frames
+          "Custom setup" as where you go FROM quick-create when it isn't
+          enough — same two entry points as before, read as a continuation
+          instead of a second, parallel path. */}
+      <div className="flex-row-gap6">
+        <button
+          className="btn btn-primary"
+          onClick={onQuickCreate}
+          disabled={quickCreatePending}
+          title={t('profiles.quickCreate.hint')}
+        >
+          <UserPlus size={14} strokeWidth={2.25} />
+          {t('profiles.create')}
+        </button>
+        <span className="text-dim text-sm">{t('profiles.customSetup.prompt')}</span>
+        <button className="btn btn-ghost" onClick={onCreate} title={t('profiles.customSetup.hint')}>
+          <SlidersHorizontal size={14} strokeWidth={2.25} />
+          {t('profiles.customSetup')}
+        </button>
+      </div>
       <button className="btn btn-ghost" onClick={onImport}>
         <Upload size={14} strokeWidth={2.25} />
         {t('profiles.import')}
