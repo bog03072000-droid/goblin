@@ -278,6 +278,44 @@ machine can fully control that profile — read cookies, run arbitrary
 JavaScript on any open page, see everything the profile does. Regenerating
 it (same Advanced tab) immediately invalidates the old one.
 
+### Human-like input (`humanClick`/`humanType`)
+
+`src/shared/automation/humanInputDriver.ts` exports two helpers for
+automation scripts that want mouse/keyboard input to look like a real
+person's rather than a script's instant, linear actions — see
+`docs/BEHAVIORAL_EMULATION.md` for the research and architecture behind
+this (in short: it's a client-side layer over the CDP session you already
+have, not a change to the automation proxy itself, so it works with
+Puppeteer, Playwright, or a raw CDP client identically).
+
+```js
+const { chromium } = require('playwright');
+const { humanClick, humanType } = require('./src/shared/automation/humanInputDriver');
+
+const browser = await chromium.connectOverCDP('http://127.0.0.1:<port>?token=<token>');
+const context = browser.contexts()[0];
+const page = context.pages()[0];
+const client = await context.newCDPSession(page);
+
+// Moves along a curved, eased, jittered path from (100,100) to (400,300)
+// (not a straight-line teleport) before clicking.
+await humanClick(client, { x: 100, y: 100 }, { x: 400, y: 300 });
+
+// Click into a field first (a real click, e.g. via humanClick or
+// page.click()) so it actually has focus — humanType only dispatches key
+// events into whatever's currently focused, same as CDP itself.
+await humanType(client, 'hello world', { meanDelayMs: 90, stdDevMs: 30 });
+```
+
+Both accept the same shape of options documented in
+`humanInput.ts`/`humanInputDriver.ts`'s own JSDoc — notably `overshoot`
+(mouse: a deliberate past-the-target correction) and
+`mistakeProbability` (typing: an occasional plausible wrong-key +
+Backspace, 0/off by default). `CdpSession` is a one-method interface
+(`send(method, params)`), so a raw `chrome-remote-interface` or plain-`ws`
+client works too with a one-line adapter — it doesn't have to be
+Playwright's `newCDPSession`.
+
 ## Design
 
 Dark was the only theme through v0.1/v0.2 by deliberate choice, not an
