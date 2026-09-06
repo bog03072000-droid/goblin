@@ -158,3 +158,129 @@ export function buildHumanMousePath(from: Point, to: Point, options: HumanMouseP
 
   return points;
 }
+
+export interface KeystrokeEvent {
+  /** The character to type. For a synthetic "wrong key" event (see
+   * `mistake` below) this is the wrong character actually pressed, not
+   * the intended one. */
+  char: string;
+  /** Milliseconds to wait after the previous event before dispatching
+   * this one. Always 0 for the very first event. */
+  delayMs: number;
+  /** Present and true only on a deliberately-injected wrong keystroke —
+   * absent (not just false) on every normal event, so consumers can use a
+   * plain truthiness check. */
+  mistake?: true;
+  /** Present and true only on the corrective Backspace that follows a
+   * mistake — `char` is the literal string `'Backspace'` on this event. */
+  backspace?: true;
+}
+
+export interface HumanTypingOptions {
+  /** Mean delay between keystrokes, in milliseconds — roughly what a
+   * "typing speed" setting would control. */
+  meanDelayMs?: number;
+  /** Standard deviation of that per-keystroke delay — larger values
+   * produce more variable, less metronomic timing. */
+  stdDevMs?: number;
+  /** Hard floor under which a sampled delay is never allowed to fall
+   * (a Gaussian sample can otherwise go negative or implausibly small). */
+  minDelayMs?: number;
+  /** Probability (0-1) that any given lowercase a-z character is preceded
+   * by a plausible wrong keystroke + backspace correction. 0 (the
+   * default) disables mistake injection entirely — see
+   * docs/BEHAVIORAL_EMULATION.md's Part 4 for why this stays opt-in.
+   * Only applies to lowercase a-z; every other character always types
+   * cleanly regardless of this setting, since a meaningful adjacency map
+   * only exists for letters here. */
+  mistakeProbability?: number;
+  /** Source of randomness, called with no arguments and expected to
+   * return a value in [0, 1) — same contract as
+   * `HumanMousePathOptions.rng`, injectable for reproducible tests.
+   * Defaults to `Math.random`. */
+  rng?: () => number;
+}
+
+const DEFAULT_MEAN_DELAY_MS = 110;
+const DEFAULT_STD_DEV_MS = 40;
+const DEFAULT_MIN_DELAY_MS = 25;
+
+/** Adjacent-on-a-real-QWERTY-keyboard letters for the handful of common
+ * lowercase keys most likely to be hit by accident — deliberately small
+ * and English-QWERTY-specific rather than a full physical keyboard model,
+ * matching this feature's own stated scope (a plausible mistake, not a
+ * layout simulator). Characters with no entry here never get a synthetic
+ * mistake, regardless of `mistakeProbability`. */
+const QWERTY_NEIGHBORS: Record<string, string[]> = {
+  a: ['s', 'q', 'z'],
+  b: ['v', 'n', 'g'],
+  c: ['x', 'v', 'd'],
+  d: ['s', 'f', 'e'],
+  e: ['w', 'r', 'd'],
+  f: ['d', 'g', 'r'],
+  g: ['f', 'h', 't'],
+  h: ['g', 'j', 'y'],
+  i: ['u', 'o', 'k'],
+  j: ['h', 'k', 'u'],
+  k: ['j', 'l', 'i'],
+  l: ['k', 'o'],
+  m: ['n', 'j'],
+  n: ['b', 'm', 'h'],
+  o: ['i', 'p', 'l'],
+  p: ['o', 'l'],
+  q: ['w', 'a'],
+  r: ['e', 't', 'f'],
+  s: ['a', 'd', 'w'],
+  t: ['r', 'y', 'g'],
+  u: ['y', 'i', 'j'],
+  v: ['c', 'b', 'f'],
+  w: ['q', 'e', 's'],
+  x: ['z', 'c', 's'],
+  y: ['t', 'u', 'h'],
+  z: ['a', 'x'],
+};
+
+/** Box-Muller transform: turns two uniform [0,1) samples from `rng` into
+ * one standard-normal sample, then scales/shifts it to the requested
+ * mean/stddev — the standard way to get Gaussian-distributed timing out
+ * of a plain uniform random source. */
+function sampleGaussian(rng: () => number, mean: number, stdDev: number): number {
+  const u1 = Math.max(rng(), Number.EPSILON); // avoid log(0)
+  const u2 = rng();
+  const standardNormal = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  return mean + standardNormal * stdDev;
+}
+
+/**
+ * Generates the ordered sequence of keystroke events a human-like typing
+ * of `text` should send — intended to become a real `keyDown`+`keyUp` CDP
+ * event pair per character (see humanInputDriver.ts), each separated by
+ * real wall-clock delay, rather than one instant value mutation.
+ */
+export function buildHumanTypingPlan(text: string, options: HumanTypingOptions = {}): KeystrokeEvent[] {
+  const rng = options.rng ?? Math.random;
+  const meanDelayMs = options.meanDelayMs ?? DEFAULT_MEAN_DELAY_MS;
+  const stdDevMs = options.stdDevMs ?? DEFAULT_STD_DEV_MS;
+  const minDelayMs = options.minDelayMs ?? DEFAULT_MIN_DELAY_MS;
+  const mistakeProbability = options.mistakeProbability ?? 0;
+
+  function nextDelay(): number {
+    return Math.max(minDelayMs, sampleGaussian(rng, meanDelayMs, stdDevMs));
+  }
+
+  const events: KeystrokeEvent[] = [];
+  for (const char of text) {
+    const neighbors = QWERTY_NEIGHBORS[char.toLowerCase()];
+    const shouldMistype = mistakeProbability > 0 && neighbors && rng() < mistakeProbability;
+
+    if (shouldMistype && neighbors) {
+      const wrongChar = neighbors[Math.floor(rng() * neighbors.length)]!;
+      events.push({ char: wrongChar, delayMs: events.length === 0 ? 0 : nextDelay(), mistake: true });
+      events.push({ char: 'Backspace', delayMs: nextDelay(), backspace: true });
+    }
+
+    events.push({ char, delayMs: events.length === 0 ? 0 : nextDelay() });
+  }
+
+  return events;
+}
