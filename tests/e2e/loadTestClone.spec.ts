@@ -123,7 +123,7 @@ for (let i = 0; i < PAIRS; i++) {
     await sourceRow.getByRole('button', { name: 'Edit' }).click();
     await window.getByText('fingerprint', { exact: true }).click();
     const sourceUserAgent = await window
-      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
       .locator('td')
       .textContent();
     await window.getByRole('button', { name: 'Close' }).click();
@@ -139,7 +139,7 @@ for (let i = 0; i < PAIRS; i++) {
     await cloneRow.getByRole('button', { name: 'Edit' }).click();
     await window.getByText('fingerprint', { exact: true }).click();
     const cloneUserAgent = await window
-      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
       .locator('td')
       .textContent();
     const fingerprintCarried = cloneUserAgent === sourceUserAgent;

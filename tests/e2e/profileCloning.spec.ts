@@ -107,7 +107,7 @@ test('cloning a profile copies its config (proxy/group/tags/fingerprint identity
   await sourceRow.getByRole('button', { name: 'Edit' }).click();
   await window.getByText('fingerprint', { exact: true }).click();
   const sourceUserAgent = await window
-    .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+    .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
     .locator('td')
     .textContent();
   await window.getByRole('button', { name: 'Close' }).click();
@@ -129,7 +129,7 @@ test('cloning a profile copies its config (proxy/group/tags/fingerprint identity
   await cloneRow.getByRole('button', { name: 'Edit' }).click();
   await window.getByText('fingerprint', { exact: true }).click();
   const cloneUserAgent = await window
-    .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+    .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
     .locator('td')
     .textContent();
   expect(cloneUserAgent).toBe(sourceUserAgent);

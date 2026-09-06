@@ -102,7 +102,7 @@ test('editing a profile shows its fingerprint and allows renaming', async () => 
 
   await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
   await window.getByText('fingerprint', { exact: true }).click();
-  await expect(window.locator('th', { hasText: 'User-Agent' })).toBeVisible();
+  await expect(window.locator('.fp-card-grid th', { hasText: 'User-Agent' })).toBeVisible();
   await window.getByRole('button', { name: 'Validate' }).click();
   await expect(window.locator('p', { hasText: /Valid|Invalid/ })).toBeVisible({ timeout: 10_000 });
 

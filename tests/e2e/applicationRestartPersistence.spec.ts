@@ -54,7 +54,7 @@ test('a profile, its configuration, and its storage all survive closing and reop
 
     await window.getByText('fingerprint', { exact: true }).click();
     const userAgentBefore = await window
-      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
       .locator('td')
       .textContent();
     expect(userAgentBefore).toBeTruthy();
@@ -92,7 +92,7 @@ test('a profile, its configuration, and its storage all survive closing and reop
     // The exact same fingerprint (not a freshly regenerated one) is still there.
     await window.getByText('fingerprint', { exact: true }).click();
     const userAgentAfter = await window
-      .locator('tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
+      .locator('.fp-card-grid tr', { has: window.locator('th', { hasText: 'User-Agent' }) })
       .locator('td')
       .textContent();
     expect(userAgentAfter).toBe(userAgentBefore);
