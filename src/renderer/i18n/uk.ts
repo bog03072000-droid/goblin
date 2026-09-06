@@ -76,6 +76,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.quickCreate.hint': 'Створити профіль миттєво з автоматично згенерованим fingerprint — без модального вікна',
   'profiles.create': 'Новий профіль',
   'profiles.customSetup': 'Детальне налаштування',
+  'profiles.customSetup.prompt': 'Потрібно більше налаштувань?',
   'profiles.customSetup.hint': 'Відкрити повну модалку налаштувань — перевизначення fingerprint, призначення проксі, ручний режим',
   'profiles.import': 'Імпорт',
   'profiles.restore': 'Відновити',
@@ -334,6 +335,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'proxy.geolocate.failed': 'Не вдалося визначити локацію',
   'proxy.geolocate.mismatchWarning':
     'У {count} профіл(ів), що використовують цей проксі, часовий пояс відрізняється від визначеної локації проксі ({country}) — трафік і заявлений часовий пояс можуть не збігатися.',
+  'proxy.geolocate.hostOnlyNotice':
+    'SOCKS5-проксі не можна перевірити через реальний тунель — це заявлена локація хоста проксі, а не перевірений вихідний IP.',
   'proxy.status.ok': 'OK ({ms}мс)',
   'proxy.status.failed': 'Помилка: {error}',
   'proxy.status.autoOk': 'OK · {ms}мс · {when}',

@@ -15,6 +15,15 @@ interface ProxyGeolocation {
   timezone: string;
 }
 
+// geolocateProxy() on the main-process side already falls back from a
+// tunnel check to a host-only lookup for socks5 (unsupported-protocol is
+// resolved internally there) — the renderer only ever sees a successful
+// result (with verifiedThroughTunnel telling the two cases apart) or a
+// genuine lookup failure.
+type ProxyGeolocationResult =
+  | { ok: true; geo: ProxyGeolocation; verifiedThroughTunnel: boolean }
+  | { ok: false; reason: 'lookup-failed' };
+
 /** "3m ago" / "2h ago" / "just now" — used for the proxy health-check badge's
  * timestamp so it stays readable without a full date. */
 function formatRelativeTime(iso: string, t: ReturnType<typeof useTranslation>['t']): string {
@@ -79,9 +88,9 @@ export function ProxiesPage(): JSX.Element {
   // Proxy geolocation (IP -> country/timezone) — on-demand per proxy, not
   // fetched automatically for every stored proxy on page load, since the
   // free geolocation API this uses is rate-limited (see
-  // proxyGeolocation.ts). `null` after a lookup means "checked, but the
-  // service couldn't determine a location" — distinct from "never checked".
-  const [geo, setGeo] = useState<Record<string, ProxyGeolocation | null>>({});
+  // proxyGeolocation.ts). Absence from this map means "never checked";
+  // presence (success or failure) means a check has actually happened.
+  const [geo, setGeo] = useState<Record<string, ProxyGeolocationResult>>({});
   const [geoPendingId, setGeoPendingId] = useState<string | null>(null);
   // Profiles using each proxy are fetched lazily alongside a geolocation
   // check (not on page load, not kept around afterward) purely to answer
@@ -139,28 +148,30 @@ export function ProxiesPage(): JSX.Element {
     });
   }
 
-  /** Geolocates the proxy's own host (see proxyGeolocation.ts's doc comment
-   * for what this does and doesn't verify), then cross-references every
-   * profile directly assigned to this proxy against its detected timezone
-   * — a mismatch is a real, actionable signal that a profile's claimed
-   * timezone/locale doesn't match where its proxy traffic appears to
-   * originate, one of the more detectable inconsistencies a fingerprinting
-   * site can check for. Only ever triggered by this button, never
-   * automatically, since the underlying API is rate-limited. */
+  /** Geolocates the proxy — routed through the proxy's own real CONNECT
+   * tunnel for http/https proxies (genuinely verified, not just the
+   * proxy's advertised host), falling back to a host-only lookup for
+   * socks5 (see proxyGeolocation.ts's doc comments for exactly why) —
+   * then cross-references every profile directly assigned to this proxy
+   * against its detected timezone. A mismatch is a real, actionable signal
+   * that a profile's claimed timezone/locale doesn't match where its proxy
+   * traffic actually originates, one of the more detectable inconsistencies
+   * a fingerprinting site can check for. Only ever triggered by this
+   * button, never automatically, since the underlying API is rate-limited. */
   async function checkGeolocation(proxyId: string): Promise<void> {
     setGeoPendingId(proxyId);
     await run(async () => {
       const [result, allProfiles] = await Promise.all([
-        callApi<'proxy:geolocate', ProxyGeolocation | null>('proxy:geolocate', { id: proxyId }),
+        callApi<'proxy:geolocate', ProxyGeolocationResult>('proxy:geolocate', { id: proxyId }),
         callApi<'profiles:list', ProfileListItem[]>('profiles:list', {}),
       ]);
       setGeo((prev) => ({ ...prev, [proxyId]: result }));
       const usingThisProxy = allProfiles.filter((p) => p.proxyId === proxyId);
-      if (result && usingThisProxy.length > 0) {
+      if (result.ok && usingThisProxy.length > 0) {
         const fingerprints = await Promise.all(
           usingThisProxy.map((p) => callApi<'fingerprint:get', Fingerprint | null>('fingerprint:get', { id: p.fingerprintId })),
         );
-        const mismatches = fingerprints.filter((fp) => fp && fp.timezone !== result.timezone).length;
+        const mismatches = fingerprints.filter((fp) => fp && fp.timezone !== result.geo.timezone).length;
         setMismatchedProfileCount((prev) => ({ ...prev, [proxyId]: mismatches }));
       } else {
         setMismatchedProfileCount((prev) => ({ ...prev, [proxyId]: 0 }));
@@ -369,28 +380,32 @@ export function ProxiesPage(): JSX.Element {
                   )}
                 </td>
                 <td>
-                  {geo[p.id] ? (
-                    <span
-                      className={`pill ${mismatchedProfileCount[p.id] ? 'warn' : 'on'}`}
-                      title={
-                        mismatchedProfileCount[p.id]
-                          ? t('proxy.geolocate.mismatchWarning', {
-                              count: mismatchedProfileCount[p.id]!,
-                              country: geo[p.id]!.country,
-                            })
-                          : undefined
-                      }
-                    >
-                      {t('proxy.geolocate.result', { country: geo[p.id]!.country, timezone: geo[p.id]!.timezone })}
-                    </span>
-                  ) : p.id in geo ? (
-                    <span className="pill danger">{t('proxy.geolocate.failed')}</span>
-                  ) : (
-                    <button className="btn btn-ghost btn-sm" onClick={() => void checkGeolocation(p.id)} disabled={geoPendingId === p.id}>
-                      <MapPin size={13} strokeWidth={2.25} />
-                      {geoPendingId === p.id ? t('common.loading') : t('proxy.geolocate')}
-                    </button>
-                  )}
+                  {(() => {
+                    const g = geo[p.id];
+                    if (!g) {
+                      return (
+                        <button className="btn btn-ghost btn-sm" onClick={() => void checkGeolocation(p.id)} disabled={geoPendingId === p.id}>
+                          <MapPin size={13} strokeWidth={2.25} />
+                          {geoPendingId === p.id ? t('common.loading') : t('proxy.geolocate')}
+                        </button>
+                      );
+                    }
+                    if (!g.ok) {
+                      return <span className="pill danger">{t('proxy.geolocate.failed')}</span>;
+                    }
+                    const mismatches = mismatchedProfileCount[p.id];
+                    const title = mismatches
+                      ? t('proxy.geolocate.mismatchWarning', { count: mismatches, country: g.geo.country })
+                      : !g.verifiedThroughTunnel
+                        ? t('proxy.geolocate.hostOnlyNotice')
+                        : undefined;
+                    return (
+                      <span className={`pill ${mismatches ? 'warn' : 'on'}`} title={title}>
+                        {t('proxy.geolocate.result', { country: g.geo.country, timezone: g.geo.timezone })}
+                        {!g.verifiedThroughTunnel && ' *'}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>

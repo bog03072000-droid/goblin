@@ -6,7 +6,11 @@ vi.mock('../../src/main/proxy/proxyTester', () => ({
 }));
 
 vi.mock('../../src/main/proxy/proxyGeolocation', () => ({
-  geolocateHost: vi.fn(async () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' })),
+  geolocateProxy: vi.fn(async () => ({
+    ok: true,
+    verifiedThroughTunnel: true,
+    geo: { country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' },
+  })),
 }));
 
 vi.mock('../../src/main/logs/logsExport', () => ({
@@ -16,7 +20,7 @@ vi.mock('../../src/main/logs/logsExport', () => ({
 const { ipcMain } = await import('electron');
 const { registerIpc } = await import('../../src/main/ipc/registerIpc');
 const { testProxyConnection } = await import('../../src/main/proxy/proxyTester');
-const { geolocateHost } = await import('../../src/main/proxy/proxyGeolocation');
+const { geolocateProxy } = await import('../../src/main/proxy/proxyGeolocation');
 const { exportLogsToFile } = await import('../../src/main/logs/logsExport');
 
 const PROFILE_ID = '11111111-1111-1111-1111-111111111111';
@@ -374,16 +378,24 @@ describe('registerIpc', () => {
       expect(deps.proxies.listCheckHistory).toHaveBeenCalledWith(OTHER_ID);
     });
 
-    it('proxy:geolocate looks up the proxy and geolocates its host', async () => {
+    it('proxy:geolocate looks up the proxy and password, and geolocates it (tunnel-first, see geolocateProxy)', async () => {
       const result = await invoke('proxy:geolocate', { id: OTHER_ID });
-      expect(geolocateHost).toHaveBeenCalledWith('1.2.3.4');
-      expect(result).toEqual({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' });
+      expect(deps.proxies.getPassword).toHaveBeenCalledWith(OTHER_ID);
+      expect(geolocateProxy).toHaveBeenCalledWith(
+        expect.objectContaining({ host: '1.2.3.4' }),
+        'secret',
+      );
+      expect(result).toEqual({
+        ok: true,
+        verifiedThroughTunnel: true,
+        geo: { country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' },
+      });
     });
 
     it('proxy:geolocate rejects when the proxy no longer exists', async () => {
       deps.proxies.getById.mockReturnValue(null);
       await expect(invoke('proxy:geolocate', { id: OTHER_ID })).rejects.toThrow('Proxy not found');
-      expect(geolocateHost).not.toHaveBeenCalled();
+      expect(geolocateProxy).not.toHaveBeenCalled();
     });
   });
 

@@ -313,22 +313,39 @@ describe('ProxiesPage', () => {
   });
 
   describe('geolocation', () => {
-    it('shows the country/timezone pill after a successful check', async () => {
+    const tunnelGeo = { ok: true, verifiedThroughTunnel: true, geo: { country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' } };
+
+    it('shows the country/timezone pill after a successful tunnel-verified check, with no asterisk', async () => {
       mockInvoke({
         'proxy:list': () => [makeProxy({})],
-        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'proxy:geolocate': () => tunnelGeo,
         'profiles:list': () => [],
       });
       renderPage();
       fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
 
-      expect(await screen.findByText('Germany (Europe/Berlin)')).toBeInTheDocument();
+      const pill = await screen.findByText((content) => content.startsWith('Germany (Europe/Berlin)'));
+      expect(pill.textContent).toBe('Germany (Europe/Berlin)');
     });
 
-    it('shows a failure pill when the API cannot determine a location', async () => {
+    it('shows an asterisk and a host-only notice when the check falls back to a host-only lookup (e.g. SOCKS5)', async () => {
+      mockInvoke({
+        'proxy:list': () => [makeProxy({ protocol: 'socks5' })],
+        'proxy:geolocate': () => ({ ok: true, verifiedThroughTunnel: false, geo: tunnelGeo.geo }),
+        'profiles:list': () => [],
+      });
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
+
+      const pill = await screen.findByText((content) => content.startsWith('Germany (Europe/Berlin)'));
+      expect(pill.textContent).toBe('Germany (Europe/Berlin) *');
+      expect(pill).toHaveAttribute('title', expect.stringContaining("SOCKS5"));
+    });
+
+    it('shows a failure pill when the lookup fails entirely', async () => {
       mockInvoke({
         'proxy:list': () => [makeProxy({})],
-        'proxy:geolocate': () => null,
+        'proxy:geolocate': () => ({ ok: false, reason: 'lookup-failed' }),
         'profiles:list': () => [],
       });
       renderPage();
@@ -340,14 +357,14 @@ describe('ProxiesPage', () => {
     it('flags a mismatch when a profile assigned to this proxy has a different timezone', async () => {
       const invoke = mockInvoke({
         'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
-        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'proxy:geolocate': () => tunnelGeo,
         'profiles:list': () => [{ id: 'p1', proxyId: 'proxy-1', fingerprintId: 'fp1' }],
         'fingerprint:get': () => ({ timezone: 'America/New_York' }),
       });
       renderPage();
       fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
 
-      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      const pill = await screen.findByText((content) => content.startsWith('Germany (Europe/Berlin)'));
       expect(pill.className).toContain('warn');
       expect(pill).toHaveAttribute('title', expect.stringContaining('1 profile(s)'));
       expect(invoke).toHaveBeenCalledWith('fingerprint:get', { id: 'fp1' });
@@ -356,14 +373,14 @@ describe('ProxiesPage', () => {
     it('does not flag a mismatch when the assigned profile\'s timezone matches', async () => {
       mockInvoke({
         'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
-        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'proxy:geolocate': () => tunnelGeo,
         'profiles:list': () => [{ id: 'p1', proxyId: 'proxy-1', fingerprintId: 'fp1' }],
         'fingerprint:get': () => ({ timezone: 'Europe/Berlin' }),
       });
       renderPage();
       fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
 
-      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      const pill = await screen.findByText((content) => content.startsWith('Germany (Europe/Berlin)'));
       expect(pill.className).toContain('on');
       expect(pill).not.toHaveAttribute('title');
     });
@@ -371,14 +388,14 @@ describe('ProxiesPage', () => {
     it('ignores profiles assigned to a different proxy when checking for mismatches', async () => {
       mockInvoke({
         'proxy:list': () => [makeProxy({ id: 'proxy-1' })],
-        'proxy:geolocate': () => ({ country: 'Germany', countryCode: 'DE', timezone: 'Europe/Berlin' }),
+        'proxy:geolocate': () => tunnelGeo,
         'profiles:list': () => [{ id: 'p1', proxyId: 'other-proxy', fingerprintId: 'fp1' }],
         'fingerprint:get': () => ({ timezone: 'America/New_York' }),
       });
       renderPage();
       fireEvent.click(await screen.findByRole('button', { name: 'Check location' }));
 
-      const pill = await screen.findByText('Germany (Europe/Berlin)');
+      const pill = await screen.findByText((content) => content.startsWith('Germany (Europe/Berlin)'));
       expect(pill.className).toContain('on');
     });
   });

@@ -74,6 +74,7 @@ const en = {
   'profiles.quickCreate.hint': 'Create a profile instantly with an auto-generated fingerprint — no modal',
   'profiles.create': 'New Profile',
   'profiles.customSetup': 'Custom setup',
+  'profiles.customSetup.prompt': 'Need more control?',
   'profiles.customSetup.hint': 'Open the full config modal instead — fingerprint overrides, proxy assignment, manual mode',
   'profiles.import': 'Import',
   'profiles.restore': 'Restore',
@@ -332,6 +333,8 @@ const en = {
   'proxy.geolocate.failed': 'Could not determine location',
   'proxy.geolocate.mismatchWarning':
     '{count} profile(s) using this proxy have a different timezone than its detected location ({country}) — their traffic and claimed timezone may not match.',
+  'proxy.geolocate.hostOnlyNotice':
+    "SOCKS5 proxies can't be checked through a real tunnel — this is the proxy's own advertised host location, not a verified exit IP.",
   'proxy.status.ok': 'OK ({ms}ms)',
   'proxy.status.failed': 'Failed: {error}',
   'proxy.status.autoOk': 'OK · {ms}ms · {when}',
