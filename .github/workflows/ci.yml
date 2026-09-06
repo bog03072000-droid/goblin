@@ -148,8 +148,22 @@ jobs:
       - run: npm ci
       - name: Rebuild native modules for Electron ABI
         run: npm run rebuild:electron
-      - name: Build unsigned macOS package
-        run: npm run package:mac
+      # `npm run package:mac` alone actually SUCCEEDED the first time this
+      # job ever ran on a real macOS host (release/GoblinAnty-0.3.0-arm64-
+      # mac.zip was genuinely built) — the job still failed because
+      # electron-builder auto-detects package.json's `build.publish`
+      # (github provider, for the existing Windows release flow) and tries
+      # to publish a GitHub release unless told not to, which needs a
+      # GH_TOKEN this job intentionally doesn't have (this job verifies a
+      # build, it doesn't cut a release). `--publish never` disables that
+      # auto-publish attempt. Also: output goes to `release/`, not `dist/`
+      # — package.json's `build.directories.output` — a mistake in this
+      # job's first version that the artifact-upload/smoke-test paths
+      # below now match.
+      - name: Build unsigned macOS package (no auto-publish)
+        run: |
+          npm run build
+          npx electron-builder --mac --publish never
       # Minimal smoke test: launches the actual packaged .app (not the
       # source tree, unlike the `e2e` job above — this is specifically
       # checking that what electron-builder produced is a launchable
@@ -160,9 +174,9 @@ jobs:
       - name: Smoke test — launch the packaged .app and confirm it stays up
         shell: bash
         run: |
-          APP_PATH=$(find dist -maxdepth 1 -name "*.app" | head -n1)
+          APP_PATH=$(find release -name "*.app" | head -n1)
           if [ -z "$APP_PATH" ]; then
-            echo "No .app bundle found under dist/ — package:mac did not produce one"
+            echo "No .app bundle found under release/ — package:mac did not produce one"
             exit 1
           fi
           echo "Found: $APP_PATH"
@@ -180,6 +194,6 @@ jobs:
         with:
           name: macos-package-unsigned
           path: |
-            dist/*.zip
-            dist/*.app
+            release/*.zip
+            release/**/*.app
           retention-days: 7
