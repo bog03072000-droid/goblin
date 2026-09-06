@@ -81,7 +81,23 @@ function mockInvoke(overrides: Partial<Record<string, (payload: unknown) => unkn
     'groups:list': () => [],
     'profiles:getAutomationToken': () => ({ token: null }),
     'settings:get': () => ({ defaultAutomationPort: null }),
-    'fingerprint:options': () => ({ platforms: [], browserVersions: [] }),
+    'fingerprint:options': () => ({
+      platforms: [
+        {
+          os: 'windows',
+          osVersions: ['10', '11'],
+          platform: 'Win32',
+          screens: [{ width: 1920, height: 1080 }],
+          hardwareConcurrencyOptions: [4, 8, 16],
+          deviceMemoryOptions: [8, 16],
+          gpuOptions: [{ vendor: 'Google Inc.', renderer: 'ANGLE' }],
+        },
+      ],
+      browserVersions: ['128.0.0.0'],
+    }),
+    'profiles:clearCache': () => undefined,
+    'fingerprint:update': (p) => ({ ...makeFingerprint(), ...(p as object) }),
+    'fingerprint:validate': () => ({ valid: true, warnings: [], errors: [] }),
     ...overrides,
   };
   const invoke = vi.fn((channel: string, payload: unknown) => {
@@ -149,5 +165,113 @@ describe('ProfileEditorModal — per-tab unsaved-changes marker', () => {
 
     expect(generalTab.querySelector('.tab-dirty-dot')).not.toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith('profiles:update', expect.anything());
+  });
+});
+
+describe('ProfileEditorModal — Proxy tab save', () => {
+  it('changing the assigned proxy and clicking Save calls profiles:update with the new proxyId, then reloads', async () => {
+    const invoke = mockInvoke({
+      'proxy:list': () => [
+        { id: '33333333-3333-3333-3333-333333333333', name: 'Proxy 1', protocol: 'http', host: '1.2.3.4', port: 8080, lastCheckStatus: null, lastCheckedAt: null, lastCheckLatencyMs: null, createdAt: '', updatedAt: '' },
+      ],
+      'profiles:update': (p) => makeProfile(p as Partial<Profile>),
+    });
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('proxy'));
+
+    fireEvent.change(screen.getByLabelText('Assigned proxy'), { target: { value: '33333333-3333-3333-3333-333333333333' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('profiles:update', { id: '11111111-1111-1111-1111-111111111111', proxyId: '33333333-3333-3333-3333-333333333333' }),
+    );
+    // saveProxy() reloads the whole profile afterward (see its own comment) —
+    // a second profiles:get call is the observable proof of that reload.
+    await waitFor(() => expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:get').length).toBeGreaterThanOrEqual(2));
+  });
+});
+
+describe('ProfileEditorModal — Fingerprint tab: regenerate, validate, manual save, spoofing', () => {
+  it('clicking Regenerate calls fingerprint:generate then fingerprint:update with the freshly generated fields', async () => {
+    const invoke = mockInvoke({
+      'fingerprint:generate': () => ({ ...makeFingerprint(), userAgent: 'Mozilla/5.0 (regenerated)' }),
+    });
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate (new random identity)' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('fingerprint:generate', expect.anything()));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'fingerprint:update',
+        expect.objectContaining({ id: '22222222-2222-2222-2222-222222222222', userAgent: 'Mozilla/5.0 (regenerated)' }),
+      ),
+    );
+  });
+
+  it('clicking Validate calls fingerprint:validate and shows the result', async () => {
+    const invoke = mockInvoke({
+      'fingerprint:validate': () => ({ valid: false, warnings: [], errors: ['platform mismatch'] }),
+    });
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('fingerprint:validate', expect.anything()));
+    await screen.findByText(/Invalid/);
+  });
+
+  it('editing a field in MANUAL mode and saving calls fingerprint:update with the parsed manual fields', async () => {
+    const invoke = mockInvoke({
+      'fingerprint:update': (p) => ({ ...makeFingerprint(), ...(p as object) }),
+    });
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+    fireEvent.click(screen.getByRole('button', { name: 'MANUAL' }));
+
+    const uaInput = screen.getByLabelText('User-Agent');
+    fireEvent.change(uaInput, { target: { value: 'Mozilla/5.0 (manual edit)' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'fingerprint:update',
+        expect.objectContaining({ id: '22222222-2222-2222-2222-222222222222', userAgent: 'Mozilla/5.0 (manual edit)' }),
+      ),
+    );
+  });
+
+  it('changing Canvas Mode calls fingerprint:update immediately with just that spoofing patch', async () => {
+    const invoke = mockInvoke({
+      'fingerprint:update': (p) => ({ ...makeFingerprint(), ...(p as object) }),
+    });
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+
+    fireEvent.change(screen.getByLabelText('Canvas Mode'), { target: { value: 'noise' } });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('fingerprint:update', { id: '22222222-2222-2222-2222-222222222222', canvasMode: 'noise' }),
+    );
+  });
+});
+
+describe('ProfileEditorModal — Storage tab: clear cache', () => {
+  it('clicking Clear Cache calls profiles:clearCache with this profile\'s id', async () => {
+    const invoke = mockInvoke();
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('storage'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Cache' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('profiles:clearCache', { id: '11111111-1111-1111-1111-111111111111' }));
   });
 });
