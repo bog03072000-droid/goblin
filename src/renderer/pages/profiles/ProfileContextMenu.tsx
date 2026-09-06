@@ -43,12 +43,37 @@ export function ProfileContextMenu({
   const isRunning = profile.status === 'RUNNING';
   const isTransitional = profile.status === 'STARTING' || profile.status === 'STOPPING';
 
+  // Real context menus are keyboard-operable without ever touching the
+  // mouse: arrow keys move between items, Enter/Space activates, Escape
+  // closes (already handled below). Before this, every item was a bare
+  // <div> with a mouse-only onClick — this makes the whole menu behave
+  // like the role="menu" it's actually presenting itself as.
+  function menuItems(): HTMLElement[] {
+    return ref.current ? Array.from(ref.current.querySelectorAll<HTMLElement>('[role="menuitem"]')) : [];
+  }
+
   useEffect(() => {
+    // Auto-focuses the first item on open so a keyboard-only interaction
+    // (e.g. this menu opened via a keyboard shortcut) can immediately use
+    // arrow keys/Enter without an extra Tab press first.
+    menuItems()[0]?.focus();
+
     function handleOutside(e: MouseEvent): void {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     }
     function handleKey(e: KeyboardEvent): void {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const items = menuItems();
+      if (items.length === 0) return;
+      e.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      const delta = e.key === 'ArrowDown' ? 1 : -1;
+      const nextIndex = (currentIndex + delta + items.length) % items.length;
+      items[nextIndex]!.focus();
     }
     document.addEventListener('mousedown', handleOutside);
     document.addEventListener('keydown', handleKey);
@@ -56,15 +81,25 @@ export function ProfileContextMenu({
       document.removeEventListener('mousedown', handleOutside);
       document.removeEventListener('keydown', handleKey);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose]);
 
   function item(label: string, action: () => void, danger = false): JSX.Element {
+    function activate(): void {
+      action();
+      onClose();
+    }
     return (
       <div
+        role="menuitem"
+        tabIndex={0}
         className={`context-menu-item${danger ? ' danger' : ''}`}
-        onClick={() => {
-          action();
-          onClose();
+        onClick={activate}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activate();
+          }
         }}
       >
         {label}
@@ -77,7 +112,7 @@ export function ProfileContextMenu({
   const top = Math.min(state.y, window.innerHeight - 320);
 
   return (
-    <div ref={ref} className="context-menu" style={{ left, top }}>
+    <div ref={ref} role="menu" className="context-menu" style={{ left, top }}>
       {!isRunning && !isTransitional && item(t('profiles.context.open'), () => onStart(profile.id))}
       {isRunning && item(t('profiles.context.stop'), () => onStop(profile.id))}
       {!isTransitional && item(t('profiles.action.restart'), () => onRestart(profile.id))}

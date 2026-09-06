@@ -677,9 +677,10 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
   cursor: pointer;
   color: var(--paper);
 }
-.context-menu-item:hover { background: var(--char-hi); color: var(--lime); }
+.context-menu-item:hover, .context-menu-item:focus-visible { background: var(--char-hi); color: var(--lime); }
+.context-menu-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--lime-glow) inset; }
 .context-menu-item.danger { color: var(--danger); }
-.context-menu-item.danger:hover { background: rgba(229, 72, 77, 0.12); }
+.context-menu-item.danger:hover, .context-menu-item.danger:focus-visible { background: rgba(229, 72, 77, 0.12); }
 .context-menu-divider { height: 1px; background: var(--stroke); margin: 4px 2px; }
 
 /* ---------- Modal (glassmorphism) ---------- */

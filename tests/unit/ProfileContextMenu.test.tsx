@@ -124,4 +124,58 @@ describe('ProfileContextMenu', () => {
     fireEvent.keyDown(document, { key: 'a' });
     expect(handlers.onClose).not.toHaveBeenCalled();
   });
+
+  it('the container has role="menu" and every item has role="menuitem" with tabIndex 0', () => {
+    renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThan(0);
+    for (const el of items) {
+      expect(el).toHaveAttribute('tabindex', '0');
+    }
+  });
+
+  it('auto-focuses the first menu item on open, for keyboard-only interaction', () => {
+    renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    expect(screen.getByText('Open')).toHaveFocus();
+  });
+
+  it('pressing Enter on a focused item activates it, same as a click', () => {
+    const handlers = renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    const openItem = screen.getByText('Open');
+    openItem.focus();
+    fireEvent.keyDown(openItem, { key: 'Enter' });
+    expect(handlers.onStart).toHaveBeenCalledWith('p1');
+    expect(handlers.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('pressing Space on a focused item activates it too', () => {
+    const handlers = renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    const restartItem = screen.getByText('Restart');
+    restartItem.focus();
+    fireEvent.keyDown(restartItem, { key: ' ' });
+    expect(handlers.onRestart).toHaveBeenCalledWith('p1');
+  });
+
+  it('ArrowDown moves focus to the next item, wrapping around from the last to the first', () => {
+    renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(items[1]).toHaveFocus();
+
+    items[items.length - 1]!.focus();
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(items[0]).toHaveFocus();
+  });
+
+  it('ArrowUp moves focus to the previous item, wrapping around from the first to the last', () => {
+    renderMenu({ state: { x: 0, y: 0, profile: makeProfile({ status: 'STOPPED' }) } });
+    const items = screen.getAllByRole('menuitem');
+    expect(items[0]).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'ArrowUp' });
+    expect(items[items.length - 1]).toHaveFocus();
+  });
 });
