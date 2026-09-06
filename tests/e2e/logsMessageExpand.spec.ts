@@ -32,13 +32,17 @@ test.afterAll(async () => {
 
 test('a log message expands on click, and its row highlights on real keyboard focus', async () => {
   // A real, distinctive activity-log entry: creating a profile logs
-  // PROFILE_CREATED with the profile's name in the message.
-  await window.getByPlaceholder('New profile name').fill('Logs Expand Target');
+  // PROFILE_CREATED with the profile's name in the message — the name is
+  // deliberately long enough that `Profile "<name>" created` clears
+  // LogsPage's own 80-char expand threshold (item 3's conditional toggle),
+  // since a short message would render no toggle at all to test here.
+  const profileName = 'Logs Expand Target Extra Long Name For Threshold Testing Purposes';
+  await window.getByPlaceholder('New profile name').fill(profileName);
   await window.getByRole('button', { name: 'New Profile', exact: true }).click();
-  await expect(window.locator('td', { hasText: 'Logs Expand Target' })).toBeVisible({ timeout: 10_000 });
+  await expect(window.locator('td', { hasText: profileName })).toBeVisible({ timeout: 10_000 });
 
   await window.getByText('Logs', { exact: true }).click();
-  const row = window.locator('tr', { has: window.locator('td', { hasText: 'Logs Expand Target' }) });
+  const row = window.locator('tr', { has: window.locator('td', { hasText: profileName }) });
   await expect(row).toBeVisible({ timeout: 10_000 });
   const toggle = row.locator('.log-message-toggle');
   await expect(toggle).toBeVisible();

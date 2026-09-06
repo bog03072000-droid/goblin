@@ -23,6 +23,10 @@ function makeEntry(overrides: Partial<ActivityLogEntry> = {}): ActivityLogEntry 
   } as ActivityLogEntry;
 }
 
+/** Comfortably over LogsPage's own LOG_MESSAGE_EXPAND_THRESHOLD (80 chars)
+ * — used wherever a test needs the expand toggle to actually render. */
+const LONG_MESSAGE = 'A'.repeat(90);
+
 function makeProfile(overrides: Partial<ProfileListItem> = {}): ProfileListItem {
   return { id: 'p1', name: 'Work Bot', status: 'STOPPED', ...overrides } as ProfileListItem;
 }
@@ -246,10 +250,10 @@ describe('LogsPage', () => {
   });
 
   describe('expandable message', () => {
-    it('renders each row\'s message inside a focusable toggle button, collapsed by default', async () => {
+    it('a message over the length threshold renders inside a focusable toggle button, collapsed by default', async () => {
       mockInvoke({
         'profiles:list': () => [],
-        'logs:list': () => [makeEntry({ id: 1, message: 'A very long message that would otherwise overflow the cell' })],
+        'logs:list': () => [makeEntry({ id: 1, message: LONG_MESSAGE })],
       });
       renderPage();
       // The button's own text content (the message) wins over `title` for
@@ -257,14 +261,25 @@ describe('LogsPage', () => {
       // attribute directly rather than by accessible name.
       const toggle = await screen.findByTitle('Show full message');
       expect(toggle.tagName).toBe('BUTTON');
-      expect(toggle).toHaveTextContent('A very long message that would otherwise overflow the cell');
+      expect(toggle).toHaveTextContent(LONG_MESSAGE);
       expect(toggle.querySelector('.log-message-expanded')).not.toBeInTheDocument();
+    });
+
+    it('a message at or under the length threshold has no toggle at all — it never truncates in the first place', async () => {
+      const shortMessage = 'A'.repeat(80); // exactly at the threshold
+      mockInvoke({
+        'profiles:list': () => [],
+        'logs:list': () => [makeEntry({ id: 1, message: shortMessage })],
+      });
+      renderPage();
+      expect(await screen.findByText(shortMessage)).toBeInTheDocument();
+      expect(screen.queryByTitle('Show full message')).not.toBeInTheDocument();
     });
 
     it('clicking the toggle expands the message and flips its title to "Show less"', async () => {
       mockInvoke({
         'profiles:list': () => [],
-        'logs:list': () => [makeEntry({ id: 1, message: 'Expand me' })],
+        'logs:list': () => [makeEntry({ id: 1, message: LONG_MESSAGE })],
       });
       renderPage();
       const toggle = await screen.findByTitle('Show full message');
@@ -278,7 +293,7 @@ describe('LogsPage', () => {
     it('clicking an expanded toggle again collapses it back', async () => {
       mockInvoke({
         'profiles:list': () => [],
-        'logs:list': () => [makeEntry({ id: 1, message: 'Toggle me twice' })],
+        'logs:list': () => [makeEntry({ id: 1, message: LONG_MESSAGE })],
       });
       renderPage();
       const toggle = await screen.findByTitle('Show full message');
@@ -292,7 +307,7 @@ describe('LogsPage', () => {
     it('expanding one row\'s message does not affect another row\'s', async () => {
       mockInvoke({
         'profiles:list': () => [],
-        'logs:list': () => [makeEntry({ id: 1, message: 'First' }), makeEntry({ id: 2, message: 'Second' })],
+        'logs:list': () => [makeEntry({ id: 1, message: `${LONG_MESSAGE} first` }), makeEntry({ id: 2, message: `${LONG_MESSAGE} second` })],
       });
       renderPage();
       const toggles = await screen.findAllByTitle('Show full message');

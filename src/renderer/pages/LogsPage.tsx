@@ -8,6 +8,12 @@ import { useTranslation } from '../i18n';
 
 const PAGE_SIZE = 50;
 
+/** Below this length a message never actually overflows `.log-message`'s
+ * own 480px/one-line truncation (roughly matches what fits at the app's
+ * base font size), so showing an expand affordance for it would be
+ * offering to reveal text that's already fully visible. */
+const LOG_MESSAGE_EXPAND_THRESHOLD = 80;
+
 const EVENT_TYPES: ActivityEventType[] = [
   'PROFILE_CREATED',
   'PROFILE_STARTED',
@@ -200,17 +206,24 @@ export function LogsPage(): JSX.Element {
                   </td>
                   <td>{profileName(e.profileId)}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="log-message-toggle"
-                      onClick={() => toggleExpanded(e.id)}
-                      title={expandedIds.has(e.id) ? t('logs.message.collapse') : t('logs.message.expand')}
-                    >
-                      {expandedIds.has(e.id) ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}
-                      <span className={expandedIds.has(e.id) ? 'log-message log-message-expanded' : 'log-message'}>
-                        {e.message}
-                      </span>
-                    </button>
+                    {e.message.length > LOG_MESSAGE_EXPAND_THRESHOLD ? (
+                      <button
+                        type="button"
+                        className="log-message-toggle"
+                        onClick={() => toggleExpanded(e.id)}
+                        title={expandedIds.has(e.id) ? t('logs.message.collapse') : t('logs.message.expand')}
+                      >
+                        {expandedIds.has(e.id) ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}
+                        <span className={expandedIds.has(e.id) ? 'log-message log-message-expanded' : 'log-message'}>
+                          {e.message}
+                        </span>
+                      </button>
+                    ) : (
+                      // Short enough to never truncate at the cell's own
+                      // max-width — no expand affordance to show for
+                      // something that's already showing everything.
+                      <span className="log-message-short">{e.message}</span>
+                    )}
                   </td>
                 </tr>
               ))}
