@@ -25,7 +25,8 @@
     "package:mac": "npm run build && electron-builder --mac",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3",
-    "check:browser-version": "node scripts/checkBrowserVersionSync.js"
+    "check:browser-version": "node scripts/checkBrowserVersionSync.js",
+    "check:dependency-engines": "node scripts/checkDependencyEnginesSync.js"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",
@@ -59,6 +60,7 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^30.0.1",
     "prettier": "^3.3.3",
+    "semver": "^7.8.5",
     "typescript": "^5.5.4",
     "vite": "^5.4.3",
     "vitest": "^2.0.5"

@@ -33,6 +33,15 @@ jobs:
       # — it only launches the electron binary itself, never touches
       # better-sqlite3.
       - run: npm run check:browser-version
+      # Same principle, generalized to every production dependency: fails
+      # the build if any of them declares an engines.node range the real
+      # Electron-bundled Node doesn't satisfy — the exact class of bug that
+      # shipped once already (undici@8 requiring Node >=22.19 while
+      # Electron 32.3.3 bundles Node 20.18.1, crashing every profile start
+      # at module-load time) and was only caught by a real E2E run, not by
+      # typecheck/lint/unit tests. See
+      # scripts/checkDependencyEnginesSync.js's own doc comment.
+      - run: npm run check:dependency-engines
       - name: Rebuild native modules for Node ABI
         run: npm run rebuild:node
       # Runs the exact same unit/integration suite as `npm test` plus a

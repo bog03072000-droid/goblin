@@ -15,30 +15,20 @@
  * someone remembering to check it by hand on every Electron bump.
  *
  * Run under plain Node (this is a build-time check, not part of the app
- * itself) — spawns the real Electron binary via printChromeVersion.js
- * specifically to read process.versions.chrome, which only exists inside
- * an actual Electron process.
+ * itself) — spawns the real Electron binary (see
+ * scripts/lib/getElectronRuntimeVersions.js) specifically to read
+ * process.versions.chrome, which only exists inside an actual Electron
+ * process.
  */
-const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { getElectronRuntimeVersions } = require('./lib/getElectronRuntimeVersions');
 
-const electronBin = require('electron');
-const printerScript = path.join(__dirname, 'printChromeVersion.js');
-
-const result = spawnSync(electronBin, [printerScript], { encoding: 'utf-8', timeout: 30_000 });
-if (result.error || result.status !== 0) {
-  console.error('Failed to launch Electron to read its real Chromium version:');
-  console.error(result.stderr || result.error);
-  process.exit(1);
-}
-
-// The last non-empty line, in case Electron prints unrelated stray
-// warnings to stdout before app.whenReady() resolves.
-const lines = result.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
-const actualChromeVersion = lines[lines.length - 1];
-if (!actualChromeVersion || !/^\d+\.\d+\.\d+\.\d+$/.test(actualChromeVersion)) {
-  console.error(`Could not parse a Chromium version out of Electron's output: ${JSON.stringify(result.stdout)}`);
+let actualChromeVersion;
+try {
+  ({ chrome: actualChromeVersion } = getElectronRuntimeVersions());
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 const actualMajor = actualChromeVersion.split('.')[0];
