@@ -155,3 +155,48 @@ describe('AdvancedTab — schedule', () => {
     expect(screen.queryByText(/Last auto-started/)).not.toBeInTheDocument();
   });
 });
+
+describe('AdvancedTab — live schedule validation', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows a plain "next run" hint when the scheduled time has not passed today', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00')); // Monday, before 09:00
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }) });
+    expect(screen.getByText('Next run: Mon 09:00')).toBeInTheDocument();
+    expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
+  });
+
+  it('shows the "already passed today" hint when today is scheduled but its time has gone by', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T10:00:00')); // Monday, after 09:00
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }) });
+    expect(screen.getByText("Today's time has already passed — the first run will be Mon 09:00.")).toBeInTheDocument();
+  });
+
+  it('updates the live preview immediately when typing a new time, before blur/save', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00')); // Monday, before either time
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }) });
+    const timeInput = screen.getByDisplayValue('09:00');
+    fireEvent.change(timeInput, { target: { value: '07:00' } }); // now in the past today
+    expect(screen.getByText("Today's time has already passed — the first run will be Mon 07:00.")).toBeInTheDocument();
+  });
+
+  it('updates the live preview immediately when toggling a day, before save', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00')); // Monday
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [3] }) }); // Wednesday only
+    expect(screen.getByText('Next run: Wed 09:00')).toBeInTheDocument();
+  });
+
+  it('shows no next-run hint at all when no days are selected (only the noDaysWarning)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00'));
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [] }) });
+    expect(screen.queryByText(/Next run:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
+  });
+});

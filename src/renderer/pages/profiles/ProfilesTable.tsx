@@ -21,29 +21,10 @@ import type { ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { computeNextScheduledRun } from '@shared/utils/scheduleNextRun';
-import { useTranslation, type TranslationKey } from '../../i18n';
+import { formatNextRun } from '../../utils/scheduleDisplay';
+import { useTranslation } from '../../i18n';
 import { STATUS_LABEL_KEYS } from './ProfilesToolbar';
 import { ProfileContextMenu, type ContextMenuState } from './ProfileContextMenu';
-
-const SCHEDULE_DAY_KEYS: TranslationKey[] = [
-  'editor.advanced.schedule.day.0',
-  'editor.advanced.schedule.day.1',
-  'editor.advanced.schedule.day.2',
-  'editor.advanced.schedule.day.3',
-  'editor.advanced.schedule.day.4',
-  'editor.advanced.schedule.day.5',
-  'editor.advanced.schedule.day.6',
-];
-
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : String(n);
-}
-
-/** "Mon 09:00" — same day abbreviations AdvancedTab's own day picker uses,
- * so a profile's schedule reads identically wherever it's shown. */
-function formatNextRun(next: Date, t: ReturnType<typeof useTranslation>['t']): string {
-  return `${t(SCHEDULE_DAY_KEYS[next.getDay()]!)} ${pad2(next.getHours())}:${pad2(next.getMinutes())}`;
-}
 
 const PILL_VARIANT: Record<ProfileStatus, string> = {
   RUNNING: 'on',

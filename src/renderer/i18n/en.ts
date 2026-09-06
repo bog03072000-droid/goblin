@@ -311,6 +311,8 @@ const en = {
   'editor.advanced.schedule.day.5': 'Fri',
   'editor.advanced.schedule.day.6': 'Sat',
   'editor.advanced.schedule.noDaysWarning': 'Pick at least one day for the schedule to actually run.',
+  'editor.advanced.schedule.todayPassed': "Today's time has already passed — the first run will be {when}.",
+  'editor.advanced.schedule.nextRun': 'Next run: {when}',
   'editor.advanced.schedule.lastTriggered': 'Last auto-started',
   'profiles.table.nextRun': 'Next auto-start: {when}',
   'common.copy': 'Copy',

@@ -313,6 +313,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.advanced.schedule.day.5': 'Пт',
   'editor.advanced.schedule.day.6': 'Сб',
   'editor.advanced.schedule.noDaysWarning': 'Оберіть хоча б один день, щоб розклад справді спрацював.',
+  'editor.advanced.schedule.todayPassed': 'Сьогоднішній час уже минув — перший запуск буде {when}.',
+  'editor.advanced.schedule.nextRun': 'Наступний запуск: {when}',
   'editor.advanced.schedule.lastTriggered': 'Останній автозапуск',
   'profiles.table.nextRun': 'Наступний автозапуск: {when}',
   'common.copy': 'Копіювати',

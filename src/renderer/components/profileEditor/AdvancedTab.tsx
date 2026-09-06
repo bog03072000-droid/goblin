@@ -1,17 +1,9 @@
 import { useState } from 'react';
 import { Copy, RefreshCw, ShieldCheck, CalendarClock } from 'lucide-react';
 import type { Profile } from '@shared/schemas/profile';
-import { useTranslation, type TranslationKey } from '../../i18n';
-
-const SCHEDULE_DAY_KEYS: TranslationKey[] = [
-  'editor.advanced.schedule.day.0',
-  'editor.advanced.schedule.day.1',
-  'editor.advanced.schedule.day.2',
-  'editor.advanced.schedule.day.3',
-  'editor.advanced.schedule.day.4',
-  'editor.advanced.schedule.day.5',
-  'editor.advanced.schedule.day.6',
-];
+import { computeNextScheduledRun } from '@shared/utils/scheduleNextRun';
+import { SCHEDULE_DAY_KEYS, formatNextRun } from '../../utils/scheduleDisplay';
+import { useTranslation } from '../../i18n';
 
 export function AdvancedTab({
   profile,
@@ -41,6 +33,13 @@ export function AdvancedTab({
   const portInvalid = portDraft.trim() !== '' && (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535);
   const [timeDraft, setTimeDraft] = useState(profile.scheduleTime ?? '09:00');
   const scheduleDays = profile.scheduleDays ?? [];
+  // Live preview, recomputed on every render from the current draft/day
+  // selection — not the last-saved profile.scheduleTime/scheduleDays — so
+  // it reacts to typing a time or toggling a day immediately, before the
+  // onBlur/onClick save round-trip completes.
+  const now = new Date();
+  const nextRun = computeNextScheduledRun(now, timeDraft, scheduleDays);
+  const todayAlreadyPassed = scheduleDays.includes(now.getDay()) && nextRun !== null && nextRun.toDateString() !== now.toDateString();
 
   function toggleScheduleDay(day: number): void {
     const next = scheduleDays.includes(day) ? scheduleDays.filter((d) => d !== day) : [...scheduleDays, day].sort();
@@ -229,6 +228,14 @@ export function AdvancedTab({
               </div>
               {scheduleDays.length === 0 && (
                 <p className="field-hint field-hint-error">{t('editor.advanced.schedule.noDaysWarning')}</p>
+              )}
+              {nextRun && todayAlreadyPassed && (
+                <p className="field-hint field-hint-warn">
+                  {t('editor.advanced.schedule.todayPassed', { when: formatNextRun(nextRun, t) })}
+                </p>
+              )}
+              {nextRun && !todayAlreadyPassed && (
+                <p className="field-hint">{t('editor.advanced.schedule.nextRun', { when: formatNextRun(nextRun, t) })}</p>
               )}
             </div>
 
