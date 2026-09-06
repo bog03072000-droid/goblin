@@ -42,6 +42,7 @@ export function useProfileSelection(options: {
   bulkBackup: () => Promise<void>;
   bulkAssignProxy: (proxyId: string) => Promise<void>;
   bulkAssignGroup: (groupIdValue: string) => Promise<void>;
+  bulkSetSchedule: (enabled: boolean) => Promise<void>;
   bulkAddTag: (tag: string) => Promise<void>;
   bulkRemoveTag: (tag: string) => Promise<void>;
 } {
@@ -126,6 +127,21 @@ export function useProfileSelection(options: {
     });
   }
 
+  async function bulkSetSchedule(enabled: boolean): Promise<void> {
+    if (selected.size === 0) return;
+    await bulkAction.run(async () => {
+      const result = await callApi<'profiles:bulkSetSchedule', BulkResult>('profiles:bulkSetSchedule', {
+        ids: Array.from(selected),
+        enabled,
+      });
+      onBulkResult(
+        t(enabled ? 'profiles.msg.scheduleEnabled' : 'profiles.msg.scheduleDisabled', { count: result.succeeded.length }),
+        result,
+      );
+      await refresh();
+    });
+  }
+
   async function bulkAddTag(tag: string): Promise<void> {
     if (selected.size === 0 || !tag.trim()) return;
     await bulkAction.run(async () => {
@@ -165,6 +181,7 @@ export function useProfileSelection(options: {
     bulkBackup,
     bulkAssignProxy,
     bulkAssignGroup,
+    bulkSetSchedule,
     bulkAddTag,
     bulkRemoveTag,
   };

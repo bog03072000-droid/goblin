@@ -91,6 +91,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.bulk.backup': 'Резервна копія',
   'profiles.bulk.assignProxy': 'Призначити проксі…',
   'profiles.bulk.removeProxy': 'Без проксі (видалити)',
+  'profiles.bulk.enableSchedule': 'Увімкнути розклад',
+  'profiles.bulk.disableSchedule': 'Вимкнути розклад',
   'profiles.bulk.addTagPlaceholder': 'Тег + Enter',
   'profiles.bulk.removeTagPlaceholder': 'Видалити тег + Enter',
   'profiles.bulk.clearSelection': 'Зняти вибір',
@@ -134,6 +136,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.msg.tagAdded': 'Тег додано до профілів: {count}',
   'profiles.msg.tagRemoved': 'Тег видалено з профілів: {count}',
   'profiles.msg.groupAssigned': 'Переміщено до групи профілів: {count}',
+  'profiles.msg.scheduleEnabled': 'Увімкнено розклад для {count} профіл(ів)',
+  'profiles.msg.scheduleDisabled': 'Вимкнено розклад для {count} профіл(ів)',
   'profiles.msg.exportedSelected': 'Експортовано профілів: {count} до {path}',
   'profiles.msg.exportedAll': 'Усі профілі експортовано до {path}',
 

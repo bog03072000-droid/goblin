@@ -89,6 +89,8 @@ const en = {
   'profiles.bulk.backup': 'Backup',
   'profiles.bulk.assignProxy': 'Assign proxy…',
   'profiles.bulk.removeProxy': 'None (remove proxy)',
+  'profiles.bulk.enableSchedule': 'Enable schedule',
+  'profiles.bulk.disableSchedule': 'Disable schedule',
   'profiles.bulk.addTagPlaceholder': 'Add tag + Enter',
   'profiles.bulk.removeTagPlaceholder': 'Remove tag + Enter',
   'profiles.bulk.clearSelection': 'Clear selection',
@@ -132,6 +134,8 @@ const en = {
   'profiles.msg.tagAdded': 'Tag added to {count} profile(s)',
   'profiles.msg.tagRemoved': 'Tag removed from {count} profile(s)',
   'profiles.msg.groupAssigned': 'Moved {count} profile(s) to group',
+  'profiles.msg.scheduleEnabled': 'Enabled schedule for {count} profile(s)',
+  'profiles.msg.scheduleDisabled': 'Disabled schedule for {count} profile(s)',
   'profiles.msg.exportedSelected': 'Exported {count} profile(s) to {path}',
   'profiles.msg.exportedAll': 'Exported all profiles to {path}',
 

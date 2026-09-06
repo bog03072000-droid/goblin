@@ -43,6 +43,7 @@ function renderBulkToolbar(overrides: Partial<Parameters<typeof BulkToolbar>[0]>
     onBackup: vi.fn(),
     onAssignProxy: vi.fn(),
     onAssignGroup: vi.fn(),
+    onSetSchedule: vi.fn(),
     onAddTag: vi.fn(),
     onRemoveTag: vi.fn(),
     onClearSelection: vi.fn(),
@@ -76,7 +77,7 @@ describe('BulkToolbar', () => {
 
   it('every action button is disabled while bulkBusy is true', () => {
     renderBulkToolbar({ bulkBusy: true });
-    for (const name of ['Start', 'Stop', 'Restart', 'Clone', 'Delete', 'Export Selected', 'Backup', 'Clear selection']) {
+    for (const name of ['Start', 'Stop', 'Restart', 'Clone', 'Delete', 'Export Selected', 'Backup', 'Enable schedule', 'Disable schedule', 'Clear selection']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
   });
@@ -148,5 +149,13 @@ describe('BulkToolbar', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(handlers.onRemoveTag).toHaveBeenCalledWith('stale');
     expect(input.value).toBe('');
+  });
+
+  it('clicking "Enable schedule" calls onSetSchedule(true), and "Disable schedule" calls onSetSchedule(false)', () => {
+    const handlers = renderBulkToolbar();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable schedule' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable schedule' }));
+    expect(handlers.onSetSchedule).toHaveBeenNthCalledWith(1, true);
+    expect(handlers.onSetSchedule).toHaveBeenNthCalledWith(2, false);
   });
 });

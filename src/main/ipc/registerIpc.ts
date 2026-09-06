@@ -198,6 +198,7 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:bulkAddTags', (p) => deps.profileManager.bulkAddTags(p.ids, p.tags));
   handle('profiles:bulkRemoveTags', (p) => deps.profileManager.bulkRemoveTags(p.ids, p.tags));
   handle('profiles:bulkAssignGroup', (p) => deps.profileManager.bulkAssignGroup(p.ids, p.groupId));
+  handle('profiles:bulkSetSchedule', (p) => deps.profileManager.bulkSetScheduleEnabled(p.ids, p.enabled));
 
   handle('groups:list', () => deps.groups.list());
   handle('groups:create', (p) => deps.groups.create(p.name));

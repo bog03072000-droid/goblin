@@ -143,6 +143,7 @@ export function ProfilesPage(): JSX.Element {
     bulkBackup,
     bulkAssignProxy,
     bulkAssignGroup,
+    bulkSetSchedule,
     bulkAddTag,
     bulkRemoveTag,
   } = selection;
@@ -344,6 +345,7 @@ export function ProfilesPage(): JSX.Element {
           onBackup={() => void bulkBackup()}
           onAssignProxy={(proxyId) => void bulkAssignProxy(proxyId)}
           onAssignGroup={(groupId) => void bulkAssignGroup(groupId)}
+          onSetSchedule={(enabled) => void bulkSetSchedule(enabled)}
           onAddTag={(tag) => void bulkAddTag(tag)}
           onRemoveTag={(tag) => void bulkRemoveTag(tag)}
           onClearSelection={() => setSelected(new Set())}

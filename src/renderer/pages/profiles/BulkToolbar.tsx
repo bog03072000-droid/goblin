@@ -1,3 +1,4 @@
+import { CalendarClock, CalendarOff } from 'lucide-react';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
 import { useTranslation } from '../../i18n';
@@ -16,6 +17,7 @@ export function BulkToolbar({
   onBackup,
   onAssignProxy,
   onAssignGroup,
+  onSetSchedule,
   onAddTag,
   onRemoveTag,
   onClearSelection,
@@ -33,6 +35,7 @@ export function BulkToolbar({
   onBackup: () => void;
   onAssignProxy: (proxyId: string) => void;
   onAssignGroup: (groupId: string) => void;
+  onSetSchedule: (enabled: boolean) => void;
   onAddTag: (tag: string) => void;
   onRemoveTag: (tag: string) => void;
   onClearSelection: () => void;
@@ -101,6 +104,14 @@ export function BulkToolbar({
           </option>
         ))}
       </select>
+      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => onSetSchedule(true)}>
+        <CalendarClock size={14} strokeWidth={2.25} />
+        {t('profiles.bulk.enableSchedule')}
+      </button>
+      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => onSetSchedule(false)}>
+        <CalendarOff size={14} strokeWidth={2.25} />
+        {t('profiles.bulk.disableSchedule')}
+      </button>
       <input
         placeholder={t('profiles.bulk.addTagPlaceholder')}
         className="w-140"

@@ -110,6 +110,7 @@ export const IpcRequestSchemas = {
   'profiles:bulkAddTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
   'profiles:bulkRemoveTags': z.object({ ids: z.array(ProfileIdSchema).min(1), tags: z.array(z.string().min(1).max(60)) }),
   'profiles:bulkAssignGroup': z.object({ ids: z.array(ProfileIdSchema).min(1), groupId: z.string().uuid().nullable() }),
+  'profiles:bulkSetSchedule': z.object({ ids: z.array(ProfileIdSchema).min(1), enabled: z.boolean() }),
 
   'groups:list': z.object({}),
   'groups:create': GroupCreateInputSchema,

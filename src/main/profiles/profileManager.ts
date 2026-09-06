@@ -557,6 +557,19 @@ export class ProfileManager {
     });
   }
 
+  /** Toggles the recurring-schedule flag for several profiles at once —
+   * leaves scheduleTime/scheduleDays untouched either way, same as flipping
+   * the checkbox in a single profile's Advanced tab does. A profile
+   * enabled here with no time/days set yet simply never fires (see
+   * ProfileScheduler.runOnce()'s own null checks) until those are
+   * configured, same as enabling it individually would. */
+  bulkSetScheduleEnabled(ids: string[], enabled: boolean): Promise<BulkResult> {
+    return this.bulkRun(ids, (id) => {
+      this.mustGet(id);
+      this.profiles.update(id, { scheduleEnabled: enabled });
+    });
+  }
+
   /** Adds tags without clobbering each profile's existing ones. */
   bulkAddTags(ids: string[], tags: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {

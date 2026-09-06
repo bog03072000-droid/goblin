@@ -81,4 +81,44 @@ test('enabling a schedule, setting a time and days, persists across closing and 
   await expect(window.getByRole('button', { name: 'Wed', exact: true })).toHaveClass(/btn-primary/);
   await expect(window.getByRole('button', { name: 'Fri', exact: true })).toHaveClass(/btn-primary/);
   await expect(window.getByRole('button', { name: 'Mon', exact: true })).not.toHaveClass(/btn-primary/);
+  await window.getByRole('button', { name: 'Close', exact: true }).click();
+});
+
+test('bulk "Enable schedule"/"Disable schedule" toggle several selected profiles at once, without setting a time/days', async () => {
+  await window.getByText('Profiles', { exact: true }).click();
+  for (const name of ['Bulk Schedule A', 'Bulk Schedule B']) {
+    await window.getByPlaceholder('New profile name').fill(name);
+    await window.getByRole('button', { name: 'New Profile', exact: true }).click();
+    await expect(window.locator('td', { hasText: name })).toBeVisible({ timeout: 10_000 });
+  }
+
+  const rowA = window.locator('tr', { has: window.locator('td', { hasText: 'Bulk Schedule A' }) });
+  const rowB = window.locator('tr', { has: window.locator('td', { hasText: 'Bulk Schedule B' }) });
+  await rowA.locator('input[type="checkbox"]').check();
+  await rowB.locator('input[type="checkbox"]').check();
+
+  await window.getByRole('button', { name: 'Enable schedule' }).click();
+  await expect(window.getByText('Enabled schedule for 2 profile(s)')).toBeVisible({ timeout: 10_000 });
+
+  for (const row of [rowA, rowB]) {
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+    await window.getByText('advanced', { exact: true }).click();
+    await expect(window.getByLabel('Enable scheduled start')).toBeChecked();
+    // Enabling in bulk never sets a time/days on its own — no next-run badge
+    // yet, since there's nothing to compute a next run from.
+    await expect(window.getByText('Pick at least one day for the schedule to actually run.')).toBeVisible();
+    await window.getByRole('button', { name: 'Close', exact: true }).click();
+  }
+
+  await rowA.locator('input[type="checkbox"]').check();
+  await rowB.locator('input[type="checkbox"]').check();
+  await window.getByRole('button', { name: 'Disable schedule' }).click();
+  await expect(window.getByText('Disabled schedule for 2 profile(s)')).toBeVisible({ timeout: 10_000 });
+
+  await rowA.getByRole('button', { name: 'Edit' }).click();
+  await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+  await window.getByText('advanced', { exact: true }).click();
+  await expect(window.getByLabel('Enable scheduled start')).not.toBeChecked();
+  await window.getByRole('button', { name: 'Close', exact: true }).click();
 });

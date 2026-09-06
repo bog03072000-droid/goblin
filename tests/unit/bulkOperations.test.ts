@@ -69,6 +69,29 @@ describe('ProfileManager bulk operations', () => {
     }
   });
 
+  it('bulkSetScheduleEnabled(true) turns scheduling on for every requested profile, without touching time/days', async () => {
+    const result = await manager.bulkSetScheduleEnabled(ids, true);
+    expect(result.succeeded.length).toBe(3);
+    for (const id of ids) {
+      const profile = profiles.getById(id)!;
+      expect(profile.scheduleEnabled).toBe(true);
+      expect(profile.scheduleTime).toBeNull();
+      expect(profile.scheduleDays).toBeNull();
+    }
+  });
+
+  it('bulkSetScheduleEnabled(false) turns scheduling back off, leaving a previously-set time/days untouched', async () => {
+    await manager.bulkSetScheduleEnabled(ids, true);
+    profiles.update(ids[0]!, { scheduleTime: '09:00', scheduleDays: [1, 3] });
+
+    const result = await manager.bulkSetScheduleEnabled(ids, false);
+    expect(result.succeeded.length).toBe(3);
+    const first = profiles.getById(ids[0]!)!;
+    expect(first.scheduleEnabled).toBe(false);
+    expect(first.scheduleTime).toBe('09:00');
+    expect(first.scheduleDays).toEqual([1, 3]);
+  });
+
   it('bulkAddTags merges with existing tags instead of replacing them', async () => {
     const result = await manager.bulkAddTags(ids, ['new-tag']);
     expect(result.succeeded.length).toBe(3);
