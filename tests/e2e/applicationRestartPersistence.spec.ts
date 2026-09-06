@@ -2,6 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmSyncWithRetry } from './helpers/rmSyncWithRetry';
 
 /**
  * Not a page reload and not mocked repositories — two genuinely separate
@@ -113,6 +114,6 @@ test('a profile, its configuration, and its storage all survive closing and reop
 
     await app.close();
   } finally {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    await rmSyncWithRetry(userDataDir);
   }
 });

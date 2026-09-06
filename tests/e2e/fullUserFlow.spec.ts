@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
+import { rmSyncWithRetry } from './helpers/rmSyncWithRetry';
 
 /**
  * The complete practical workflow in one continuous run: create → assign
@@ -39,7 +40,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await cdp?.close();
   await app.close();
-  fs.rmSync(userDataDir, { recursive: true, force: true });
+  await rmSyncWithRetry(userDataDir);
 });
 
 async function connectToShell(): Promise<Page> {

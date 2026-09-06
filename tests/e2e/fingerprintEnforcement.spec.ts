@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { rmSyncWithRetry } from './helpers/rmSyncWithRetry';
 
 /**
  * The core verification the fingerprint audit demands: does the browser
@@ -45,7 +46,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await cdp?.close();
   await app.close();
-  fs.rmSync(userDataDir, { recursive: true, force: true });
+  await rmSyncWithRetry(userDataDir);
 });
 
 // `fs.readdirSync(...)[0]` is NOT guaranteed to be "the first profile
