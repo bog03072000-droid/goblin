@@ -14,14 +14,36 @@ import {
   CircleX,
   CircleAlert,
   Lock,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react';
 import type { ProfileListItem, ProfileStatus } from '@shared/schemas/profile';
 import type { ProxyRecord } from '@shared/schemas/proxy';
 import type { Group } from '@shared/schemas/group';
-import { useTranslation } from '../../i18n';
+import { computeNextScheduledRun } from '@shared/utils/scheduleNextRun';
+import { useTranslation, type TranslationKey } from '../../i18n';
 import { STATUS_LABEL_KEYS } from './ProfilesToolbar';
 import { ProfileContextMenu, type ContextMenuState } from './ProfileContextMenu';
+
+const SCHEDULE_DAY_KEYS: TranslationKey[] = [
+  'editor.advanced.schedule.day.0',
+  'editor.advanced.schedule.day.1',
+  'editor.advanced.schedule.day.2',
+  'editor.advanced.schedule.day.3',
+  'editor.advanced.schedule.day.4',
+  'editor.advanced.schedule.day.5',
+  'editor.advanced.schedule.day.6',
+];
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+/** "Mon 09:00" — same day abbreviations AdvancedTab's own day picker uses,
+ * so a profile's schedule reads identically wherever it's shown. */
+function formatNextRun(next: Date, t: ReturnType<typeof useTranslation>['t']): string {
+  return `${t(SCHEDULE_DAY_KEYS[next.getDay()]!)} ${pad2(next.getHours())}:${pad2(next.getMinutes())}`;
+}
 
 const PILL_VARIANT: Record<ProfileStatus, string> = {
   RUNNING: 'on',
@@ -90,12 +112,23 @@ const ProfileRow = memo(
   }): JSX.Element {
     const { t } = useTranslation();
     const StatusIcon = PILL_ICON[profile.status];
+    const nextRun = profile.scheduleEnabled
+      ? computeNextScheduledRun(new Date(), profile.scheduleTime, profile.scheduleDays)
+      : null;
     return (
       <tr data-status={profile.status} data-profile-id={profile.id} onContextMenu={(e) => onContextMenu(e, profile)}>
         <td>
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(profile.id)} />
         </td>
-        <td>{profile.name}</td>
+        <td>
+          {profile.name}
+          {nextRun && (
+            <span className="schedule-badge" title={t('profiles.table.nextRun', { when: formatNextRun(nextRun, t) })}>
+              <CalendarClock size={12} strokeWidth={2.25} />
+              {formatNextRun(nextRun, t)}
+            </span>
+          )}
+        </td>
         <td>
           <span className={`pill ${PILL_VARIANT[profile.status]}`}>
             <StatusIcon size={12} />

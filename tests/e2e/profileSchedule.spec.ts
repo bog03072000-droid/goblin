@@ -64,6 +64,14 @@ test('enabling a schedule, setting a time and days, persists across closing and 
   // Close and reopen the editor — if the UI is only holding local React
   // state (not a real, persisted profiles:update call), this would reset.
   await window.getByRole('button', { name: 'Close', exact: true }).click();
+
+  // The profiles table itself now shows a "next auto-start" badge next to
+  // the row — not just the editor. The exact day shown depends on today's
+  // real date (Wed/Fri, whichever comes first), so this only asserts the
+  // time and the schedule-badge's own class are present, not a fixed day.
+  await expect(row.locator('.schedule-badge')).toBeVisible({ timeout: 10_000 });
+  await expect(row.locator('.schedule-badge')).toContainText('14:30');
+
   await row.getByRole('button', { name: 'Edit' }).click();
   await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
   await window.getByText('advanced', { exact: true }).click();

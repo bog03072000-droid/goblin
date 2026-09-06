@@ -312,6 +312,7 @@ const en = {
   'editor.advanced.schedule.day.6': 'Sat',
   'editor.advanced.schedule.noDaysWarning': 'Pick at least one day for the schedule to actually run.',
   'editor.advanced.schedule.lastTriggered': 'Last auto-started',
+  'profiles.table.nextRun': 'Next auto-start: {when}',
   'common.copy': 'Copy',
   'common.refresh': 'Refresh',
   'common.copied': 'Copied',

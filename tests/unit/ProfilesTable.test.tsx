@@ -29,6 +29,10 @@ function makeProfile(overrides: Partial<ProfileListItem>): ProfileListItem {
     automationPort: null,
     os: 'windows',
     browserVersion: '128.0.0.0',
+    scheduleEnabled: false,
+    scheduleTime: null,
+    scheduleDays: null,
+    scheduleLastTriggeredAt: null,
     ...overrides,
   } as ProfileListItem;
 }
@@ -192,5 +196,37 @@ describe('ProfilesTable', () => {
     const row = screen.getByText('To Delete').closest('tr')!;
     within(row).getByRole('button', { name: /Delete/ }).click();
     expect(handlers.onDeleteRequest).toHaveBeenCalledWith(expect.objectContaining({ id: '1', name: 'To Delete' }));
+  });
+
+  describe('scheduled auto-start badge', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows a next-run badge for a profile with an active schedule', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-07T08:00:00')); // Monday, before 09:00
+      renderTable([
+        makeProfile({ id: '1', name: 'Scheduled One', scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }),
+      ]);
+      const row = screen.getByText('Scheduled One').closest('tr')!;
+      expect(within(row).getByText('Mon 09:00')).toBeInTheDocument();
+    });
+
+    it('shows no badge when scheduleEnabled is false, even if scheduleTime/scheduleDays are still set from a previous session', () => {
+      renderTable([
+        makeProfile({ id: '1', name: 'Disabled Schedule', scheduleEnabled: false, scheduleTime: '09:00', scheduleDays: [1] }),
+      ]);
+      const row = screen.getByText('Disabled Schedule').closest('tr')!;
+      expect(within(row).queryByText(/\d\d:\d\d/)).not.toBeInTheDocument();
+    });
+
+    it('shows no badge when scheduleEnabled is true but no days are selected', () => {
+      renderTable([
+        makeProfile({ id: '1', name: 'No Days', scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [] }),
+      ]);
+      const row = screen.getByText('No Days').closest('tr')!;
+      expect(within(row).queryByText(/\d\d:\d\d/)).not.toBeInTheDocument();
+    });
   });
 });

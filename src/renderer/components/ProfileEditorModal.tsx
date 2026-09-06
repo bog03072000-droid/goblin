@@ -51,7 +51,16 @@ export function ProfileEditorModal({
     error: automationError,
     saveAutomation,
     regenerateAutomationToken,
-  } = useProfileAutomation(profileId, setProfile);
+    // Also reports up to ProfilesPage (same as saveGeneral/saveProxy already
+    // do) — automation/schedule fields save straight through with no
+    // separate "Save" click, and without this the profiles table's own
+    // schedule badge (ProfilesTable.tsx) would only ever pick up the change
+    // whenever some unrelated action happened to trigger a refresh, since
+    // ProfilesPage's list only re-polls while a profile is transitional.
+  } = useProfileAutomation(profileId, (updated) => {
+    setProfile(updated);
+    onSaved();
+  });
   const {
     cookies,
     cookiesPending,
