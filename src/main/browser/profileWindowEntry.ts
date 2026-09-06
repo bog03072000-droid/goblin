@@ -2,11 +2,17 @@ import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron
 import fs from 'node:fs';
 import path from 'node:path';
 import { enforceFingerprint, applyWebrtcPolicy, applyPermissionPolicy, injectSpoofingScriptViaCdp } from './fingerprintEnforcement';
-import { buildSpoofingScript, type SpoofableFingerprint } from './spoofingScript';
-import type { WebrtcMode, Fingerprint, GeolocationMode, PermissionsMode } from '../../shared/schemas/fingerprint';
+import { buildSpoofingScript } from './spoofingScript';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
 import { findFreePort, startAutomationProxy } from './automationProxy';
+import {
+  resolveLanguages,
+  buildSpoofableFingerprint,
+  resolveEnforcementModes,
+  resolveAutoNavigateTarget,
+  normalizeNavigationUrl,
+} from './profileWindowLogic';
 
 const BROWSER_START_URL = 'https://www.google.com';
 
@@ -161,14 +167,10 @@ export function runProfileWindowProcess(): void {
     // audit — see docs/FINGERPRINT_AUDIT.md) so it is NOT relied on for that;
     // the CDP override in the did-attach-webview handler is the authoritative
     // source for navigator.language/languages/platform.
-    const languages = Array.isArray(args.fingerprintConfig['languages'])
-      ? (args.fingerprintConfig['languages'] as string[])
-      : [args.locale];
+    const languages = resolveLanguages(args.fingerprintConfig, args.locale);
     ses.setUserAgent(args.userAgent, languages.join(','));
 
-    const webrtcMode = (args.fingerprintConfig['webrtcMode'] as WebrtcMode | undefined) ?? 'default';
-    const geolocationMode = (args.fingerprintConfig['geolocationMode'] as GeolocationMode | undefined) ?? 'real';
-    const permissionsMode = (args.fingerprintConfig['permissionsMode'] as PermissionsMode | undefined) ?? 'real';
+    const { webrtcMode, geolocationMode, permissionsMode } = resolveEnforcementModes(args.fingerprintConfig);
     applyPermissionPolicy(ses, { permissionsMode, geolocationMode });
 
     // Registered on the profile's own session (not the default one) since that's
@@ -244,22 +246,10 @@ export function runProfileWindowProcess(): void {
     // handler below (answered from diagnosticsPreload.js, which needs the
     // script BEFORE the guest page's own scripts run) and did-attach-webview
     // (still applying the CDP-only fields) see the identical fingerprint.
-    const fpForSpoofing = args.fingerprintConfig;
-    const spoofableFingerprint: SpoofableFingerprint = {
-      seed: String(fpForSpoofing['seed'] ?? args.profileId),
-      canvasMode: (fpForSpoofing['canvasMode'] as Fingerprint['canvasMode']) ?? 'off',
-      audioMode: (fpForSpoofing['audioMode'] as Fingerprint['audioMode']) ?? 'off',
-      deviceMemory: Number(fpForSpoofing['deviceMemory'] ?? 8),
-      webglSpoofingMode: (fpForSpoofing['webglSpoofingMode'] as Fingerprint['webglSpoofingMode']) ?? 'off',
-      webglVendor: String(fpForSpoofing['webglVendor'] ?? 'Google Inc.'),
-      webglRenderer: String(fpForSpoofing['webglRenderer'] ?? 'ANGLE'),
-      fontsMode: (fpForSpoofing['fontsMode'] as Fingerprint['fontsMode']) ?? 'system',
-      mediaDevicesMode: (fpForSpoofing['mediaDevicesMode'] as Fingerprint['mediaDevicesMode']) ?? 'real',
+    const spoofableFingerprint = buildSpoofableFingerprint(args.fingerprintConfig, {
       userAgent: args.userAgent,
-      platform: String(fpForSpoofing['platform'] ?? 'Win32'),
-      hardwareConcurrency: Number(fpForSpoofing['hardwareConcurrency'] ?? 8),
-      serviceWorkerMode: (fpForSpoofing['serviceWorkerMode'] as Fingerprint['serviceWorkerMode']) ?? 'real',
-    };
+      profileId: args.profileId,
+    });
     const spoofingScript = buildSpoofingScript(spoofableFingerprint);
 
     const configB64 = Buffer.from(JSON.stringify(args.fingerprintConfig)).toString('base64');
@@ -270,10 +260,7 @@ export function runProfileWindowProcess(): void {
     // of the real start page, so an automated test doesn't need to drive the
     // UI's address bar inside this separate, otherwise-unreachable-by-
     // Playwright child process window. Never set in a normal launch.
-    const autoNavigateTarget =
-      process.env['PF_E2E_AUTO_DIAGNOSTICS'] === '1'
-        ? diagnosticsUrl
-        : (process.env['PF_E2E_PROXY_TEST_URL'] ?? args.navigateTo ?? BROWSER_START_URL);
+    const autoNavigateTarget = resolveAutoNavigateTarget(process.env, args, diagnosticsUrl, BROWSER_START_URL);
 
     // Keyed by webContents.id (the renderer reads its own tab's id via the
     // <webview> element's getWebContentsId() and passes it back on
@@ -285,9 +272,7 @@ export function runProfileWindowProcess(): void {
     ipcMain.on('pf:navigate', (_event, webContentsId: number, url: string) => {
       const target = webviewsById.get(webContentsId);
       if (!target) return;
-      let normalized = String(url).trim();
-      if (!/^[a-zA-Z]+:\/\//.test(normalized)) normalized = 'https://' + normalized;
-      void target.loadURL(normalized);
+      void target.loadURL(normalizeNavigationUrl(String(url)));
     });
 
     // localStorage editor support (ProfileManager.sendChildRequest, same
