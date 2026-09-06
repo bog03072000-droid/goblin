@@ -68,7 +68,7 @@ function mockInvoke(overrides: Partial<Record<string, (payload: unknown) => unkn
       browserVersions: ['128.0.0.0'],
     }),
     'fingerprint:generate': () => makeGeneratedFingerprint(),
-    'fingerprint:validate': () => ({ valid: true, issues: [] }),
+    'fingerprint:validate': () => ({ valid: true, warnings: [], errors: [] }),
     'profiles:create': () => undefined,
     'proxy:create': (p) => ({
       id: '33333333-3333-3333-3333-333333333333',
@@ -198,6 +198,59 @@ describe('ProfileCreateModal', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
     expect(setItemSpy).toHaveBeenCalledWith('profileforge.hint.customSetupSeen', '1');
     expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  });
+
+  it('MANUAL mode: editing the User-Agent field and saving updates the local draft, with no fingerprint:update IPC call (unlike the editor)', async () => {
+    const invoke = mockInvoke();
+    const { onCreated } = renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+    fireEvent.click(screen.getByRole('button', { name: 'MANUAL' }));
+
+    const uaInput = screen.getByLabelText('User-Agent');
+    fireEvent.change(uaInput, { target: { value: 'Mozilla/5.0 (manual create-time edit)' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Nothing under the not-yet-persisted __draft__ fingerprint is ever
+    // written via IPC before the profile itself is created (see
+    // ProfileCreateModal.tsx's own module comment) — the edit only lives in
+    // local state until "Create profile" is clicked.
+    expect(invoke).not.toHaveBeenCalledWith('fingerprint:update', expect.anything());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create profile' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'profiles:create',
+        expect.objectContaining({ fingerprint: expect.objectContaining({ userAgent: 'Mozilla/5.0 (manual create-time edit)' }) }),
+      ),
+    );
+    expect(onCreated).toHaveBeenCalled();
+  });
+
+  it('AUTO mode: picking a concrete OS-version override regenerates the preview with that override, carried through to profiles:create', async () => {
+    const invoke = mockInvoke();
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+
+    fireEvent.change(screen.getByLabelText('OS version'), { target: { value: '11' } });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('fingerprint:generate', expect.objectContaining({ osVersion: '11' })),
+    );
+  });
+
+  it('AUTO mode: picking a CPU core-count override regenerates the preview with that override', async () => {
+    const invoke = mockInvoke();
+    renderModal();
+    await screen.findByLabelText('Name');
+    fireEvent.click(screen.getByText('fingerprint'));
+
+    fireEvent.change(screen.getByLabelText('CPU cores (hardwareConcurrency)'), { target: { value: '16' } });
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('fingerprint:generate', expect.objectContaining({ hardwareConcurrency: 16 })),
+    );
   });
 
   it('clicking the overlay calls onClose, but clicking inside the panel does not', async () => {
