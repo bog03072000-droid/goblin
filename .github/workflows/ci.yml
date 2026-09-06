@@ -23,6 +23,16 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      # Fails the build if platformProfiles.ts's hardcoded browserVersion
+      # (baked into every generated profile's spoofed User-Agent) no longer
+      # matches the real installed Electron's actual Chromium version — see
+      # scripts/checkBrowserVersionSync.js's own doc comment and
+      # docs/FINGERPRINT_AUDIT.md's "Ninth investigation" for why a silent
+      # drift here is a real, detectable UA-vs-TLS-handshake mismatch, not
+      # just a cosmetic inconsistency. Needs no native-module rebuild first
+      # — it only launches the electron binary itself, never touches
+      # better-sqlite3.
+      - run: npm run check:browser-version
       - name: Rebuild native modules for Node ABI
         run: npm run rebuild:node
       # Runs the exact same unit/integration suite as `npm test` plus a
