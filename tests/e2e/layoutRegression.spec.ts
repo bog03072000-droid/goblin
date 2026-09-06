@@ -145,3 +145,27 @@ test('a proxy row highlights on keyboard focus too, proving :has(:focus-visible)
   await expect(historyButton).not.toBeFocused();
   await expect.poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(unfocusedBackground);
 });
+
+test('a data table panel scrolls its own overflow on a narrow window instead of the whole page scrolling sideways', async () => {
+  // Found missing while checking LogsPage.tsx's .log-message-toggle
+  // (width: 100%) at narrow widths: no table's .panel wrapper had
+  // overflow-x set at all, so the *page* itself scrolled sideways past a
+  // certain width instead of the panel containing its own table — the
+  // toggle button itself was never the problem, the missing overflow
+  // container was.
+  await window.setViewportSize({ width: 700, height: 800 });
+  try {
+    await window.getByText('Logs', { exact: true }).click();
+    await expect
+      .poll(() => window.evaluate(() => document.body.scrollWidth === document.body.clientWidth))
+      .toBe(true);
+
+    const panel = window.locator('.panel').first();
+    await expect(panel).toHaveCSS('overflow-x', 'auto');
+    const panelOverflows = await panel.evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect(panelOverflows).toBe(true);
+  } finally {
+    // Reset for any test that runs after this one in the same shared window.
+    await window.setViewportSize({ width: 1400, height: 900 });
+  }
+});

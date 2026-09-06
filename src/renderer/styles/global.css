@@ -389,6 +389,14 @@ h1, h2, h3, h4 {
   margin-bottom: 16px;
   transition: border-color var(--ease);
 }
+/* A panel wrapping a data table (Profiles/Proxies/Logs) gets its own
+   horizontal scrollbar on a narrow window instead of the whole page
+   scrolling sideways — found missing while checking .log-message-toggle's
+   width:100% at narrow widths (LogsPage.tsx): every table in the app was
+   actually affected, not just that one button. */
+.panel:has(table) {
+  overflow-x: auto;
+}
 
 /* ---------- Form controls ---------- */
 input, select, textarea {
