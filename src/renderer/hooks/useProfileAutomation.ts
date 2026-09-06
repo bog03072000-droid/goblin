@@ -19,7 +19,13 @@ export function useProfileAutomation(
   setAutomationToken: (token: string | null) => void;
   pending: boolean;
   error: string | null;
-  saveAutomation: (patch: { automationEnabled?: boolean; automationPort?: number | null }) => Promise<void>;
+  saveAutomation: (patch: {
+    automationEnabled?: boolean;
+    automationPort?: number | null;
+    scheduleEnabled?: boolean;
+    scheduleTime?: string | null;
+    scheduleDays?: number[] | null;
+  }) => Promise<void>;
   regenerateAutomationToken: () => Promise<void>;
 } {
   const [automationToken, setAutomationToken] = useState<string | null>(null);
@@ -29,8 +35,19 @@ export function useProfileAutomation(
    * yet for a profile that never had it enabled); toggling off just flips
    * the flag and clears the displayed token — the encrypted token itself
    * stays in the database so re-enabling later doesn't silently rotate it
-   * out from under an already-configured external automation client. */
-  async function saveAutomation(patch: { automationEnabled?: boolean; automationPort?: number | null }): Promise<void> {
+   * out from under an already-configured external automation client.
+   *
+   * Also the save path for the Advanced tab's schedule fields — same
+   * generic "patch the profile" shape, no automation-specific behavior
+   * needed for those, so one function covers both rather than a near-
+   * identical sibling hook. */
+  async function saveAutomation(patch: {
+    automationEnabled?: boolean;
+    automationPort?: number | null;
+    scheduleEnabled?: boolean;
+    scheduleTime?: string | null;
+    scheduleDays?: number[] | null;
+  }): Promise<void> {
     await automationAction.run(async () => {
       const updated = await callApi<'profiles:update', Profile>('profiles:update', { id: profileId, ...patch });
       onProfileUpdated(updated);

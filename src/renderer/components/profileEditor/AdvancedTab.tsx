@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { Copy, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Copy, RefreshCw, ShieldCheck, CalendarClock } from 'lucide-react';
 import type { Profile } from '@shared/schemas/profile';
-import { useTranslation } from '../../i18n';
+import { useTranslation, type TranslationKey } from '../../i18n';
+
+const SCHEDULE_DAY_KEYS: TranslationKey[] = [
+  'editor.advanced.schedule.day.0',
+  'editor.advanced.schedule.day.1',
+  'editor.advanced.schedule.day.2',
+  'editor.advanced.schedule.day.3',
+  'editor.advanced.schedule.day.4',
+  'editor.advanced.schedule.day.5',
+  'editor.advanced.schedule.day.6',
+];
 
 export function AdvancedTab({
   profile,
@@ -15,7 +25,13 @@ export function AdvancedTab({
   automationToken: string | null;
   defaultAutomationPort: number | null;
   automationSaving: boolean;
-  onSaveAutomation: (patch: { automationEnabled?: boolean; automationPort?: number | null }) => void;
+  onSaveAutomation: (patch: {
+    automationEnabled?: boolean;
+    automationPort?: number | null;
+    scheduleEnabled?: boolean;
+    scheduleTime?: string | null;
+    scheduleDays?: number[] | null;
+  }) => void;
   onRegenerateToken: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -23,6 +39,13 @@ export function AdvancedTab({
   const [copied, setCopied] = useState<'port' | 'token' | 'snippet' | null>(null);
   const portNum = Number(portDraft);
   const portInvalid = portDraft.trim() !== '' && (!Number.isInteger(portNum) || portNum < 1024 || portNum > 65535);
+  const [timeDraft, setTimeDraft] = useState(profile.scheduleTime ?? '09:00');
+  const scheduleDays = profile.scheduleDays ?? [];
+
+  function toggleScheduleDay(day: number): void {
+    const next = scheduleDays.includes(day) ? scheduleDays.filter((d) => d !== day) : [...scheduleDays, day].sort();
+    onSaveAutomation({ scheduleDays: next });
+  }
 
   function copy(value: string, what: 'port' | 'token' | 'snippet'): void {
     void navigator.clipboard.writeText(value).then(() => {
@@ -152,6 +175,68 @@ export function AdvancedTab({
             <div className="banner banner-warn mt-8 mb-0 text-xs">
               {t('editor.advanced.automation.warning')}
             </div>
+          </>
+        )}
+      </div>
+
+      <div className="panel mt-16">
+        <h4 className="fp-heading">
+          <CalendarClock size={16} strokeWidth={2.25} />
+          {t('editor.advanced.schedule.title')}
+          {automationSaving && <span className="spinner" />}
+        </h4>
+        <p className="text-dim text-xs mt-0">{t('editor.advanced.schedule.hint')}</p>
+
+        <label className="field">
+          <span className="inline-flex" style={{ alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={profile.scheduleEnabled}
+              onChange={(e) => onSaveAutomation({ scheduleEnabled: e.target.checked })}
+            />
+            {t('editor.advanced.schedule.enable')}
+          </span>
+        </label>
+
+        {profile.scheduleEnabled && (
+          <>
+            <label className="field field-narrow">
+              {t('editor.advanced.schedule.time')}
+              <input
+                type="time"
+                className="mono field-input-160"
+                value={timeDraft}
+                onChange={(e) => setTimeDraft(e.target.value)}
+                onBlur={() => {
+                  if (timeDraft && timeDraft !== profile.scheduleTime) onSaveAutomation({ scheduleTime: timeDraft });
+                }}
+              />
+            </label>
+
+            <div className="field">
+              <span>{t('editor.advanced.schedule.days')}</span>
+              <div className="flex-row-gap6 mt-4">
+                {SCHEDULE_DAY_KEYS.map((key, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className={`btn btn-sm ${scheduleDays.includes(day) ? 'btn-primary' : 'btn-ghost'}`}
+                    onClick={() => toggleScheduleDay(day)}
+                  >
+                    {t(key)}
+                  </button>
+                ))}
+              </div>
+              {scheduleDays.length === 0 && (
+                <p className="field-hint field-hint-error">{t('editor.advanced.schedule.noDaysWarning')}</p>
+              )}
+            </div>
+
+            {profile.scheduleLastTriggeredAt && (
+              <p className="text-dim text-xs">
+                {t('editor.advanced.schedule.lastTriggered')}: <span className="mono">{profile.scheduleLastTriggeredAt}</span>
+              </p>
+            )}
           </>
         )}
       </div>

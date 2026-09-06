@@ -14,6 +14,7 @@ import { DownloadRepository } from './database/downloadRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { ProxyHealthScheduler } from './proxy/proxyHealthScheduler';
+import { ProfileScheduler } from './profiles/profileScheduler';
 import { registerIpc } from './ipc/registerIpc';
 import { runProfileWindowProcess } from './browser/profileWindowEntry';
 
@@ -88,6 +89,9 @@ function runManagerProcess(): void {
     // proxyHealthScheduler.ts for why this exists alongside the manual
     // "Test" button.
     new ProxyHealthScheduler(proxies).start();
+    // Same lifetime/unref() posture as the proxy health scheduler above —
+    // see profileScheduler.ts for what "recurring auto-start" actually means.
+    new ProfileScheduler(profiles, profileManager).start();
 
     registerIpc({
       profileManager,

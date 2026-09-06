@@ -20,6 +20,10 @@ interface ProfileRow {
   automation_enabled: number;
   automation_port: number | null;
   automation_token_encrypted: Buffer | null;
+  schedule_enabled: number;
+  schedule_time: string | null;
+  schedule_days: string | null;
+  schedule_last_triggered_at: string | null;
 }
 
 interface ProfileListRow extends ProfileRow {
@@ -70,6 +74,10 @@ export class ProfileRepository {
       lastStoppedAt: row.last_stopped_at,
       automationEnabled: Boolean(row.automation_enabled),
       automationPort: row.automation_port,
+      scheduleEnabled: Boolean(row.schedule_enabled),
+      scheduleTime: row.schedule_time,
+      scheduleDays: row.schedule_days ? (JSON.parse(row.schedule_days) as number[]) : null,
+      scheduleLastTriggeredAt: row.schedule_last_triggered_at,
     };
   }
 
@@ -160,6 +168,9 @@ export class ProfileRepository {
       tags: string[];
       automationEnabled: boolean;
       automationPort: number | null;
+      scheduleEnabled: boolean;
+      scheduleTime: string | null;
+      scheduleDays: number[] | null;
     }>,
   ): Profile {
     const existing = this.getById(id);
@@ -168,7 +179,9 @@ export class ProfileRepository {
       this.db
         .prepare(
           `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, group_id=@groupId,
-           automation_enabled=@automationEnabled, automation_port=@automationPort, updated_at=@updatedAt WHERE id=@id`,
+           automation_enabled=@automationEnabled, automation_port=@automationPort,
+           schedule_enabled=@scheduleEnabled, schedule_time=@scheduleTime, schedule_days=@scheduleDays,
+           updated_at=@updatedAt WHERE id=@id`,
         )
         .run({
           id,
@@ -178,12 +191,31 @@ export class ProfileRepository {
           groupId: patch.groupId !== undefined ? patch.groupId : existing.groupId,
           automationEnabled: (patch.automationEnabled ?? existing.automationEnabled) ? 1 : 0,
           automationPort: patch.automationPort !== undefined ? patch.automationPort : existing.automationPort,
+          scheduleEnabled: (patch.scheduleEnabled ?? existing.scheduleEnabled) ? 1 : 0,
+          scheduleTime: patch.scheduleTime !== undefined ? patch.scheduleTime : existing.scheduleTime,
+          scheduleDays:
+            patch.scheduleDays !== undefined ? JSON.stringify(patch.scheduleDays) : JSON.stringify(existing.scheduleDays),
           updatedAt: new Date().toISOString(),
         });
       if (patch.tags) this.setTags(id, patch.tags);
     });
     update();
     return this.getById(id)!;
+  }
+
+  /** Profiles with a recurring schedule turned on — used by ProfileScheduler's
+   * own polling loop rather than filtering the full list() client-side, since
+   * this runs on every tick and most profiles won't have scheduling enabled. */
+  listScheduled(): Profile[] {
+    const rows = this.db.prepare('SELECT * FROM profiles WHERE schedule_enabled = 1 AND deleted_at IS NULL').all() as ProfileRow[];
+    return rows.map((r) => this.rowToProfile(r));
+  }
+
+  /** Records that this profile's schedule fired just now — see
+   * ProfileScheduler's own comment on why this exists (prevents firing twice
+   * for the same matching minute across consecutive polls). */
+  recordScheduleTriggered(id: string, whenIso: string): void {
+    this.db.prepare('UPDATE profiles SET schedule_last_triggered_at = ? WHERE id = ?').run(whenIso, id);
   }
 
   /** The automation token is never part of the plain Profile object returned
