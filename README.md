@@ -25,20 +25,16 @@ assumed; electron-builder blocks macOS packaging from any non-macOS host
 categorically, regardless of target format (`zip` included, not just
 `dmg`). A `package-macos` job now runs on a real `macos-latest` GitHub
 Actions runner (`.github/workflows/ci.yml`) — the first real macOS host
-this config has ever touched. **First real run's result: the macOS build
-itself genuinely succeeded** — `release/GoblinAnty-0.3.0-arm64-mac.zip`
-was produced end to end (Electron downloaded, app packaged, zip + block
-map written) — the job still showed red because of two separate CI-config
-bugs in this workflow, not the app: electron-builder auto-detected
-`package.json`'s `build.publish` (github provider, used by the existing
-Windows release flow) and tried to publish a GitHub release with no
-`GH_TOKEN` available (this job verifies a build, it doesn't cut a
-release), and the artifact-upload/smoke-test steps looked for the output
-under `dist/` when it actually lands under `release/`
-(`build.directories.output`). Both are fixed (`--publish never`, corrected
-paths) but **unverified until the fixed workflow actually runs** — this
-paragraph will be updated again once it does, rather than assumed fixed
-from reading the diff. Linux is not targeted at all — no `build.linux`
+this config has ever touched. **Confirmed, real result (two runs): the
+macOS build passes end to end** — `release/GoblinAnty-0.3.0-arm64-mac.zip`
+built and its smoke test (launching the actual packaged `.app` and
+confirming it stays running) passed. The first run showed red purely from
+two CI-config bugs unrelated to the app itself (electron-builder
+auto-publishing to GitHub with no token available, and looking for the
+build output under `dist/` when it actually lands under `release/`) — both
+fixed, and the very next run came back green. This is now the one platform
+besides Windows this project has an actual passing build for, not just a
+valid config file. Linux is not targeted at all — no `build.linux`
 config, no plan to add one.
 
 ## What it does today
@@ -167,14 +163,16 @@ confirmed directly, not assumed. `.github/workflows/ci.yml`'s
 `package-macos` job runs `electron-builder --mac --publish never` on a
 real `macos-latest` GitHub Actions runner and smoke-tests the resulting
 `.app` (`continue-on-error: true` — informational, not a merge gate).
-**First real run**: the macOS build itself genuinely succeeded
-(`release/GoblinAnty-0.3.0-arm64-mac.zip` built end to end) — the job
-still failed on two CI-config bugs unrelated to the app (electron-builder
-auto-publishing to GitHub with no token available, and the artifact/smoke-
-test steps looking in the wrong output directory), both now fixed but not
-yet re-verified by an actual run. Check that job's latest run for the
-current, real answer rather than trusting this paragraph, which will go
-stale the moment that changes.
+**Confirmed passing** (two real runs): the build produces
+`release/GoblinAnty-0.3.0-arm64-mac.zip` end to end, and the smoke test —
+actually launching the packaged `.app` and confirming it stays running,
+not just that a file exists — passed. The first run showed red purely
+from two CI-config bugs unrelated to the app (electron-builder
+auto-publishing to GitHub with no token available, and looking in the
+wrong output directory) — both fixed, and the corrected workflow's very
+next run came back green. Check that job's latest run for the current,
+real answer rather than trusting this paragraph, which will go stale the
+moment that changes.
 
 ## Profile storage
 
