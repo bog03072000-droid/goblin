@@ -109,3 +109,39 @@ test('a profile row highlights when keyboard focus lands on one of its buttons, 
   await expect(startButton).not.toBeFocused();
   await expect.poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(unfocusedBackground);
 });
+
+test('a proxy row highlights on keyboard focus too, proving :has(:focus-visible) is a global rule, not ProfilesTable-specific', async () => {
+  await window.getByText('Proxies', { exact: true }).click();
+  await window.getByPlaceholder('Name', { exact: true }).fill('Layout Focus Proxy');
+  await window.getByPlaceholder('Host').fill('127.0.0.1');
+  await window.getByPlaceholder('Port').fill('8811');
+  await window.getByRole('button', { name: 'Add Proxy' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'Layout Focus Proxy' }) });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const firstCell = row.locator('td').first();
+
+  const unfocusedBackground = await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  // `:focus-visible` is a browser heuristic tied to a real keyboard-driven
+  // focus change (same reason the ProfilesTable test above uses real Tab
+  // presses, not `.focus()`) — ProxiesPage rows have no checkbox to click
+  // first, so instead mouse-click the "Test" button (a real click's own
+  // resulting focus is NOT :focus-visible) then Tab onto the next button,
+  // which IS a keyboard-driven focus change.
+  const testButton = row.getByRole('button', { name: 'Test', exact: true });
+  await testButton.click();
+  await window.keyboard.press('Tab');
+  const historyButton = row.getByRole('button', { name: /History/, exact: false });
+  await expect(historyButton).toBeFocused();
+
+  await expect
+    .poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor))
+    .toBe('rgba(124, 179, 66, 0.05)');
+
+  // Moving focus off the row entirely (a plain click on non-interactive
+  // page text) removes the highlight again — this isn't a permanent
+  // "was ever focused" state.
+  await window.getByText('Proxies', { exact: true }).click();
+  await expect(historyButton).not.toBeFocused();
+  await expect.poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(unfocusedBackground);
+});
