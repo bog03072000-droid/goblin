@@ -1767,6 +1767,27 @@ User-Agent) behaving exactly like every other real Chrome 128 install on
 the internet. Modern TLS fingerprinting tooling has already adapted to
 this — see Result 2.
 
+**Why JA3 specifically is not addressed by any Goblin mechanism — stated
+explicitly, at the same level of transparency as JA4's own treatment
+below.** Given the above, three things would have to be true for a JA3-based
+mechanism to be worth building, and none of them are: (1) *stability* — JA3
+would need to be a stable per-connection value worth normalizing against,
+but Chrome's own extension-order randomization makes it change on every
+single connection from the same browser, so there is no fixed "real
+Chromium" JA3 to match in the first place, unlike JA4's one stable, public
+reference value; (2) *signal* — even if it were stabilized, a detector
+comparing it against anything would be comparing against a moving target
+that changes for every real Chrome 128 user too, so it carries no
+discriminating power between a Goblin profile and genuine Chrome; (3)
+*feasibility* — "fixing" JA3's instability would mean overriding Chromium's
+own compiled-in TLS extension-ordering behavior, which sits at the same
+BoringSSL/network-stack layer Result 3 (below) already establishes has no
+exposed override surface for JA4 either. This is a considered non-goal, not
+an oversight: building JA3 tooling (a database lookup, a CI check, a
+per-profile override) would spend effort defending against a signal that
+is already, by Chrome's own design, useless for telling any two Chrome 128
+installations apart — Goblin's or otherwise.
+
 **Result 2 — JA4 (the modern successor, designed to survive Chrome's own
 permutation) is byte-identical between the two profiles, and matches a
 public database's real "Chromium Browser" entry exactly.**
