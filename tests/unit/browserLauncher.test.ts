@@ -87,6 +87,10 @@ describe('launchProfileProcess', () => {
 
     expect(lastSpawnCall!.command).toBe(process.execPath);
     expect(lastSpawnCall!.args).toContain('--profile-window');
+    // Real, measured ~15% per-profile RAM reduction (docs/LOAD_TEST.md's
+    // "Update (2026-09-06)" section) — verified against a real Electron
+    // build to not regress fingerprint behavior before being added here.
+    expect(lastSpawnCall!.args).toContain('--in-process-gpu');
     expect(lastSpawnCall!.args).toContain('--profile-id=p1');
     expect(lastSpawnCall!.args).toContain('--profile-name=My Profile');
     expect(lastSpawnCall!.args).toContain('--user-data-dir=/data/p1');

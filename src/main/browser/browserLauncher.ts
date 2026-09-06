@@ -90,10 +90,25 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   // mixed-to-worse, not better (50 profiles at maxConcurrentLaunches=4 used
   // ~19% MORE peak RAM with the flags than without). Reverted rather than
   // kept on a plausible-sounding but unproven theory — see this project's
-  // whole convention of measuring before claiming. Not worth re-attempting
-  // without a concrete, different hypothesis for why it would help.
+  // whole convention of measuring before claiming.
+  //
+  // --in-process-gpu, unlike the above, IS kept — a different hypothesis
+  // (fewer OS processes per profile, not fewer Chromium subsystems) that
+  // real measurement confirmed: 5 processes / ~617MB per running profile
+  // (matching LOAD_TEST.md's own ~585MB baseline) dropped to 4 processes /
+  // ~527MB — a real ~15% per-profile RAM reduction, measured 3x for
+  // consistency, not a one-off. Runs Chromium's GPU command processing
+  // inside the browser process instead of a separate one; verified this
+  // doesn't silently break or change fingerprint behavior: the full
+  // fingerprintEnforcement.spec.ts suite (including the WebGL vendor/
+  // renderer spoofing test, which also confirms WebGL itself keeps
+  // rendering) passes unchanged, and a live CreepJS capture came back with
+  // the exact same clean stealth-score hash (0c019315) as the untouched
+  // baseline — same verification standard as every other fingerprint-
+  // adjacent change in this project.
   const args = [
     entryScript,
+    '--in-process-gpu',
     '--profile-window',
     `--profile-id=${params.profileId}`,
     `--profile-name=${params.profileName}`,

@@ -27,6 +27,25 @@ Code sessions, etc.), **more than ~2 real simultaneous browser processes
 reliably destabilizes this machine**, independent of anything in GoblinAnty's
 own code. See Test 2/3 below for the full, honest account.
 
+**Update (2026-09-06) — one real reduction found and shipped.** Investigated
+whether a shared/reduced GPU process per profile could lower the ~585MB/5-
+process figure above. `--in-process-gpu` (runs Chromium's GPU command
+processing inside the browser process instead of spawning a separate GPU
+process) measured a real **~15% per-profile RAM reduction**: 5 processes /
+~617MB → 4 processes / ~527MB, measured 3 times for consistency (Playwright
+launching a real profile, `tasklist` reading actual `electron.exe` working-
+set sizes before/after). Verified this doesn't silently change fingerprint
+behavior before shipping it in `browserLauncher.ts`: the full
+`fingerprintEnforcement.spec.ts` suite (including the WebGL vendor/renderer
+spoofing test, which also confirms WebGL itself keeps rendering) passes
+unchanged, and a live CreepJS capture came back with the exact same clean
+stealth-score hash (`0c019315`) as the untouched baseline. This does not
+change the ~2-simultaneous-profile stability ceiling above by itself — a
+~15% per-profile reduction doesn't turn a fundamentally RAM-bound limit into
+a solved one — but it is a genuine, measured, shipped improvement, not a
+mixed-to-worse result like the reverted Puppeteer-style flags experiment
+documented in `browserLauncher.ts` itself.
+
 ---
 
 ## Test 1 — Profile database (20 / 50 / 100 / 200 profiles)
