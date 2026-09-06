@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, ChevronDown, ChevronUp } from 'lucide-react';
 import type { ActivityLogEntry, ActivityEventType } from '@shared/schemas/activityLog';
 import type { ProfileListItem } from '@shared/schemas/profile';
 import { callApi } from '../services/api';
@@ -42,7 +42,17 @@ export function LogsPage(): JSX.Element {
   const loadMoreAction = useAsyncAction();
   const exportAction = useAsyncAction();
   const [exportedInfo, setExportedInfo] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const latestIdRef = useRef<number | null>(null);
+
+  function toggleExpanded(id: number): void {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Matches ProfilesPage's own 250ms debounce for the same reason: avoid
   // firing an IPC round-trip (and a LIKE query) on every keystroke.
@@ -189,7 +199,19 @@ export function LogsPage(): JSX.Element {
                     <span className={`pill ${eventPillVariant(e.eventType)}`}>{e.eventType}</span>
                   </td>
                   <td>{profileName(e.profileId)}</td>
-                  <td>{e.message}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="log-message-toggle"
+                      onClick={() => toggleExpanded(e.id)}
+                      title={expandedIds.has(e.id) ? t('logs.message.collapse') : t('logs.message.expand')}
+                    >
+                      {expandedIds.has(e.id) ? <ChevronUp size={13} strokeWidth={2.25} /> : <ChevronDown size={13} strokeWidth={2.25} />}
+                      <span className={expandedIds.has(e.id) ? 'log-message log-message-expanded' : 'log-message'}>
+                        {e.message}
+                      </span>
+                    </button>
+                  </td>
                 </tr>
               ))}
               {entries.length === 0 && !error && (

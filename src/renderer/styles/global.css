@@ -539,6 +539,36 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
 .proxy-history-table { width: auto; margin: 0; }
 .proxy-history-table th, .proxy-history-table td { padding: 4px 12px 4px 0; font-size: 12px; }
 
+/* ---------- LogsPage.tsx message cell: click/keyboard-expandable ---------- */
+.log-message-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.log-message-toggle:hover { background: rgba(124, 179, 66, 0.05); }
+.log-message-toggle svg { flex-shrink: 0; margin-top: 3px; color: var(--ash-dim); }
+.log-message {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 480px;
+}
+.log-message-expanded {
+  white-space: pre-wrap;
+  overflow: visible;
+  max-width: none;
+}
+
 /* ---------- Form field (label + control), reusable across all
    modals/tabs — extracted this stage from what used to be repeated inline
    `style={{ display: 'block', marginBottom: 8 }}` on every <label>. ---------- */

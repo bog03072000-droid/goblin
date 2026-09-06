@@ -244,4 +244,65 @@ describe('LogsPage', () => {
 
     expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
   });
+
+  describe('expandable message', () => {
+    it('renders each row\'s message inside a focusable toggle button, collapsed by default', async () => {
+      mockInvoke({
+        'profiles:list': () => [],
+        'logs:list': () => [makeEntry({ id: 1, message: 'A very long message that would otherwise overflow the cell' })],
+      });
+      renderPage();
+      // The button's own text content (the message) wins over `title` for
+      // its accessible name, so these look up the toggle by its title
+      // attribute directly rather than by accessible name.
+      const toggle = await screen.findByTitle('Show full message');
+      expect(toggle.tagName).toBe('BUTTON');
+      expect(toggle).toHaveTextContent('A very long message that would otherwise overflow the cell');
+      expect(toggle.querySelector('.log-message-expanded')).not.toBeInTheDocument();
+    });
+
+    it('clicking the toggle expands the message and flips its title to "Show less"', async () => {
+      mockInvoke({
+        'profiles:list': () => [],
+        'logs:list': () => [makeEntry({ id: 1, message: 'Expand me' })],
+      });
+      renderPage();
+      const toggle = await screen.findByTitle('Show full message');
+
+      fireEvent.click(toggle);
+
+      expect(screen.getByTitle('Show less')).toBeInTheDocument();
+      expect(toggle.querySelector('.log-message-expanded')).toBeInTheDocument();
+    });
+
+    it('clicking an expanded toggle again collapses it back', async () => {
+      mockInvoke({
+        'profiles:list': () => [],
+        'logs:list': () => [makeEntry({ id: 1, message: 'Toggle me twice' })],
+      });
+      renderPage();
+      const toggle = await screen.findByTitle('Show full message');
+
+      fireEvent.click(toggle);
+      fireEvent.click(screen.getByTitle('Show less'));
+
+      expect(screen.getByTitle('Show full message')).toBeInTheDocument();
+    });
+
+    it('expanding one row\'s message does not affect another row\'s', async () => {
+      mockInvoke({
+        'profiles:list': () => [],
+        'logs:list': () => [makeEntry({ id: 1, message: 'First' }), makeEntry({ id: 2, message: 'Second' })],
+      });
+      renderPage();
+      const toggles = await screen.findAllByTitle('Show full message');
+      expect(toggles).toHaveLength(2);
+
+      fireEvent.click(toggles[0]!);
+
+      const stillCollapsed = screen.getAllByTitle('Show full message');
+      expect(stillCollapsed).toHaveLength(1);
+      expect(screen.getByTitle('Show less')).toBeInTheDocument();
+    });
+  });
 });

@@ -448,6 +448,8 @@ const en = {
   'logs.loadMore': 'Load more',
   'logs.export': 'Export logs',
   'logs.export.success': 'Exported to {path}',
+  'logs.message.expand': 'Show full message',
+  'logs.message.collapse': 'Show less',
 } as const;
 
 export default en;

@@ -450,6 +450,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'logs.loadMore': 'Завантажити ще',
   'logs.export': 'Експортувати журнал',
   'logs.export.success': 'Експортовано до {path}',
+  'logs.message.expand': 'Показати повне повідомлення',
+  'logs.message.collapse': 'Згорнути',
 };
 
 export default uk;
