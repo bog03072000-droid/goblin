@@ -26,7 +26,8 @@
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3",
     "check:browser-version": "node scripts/checkBrowserVersionSync.js",
-    "check:dependency-engines": "node scripts/checkDependencyEnginesSync.js"
+    "check:dependency-engines": "node scripts/checkDependencyEnginesSync.js",
+    "check:ja4-drift": "node scripts/checkJa4Drift.js"
   },
   "dependencies": {
     "adm-zip": "^0.6.0",

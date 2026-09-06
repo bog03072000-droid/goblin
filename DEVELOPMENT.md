@@ -329,6 +329,38 @@ C with an OV cert** otherwise; skip Option A for anything meant for public
 download, it's documented above for honesty about what it does and
 doesn't solve, not as a real fix.
 
+## Checking for JA4 drift after an Electron upgrade
+
+`npm run check:browser-version` (part of the automated CI gate) already
+catches the more common drift: `platformProfiles.ts`'s hardcoded
+`browserVersion` string no longer matching the real installed Electron's
+Chromium major version. There is a second, deeper risk an Electron upgrade
+can introduce that check does NOT cover: the real TLS ClientHello (JA4)
+fingerprint changing to something no longer catalogued as a genuine
+browser (see `docs/FINGERPRINT_AUDIT.md`'s "Ninth investigation" for the
+full background on why this matters and why it is intentionally NOT a
+live network call inside CI — that was considered and rejected as a
+flakiness risk for an external third-party dependency).
+
+**Run this by hand once, specifically after bumping the `electron`
+dependency version** (not on every commit, not in CI):
+
+```bash
+npm run check:ja4-drift
+```
+
+This launches the real installed Electron binary, makes one real HTTPS
+request through its actual network stack to a public TLS-fingerprint echo
+service (`tls.peet.ws`), and compares the returned JA4 hash against the
+value this project's Chromium 128 build was confirmed to match against
+`ja4db.com`'s "Chromium Browser" entry at the time of the original
+investigation. A mismatch is not automatically a failure — it means a
+human needs to look the new value up at [ja4db.com](https://ja4db.com) and
+confirm it's still catalogued as a real browser, then update the script's
+`REFERENCE_JA4`/`REFERENCE_CHROME_MAJOR` constants and record the new
+value in `docs/FINGERPRINT_AUDIT.md`. The script's own output spells out
+these exact next steps when it detects a mismatch.
+
 ## Known dev-environment quirks
 
 - `dist-electron/main/browser/browser-shell.html` is a plain static asset
