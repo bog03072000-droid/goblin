@@ -15,6 +15,8 @@ import path from 'node:path';
 export const app = {
   getVersion: (): string => '0.0.0-test',
   getPath: (name: string): string => path.join(os.tmpdir(), 'profileforge-test-userdata', name),
+  getAppPath: (): string => path.join(os.tmpdir(), 'profileforge-test-app-path'),
+  isPackaged: false,
 };
 
 export const dialog = {
