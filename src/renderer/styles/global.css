@@ -188,6 +188,11 @@
   --ash-dim: #7c8577;
   --danger: #e5484d;
   --warn: #d29922;
+  /* Modal glass background — was a hardcoded dark rgba() literal (found
+     during a design review to stay dark even under the light theme, the
+     one surface that hadn't been made theme-aware); now a token like every
+     other surface color, re-defined per theme below. */
+  --modal-bg: rgba(35, 39, 31, 0.72);
 
   --radius-card: 18px;
   --radius-input: 12px;
@@ -213,6 +218,7 @@
     --paper: #1c1f1a;
     --ash: #5b6355;
     --ash-dim: #8a9280;
+    --modal-bg: rgba(240, 243, 236, 0.85);
   }
 }
 :root[data-theme="light"] {
@@ -225,6 +231,7 @@
   --paper: #1c1f1a;
   --ash: #5b6355;
   --ash-dim: #8a9280;
+  --modal-bg: rgba(240, 243, 236, 0.85);
 }
 /* Explicit dark selection always wins, even on a light-OS system — the bare
  * :root above already provides these values, this exists so the override
@@ -239,6 +246,7 @@
   --paper: #f2f5ee;
   --ash: #aab3a2;
   --ash-dim: #7c8577;
+  --modal-bg: rgba(35, 39, 31, 0.72);
 }
 
 /* Light-theme bevel/glow overrides — the dark-mode box-shadows above read
@@ -764,7 +772,7 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   z-index: 100;
 }
 .modal-panel {
-  background: rgba(35, 39, 31, 0.72);
+  background: var(--modal-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid rgba(124, 179, 66, 0.2);
@@ -830,6 +838,15 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
 .toolbar-inline { border-bottom: none; background: transparent; padding: 0; margin-bottom: 12px; }
 .selected-count { font-size: 12px; display: inline-flex; align-items: center; }
 .toolbar-wrap { flex-wrap: wrap; }
+/* Stacks two semantically distinct toolbar rows (filters, then quick-create
+   fields+actions) instead of relying on a `flex: 1` spacer inside one
+   wrapping flex container — at wide viewports that spacer let the second
+   group's fields wrap onto a visual line the group's own action buttons
+   (New Profile/Custom setup) then wrapped BELOW, landing them under the
+   unrelated filter row instead of under the fields they act on. See
+   ProfilesToolbar.tsx. */
+.toolbar-group { display: flex; flex-direction: column; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--stroke); background: var(--char); }
+.toolbar-group .toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .inline-flex { display: inline-flex; }
 .bulk-failure-list { margin: 6px 0 0; padding-left: 18px; }
 
@@ -871,6 +888,11 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+  /* Grid items stretch to the tallest row-mate by default — cards with
+     genuinely different field counts (e.g. Platform's 6 rows vs. Display's
+     2) otherwise end up with a large dead-space gap at the bottom of the
+     shorter card. Each card should size to its own content instead. */
+  align-items: start;
 }
 .fp-field-card { margin-bottom: 0; }
 .fp-field-card table { margin-top: 4px; }
