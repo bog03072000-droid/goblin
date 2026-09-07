@@ -216,3 +216,64 @@ jobs:
             release/*.zip
             release/**/*.app
           retention-days: 7
+
+  # Real Linux packaging + smoke test — best-effort, not required (continue-
+  # on-error), same non-blocking pattern as package-macos above.
+  # build.linux (package.json) was added without ever having been run on a
+  # real Linux host — this project has otherwise only ever built/tested on
+  # Windows, so ubuntu-latest is the first real opportunity to find out
+  # whether `npm run package:linux` (AppImage + deb) actually produces a
+  # launchable binary, same "verify, don't assume" standard as the macOS job.
+  package-linux:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Rebuild native modules for Electron ABI
+        run: npm run rebuild:electron
+      # --publish never for the same reason as the macOS job: electron-builder
+      # auto-detects package.json's build.publish (GitHub provider) and would
+      # otherwise try to publish a release without a GH_TOKEN this job
+      # intentionally doesn't have — this verifies a build, it doesn't cut one.
+      - name: Build unsigned Linux packages (AppImage + deb, no auto-publish)
+        run: |
+          npm run build
+          npx electron-builder --linux --publish never
+      # Minimal smoke test: launches the actual packaged AppImage (not the
+      # source tree) and confirms the process is still alive a few seconds
+      # later — answers "does the packaged artifact even start", the same
+      # standard as the macOS job's own smoke test. AppImages need FUSE to
+      # run directly on most CI images; --appimage-extract-and-run sidesteps
+      # that without needing to install/configure FUSE in this job.
+      - name: Smoke test — launch the packaged AppImage and confirm it stays up
+        shell: bash
+        run: |
+          APPIMAGE_PATH=$(find release -name "*.AppImage" | head -n1)
+          if [ -z "$APPIMAGE_PATH" ]; then
+            echo "No .AppImage found under release/ — package:linux did not produce one"
+            exit 1
+          fi
+          echo "Found: $APPIMAGE_PATH"
+          chmod +x "$APPIMAGE_PATH"
+          "$APPIMAGE_PATH" --appimage-extract-and-run --no-sandbox &
+          APP_PID=$!
+          sleep 8
+          if ! kill -0 "$APP_PID" 2>/dev/null; then
+            echo "Packaged AppImage is not running after launch — it likely crashed on startup"
+            exit 1
+          fi
+          echo "Packaged AppImage is running."
+          kill "$APP_PID" || true
+      - name: Upload the unsigned Linux packages
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages-unsigned
+          path: |
+            release/*.AppImage
+            release/*.deb
+          retention-days: 7
