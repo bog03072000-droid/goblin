@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.4.0 — behavioral emulation, mobile fingerprint bundles, competitor import, coverage/architecture hardening
+
+Everything shipped since the `v0.3.0` tag (`git log v0.3.0..v0.4.0`, 48
+commits) — previously scattered as ungrouped work-in-progress with no
+release entry at all, now consolidated into one real version bump.
+
+- **Behavioral emulation** (`src/shared/automation/humanInput.ts`,
+  `humanInputDriver.ts`): human-like mouse-movement paths (Bezier curve,
+  eased non-uniform speed, slight overshoot+correction), typing timing
+  (variable inter-key delay, occasional realistic pauses), and scroll
+  patterns (non-uniform speed, pauses, overshoot+correction) — all
+  dispatched over real CDP `Input.dispatch*Event` sequences via
+  `humanClick`/`humanType`/`humanScroll`, verified end-to-end against a
+  live profile reading its own real mousemove/keydown/wheel DOM events
+  (`tests/e2e/humanInputDriver.spec.ts`). A new **"Test human input"**
+  toolbar button in the per-profile browser shell runs a real
+  humanClick+humanScroll against whatever page is loaded, for visual
+  confirmation without writing an automation script.
+  See `docs/BEHAVIORAL_EMULATION.md` for the research/architecture writeup.
+- **Mobile Android/iOS fingerprint bundles** (`platformProfiles.ts`):
+  realistic UA/screen/DPR/hardware/GPU bundles for both, plus a new
+  `maxTouchPoints` field carried through the full schema → DB → generator
+  → validator → spoofing → enforcement → UI stack. Found and fixed two
+  real bugs a live E2E run caught that nothing else could have: the
+  per-profile child process's `--fingerprint-config` allowlist silently
+  dropped `os`/`maxTouchPoints` entirely, and `Emulation.setDeviceMetricsOverride`'s
+  `mobile` flag alone didn't flip `matchMedia('(pointer: coarse)')`/`(hover:
+  none)` without a paired `Emulation.setTouchEmulationEnabled` call. iOS's
+  inherent Chromium-presenting-as-WebKit engine-level mismatch is documented
+  as an honest, unfixable-within-this-architecture limitation, not glossed
+  over. See `docs/FINGERPRINT_AUDIT.md`'s "Tenth investigation".
+- **Competitor profile import** (`src/main/profiles/competitorImport.ts`):
+  `importFromCompetitor()` parses GoLogin's real, publicly-documented JSON
+  profile export format, maps confirmed fields onto this project's own
+  Fingerprint schema, and falls back to a fully-generated coherent
+  fingerprint if the merge would be internally inconsistent. Dolphin Anty
+  deliberately **not** supported — its docs are a JS-rendered SPA with no
+  retrievable public schema, and guessing one was explicitly ruled out.
+- **Architecture**: `browserLauncher.ts`'s hand-maintained field-by-field
+  allowlist for the child process's fingerprint config — the exact
+  mechanism that silently dropped `os`/`maxTouchPoints` above — replaced
+  with `pickChildProcessFingerprintFields()`, an exclude list covering only
+  genuine DB-bookkeeping/redundant fields. A field added to the schema in
+  the future now reaches the child process by default instead of requiring
+  someone to remember to add it here too.
+- **Test coverage**: `ProfilesPage.tsx` (445 lines) and
+  `useProfileSelection.ts` (188 lines) — the two largest concrete 0%-covered
+  files from the last real coverage report — now have real RTL/hook test
+  coverage (84.18% and 100% statements respectively). Overall project
+  statement coverage: 82.01% → 86.82%.
+- **Fingerprint investigations, resolved rather than left open**: confirmed
+  and root-caused a real gap where an external automation client's own CDP
+  session reads `navigator.platform` as the real host value instead of the
+  spoofed one (narrow impact — does not affect what a visited website's own
+  script sees, only a user's own automation script inspecting its profile
+  via `page.evaluate()`-style calls); re-investigated the CSS
+  fallback-width-measurement font-detection gap and confirmed, independently,
+  that no clean fix exists without a Chromium patch or a genuinely new
+  per-profile OS-level font directory feature. Both in
+  `docs/FINGERPRINT_AUDIT.md`'s "Eleventh"/"Twelfth" investigations.
+- **UX/design/reliability polish**: bulk-enable-schedule scope explained
+  directly in the UI (not just a code comment), recurring scheduled
+  auto-start with a "next auto-start" badge and live schedule validation,
+  keyboard-operable context menu and `:focus-visible` row highlighting on
+  Profiles/Proxies tables, expandable long log messages, table panels get
+  their own horizontal scroll on narrow windows, proxy geolocation verified
+  through a real HTTP CONNECT tunnel (not just the host) with timezone-
+  mismatch flags, `--in-process-gpu` for a real measured ~15% per-profile
+  RAM reduction, a soft memory limit (with user-acknowledgeable override) on
+  starting/bulk-starting profiles, a JA4-drift CI guard for Electron
+  upgrades, and a dependency-engines CI gate that would have caught the
+  undici/Node-ABI class of crash before it shipped.
+- Real DB-layer load-test numbers refreshed fresh (`docs/LOAD_TEST.md`),
+  confirming no regression across this entire range.
+
 ## 0.3.0 — Service Worker fingerprint leak closed by default, entire spoofing injection moved to CDP
 
 - **`serviceWorkerMode` now defaults to `'disabled'` (protection ON) for every
@@ -43,7 +118,7 @@
   `DownloadsPage.tsx`, `ProfileContextMenu.tsx` — raising overall statement
   coverage from 63.5% to 67.83%.
 
-## Unreleased — proxy rotation pool per group
+### proxy rotation pool per group
 
 - Groups can now carry a proxy rotation pool (migration 007:
   `group_proxy_pool`, plus a `proxy_rotation_cursor` column on `groups`).
@@ -57,7 +132,7 @@
   dependency - existing callers/tests that omit it keep working exactly
   as before (grouped, proxy-less profiles just run unproxied).
 
-## Unreleased — GoblinAnty rebrand, experimental macOS packaging
+### GoblinAnty rebrand, experimental macOS packaging
 
 - Application renamed from **Goblin** to **GoblinAnty** throughout the UI
   (window titles, sidebar brand, file-dialog filter names), `package.json`
@@ -80,7 +155,7 @@
   produced or verified beyond that here. See README's "Build a macOS
   package" section.
 
-## Unreleased — audit remediation: fingerprint default, proxy edit, logs, design, CSP, refactor
+### audit remediation: fingerprint default, proxy edit, logs, design, CSP, refactor
 
 - WebGL vendor/renderer spoofing now defaults to on for new profiles (was
   the single largest practical detection gap).
@@ -96,7 +171,7 @@
 - Split `ProfilesPage.tsx` and `profileWindowEntry.ts` into focused
   modules/hooks (each now under 400 lines).
 
-## Unreleased — final technical hardening: WebGL enabled-mode E2E, fonts re-investigation, documentation refresh
+### final technical hardening: WebGL enabled-mode E2E, fonts re-investigation, documentation refresh
 
 - Added the missing enabled-mode E2E test for WebGL vendor/renderer
   spoofing: turns `webglSpoofingMode` on via the real UI, starts a profile,
@@ -126,7 +201,7 @@
   (Feature | Supported | Actually Applied | E2E Verified | Notes) covering
   every currently-supported fingerprint field in one place.
 
-## Unreleased — reliability: cookie/storage-restart fix, clone/proxy/concurrency E2E gaps
+### reliability: cookie/storage-restart fix, clone/proxy/concurrency E2E gaps
 
 - Root-caused and fixed the cookie/localStorage/IndexedDB-not-surviving-
   restart bug from the prior stage's fixme'd test. The graceful `app.quit()`
@@ -151,7 +226,7 @@
   validation across all channels) and fingerprint consistency (existing
   E2E suite, no regressions).
 
-## Unreleased — profile manager daily-use polish
+### profile manager daily-use polish
 
 - Filter by proxy (including "no proxy"), sort direction toggle, invert
   selection, debounced search (250ms) alongside the existing group/tag/
@@ -175,7 +250,7 @@
   page-level keyboard shortcuts (Ctrl+N/Ctrl+F/Ctrl+A/Delete/Enter),
   documented in a new Settings → Keyboard Shortcuts panel.
 
-## Unreleased — daily-use reliability hardening
+### daily-use reliability hardening
 
 - New translated (UK/EN) error messages for a missing profile storage
   directory, corrupted fingerprint data, and a failed browser process
@@ -197,7 +272,7 @@
   one, and the missing-storage-directory case, all driven through real IPC/
   UI interaction.
 
-## Unreleased — persistent downloads history
+### persistent downloads history
 
 - New `downloads` SQLite table, written to directly by each per-profile
   child process's own `will-download` handler on every terminal download
@@ -215,7 +290,7 @@
   currently running — documented as a known limitation, not silently
   broken).
 
-## Unreleased — fingerprint spoofing: Canvas, Audio, Device Memory, WebGL, Fonts, Media Devices
+### fingerprint spoofing: Canvas, Audio, Device Memory, WebGL, Fonts, Media Devices
 
 - Closed the D-graded gaps from the fingerprint audit by injecting a seeded
   spoofing script into the page's real main JS world via CDP
@@ -239,7 +314,7 @@
   (`isOverridden()`, `canvasIsDeterministic()`, `mediaDevicesLookFake()`) so
   no field can report a false PASS/APPLIED based on configuration alone.
 
-## Unreleased — Goblin rebrand: real tabs, downloads panel, proxy verification, groups UI
+### Goblin rebrand: real tabs, downloads panel, proxy verification, groups UI
 
 - Application renamed from ProfileForge to **Goblin** throughout the UI,
   installer (`productName`/`shortcutName`), and branding assets — a new
@@ -257,7 +332,7 @@
   into smaller page/component modules with a shared `useAsyncAction` hook,
   as the single-file versions had grown large enough to be hard to navigate.
 
-## Unreleased — multi-tab browser, restart/persistence/proxy verification
+### multi-tab browser, restart/persistence/proxy verification
 
 - Multi-tab browser: New Tab, Close Tab (last tab protected), Switch Tab,
   Duplicate Tab, all sharing the profile's one session/partition (tabs never
@@ -290,7 +365,7 @@
   a new `retries: 1` in playwright.config.ts). 89 unit/integration tests
   still passing, 200-profile performance unaffected.
 
-## Unreleased — Octo-like functional pass: bulk ops, backup/restore, list columns
+### Octo-like functional pass: bulk ops, backup/restore, list columns
 
 - Bulk profile operations: multi-select checkboxes + a bulk action toolbar
   (Start, Stop, Clone, Delete, Export Selected, assign proxy, add tag) on the
@@ -318,7 +393,7 @@
 - 14 new tests (bulk operations, bulk import error isolation/dedup, one new
   E2E spec for multi-select) — 72 unit/integration + 10 E2E, all passing.
 
-## Unreleased — fingerprint reality audit & deep browser integration
+### fingerprint reality audit & deep browser integration
 
 Full audit of every fingerprint property against the actual running browser
 — see **`docs/FINGERPRINT_AUDIT.md`** for the complete reality matrix and the
@@ -363,7 +438,7 @@ empirical findings behind every classification. Summary:
 - 10 new tests (2 E2E + 5 consistency + 3 compatibility) — 63 unit/
   integration + 9 E2E, all passing.
 
-## Unreleased — real browser start/stop E2E coverage + polling bug fix
+### real browser start/stop E2E coverage + polling bug fix
 
 - Added `tests/e2e/profileBrowserLifecycle.spec.ts`: an E2E test that clicks a
   profile's real Start button, confirms the nested per-profile Electron/
@@ -379,7 +454,7 @@ empirical findings behind every classification. Summary:
   unit/integration, 6/6 performance tests passing; both tsconfigs and ESLint
   clean.
 
-## Unreleased — profile editor UI
+### profile editor UI
 
 - `ProfileEditorModal` with General/Fingerprint/Proxy/Storage/Advanced tabs:
   view and rename a profile, view every fingerprint field and run
@@ -390,7 +465,7 @@ empirical findings behind every classification. Summary:
   (open, view fingerprint, validate, rename, save) — 6/6 e2e tests passing,
   55/55 unit/integration tests still passing.
 
-## Unreleased — Windows installer
+### Windows installer
 
 - Fixed `electron-builder` packaging on Windows without Developer Mode/admin
   (`signAndEditExecutable: false`, documented in DEVELOPMENT.md) and produced
@@ -401,7 +476,7 @@ empirical findings behind every classification. Summary:
   — outside the install directory.
 - Added the `author` field electron-builder required.
 
-## Unreleased — E2E harness, performance benchmark
+### E2E harness, performance benchmark
 
 - Playwright + `_electron` E2E harness (`tests/e2e/profileLifecycle.spec.ts`,
   5 tests) driving the real built Electron app — main process, preload,
@@ -414,7 +489,7 @@ empirical findings behind every classification. Summary:
   `tests/performance/PERFORMANCE_REPORT.md` on every run — sub-2ms for
   list/search/filter at 200 profiles, ~170ms to create all 200.
 
-## Unreleased — settings, filtering, security suite
+### settings, filtering, security suite
 
 - Settings repository (defaults-merged, corrupted-key-resilient key/value
   store over the `settings` table) + Settings page: hardware acceleration
@@ -429,7 +504,7 @@ empirical findings behind every classification. Summary:
   corruption resistance.
 - 22 new tests overall — 55/55 passing.
 
-## Unreleased — diagnostics, templates, import/export
+### diagnostics, templates, import/export
 
 - Fingerprint diagnostic page (`profileforge://fingerprint-test`), served by a
   custom protocol handler registered on each profile's own session, comparing
@@ -447,7 +522,7 @@ empirical findings behind every classification. Summary:
   overwrites an existing one.
 - 8 new tests (templates, export schema validation) — 33/33 passing.
 
-## Unreleased — initial foundation
+### initial foundation
 
 - Initialized project: Electron + React + TypeScript + Vite + better-sqlite3 +
   Zod + Vitest + ESLint + Prettier + electron-builder.
