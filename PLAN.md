@@ -121,3 +121,52 @@ making any claim about what ProfileForge's fingerprinting "does."
 automated "survives app restart" E2E round-trip, and E2E coverage of `restart()` specifically
 (as opposed to start+stop, which are covered). Everything else on the brief's own acceptance
 list is done and verified by an automated test, not just present in the code.
+
+**This section is now stale, kept verbatim as history — see the dated assessment below for
+the current, real state; every gap named above has since been closed** (manual fingerprint
+editing: `ProfileEditorModal`'s Fingerprint tab AUTO/MANUAL toggle; backup/restore UI:
+`ProfilesToolbar.tsx`'s Backup/Restore actions, live-tested end to end 2026-09-07; app-restart
+survival: `tests/e2e/applicationRestartPersistence.spec.ts`; `restart()` E2E coverage: covered
+alongside start/stop in `profileLifecycle.spec.ts` and elsewhere).
+
+## Release readiness for v1.0 (2026-09-07)
+
+Assessed honestly against the actual current state — `git log`, a real `npm run test:coverage`
+run (86.86% statements, 74 files / 778 tests, all passing), a real full `npm run test:e2e` run
+(99/121 clean in one pass; the rest traced to either ambient-machine-load-sensitive `loadTest*`
+specs or a since-root-caused-and-fixed timing flake — see `docs/FINGERPRINT_AUDIT.md`'s
+"Thirteenth investigation"), and a fresh UX walkthrough of bulk operations, backup/restore,
+cloning, and group management (no new friction found).
+
+**No code-level blockers found.** The feature set is comprehensive and each major area has real,
+E2E-verified coverage: profiles/proxies/fingerprint spoofing (twelve dedicated investigations in
+`docs/FINGERPRINT_AUDIT.md`)/groups/scheduling/logs/downloads/cookie-and-localStorage editing/
+backup-restore/import-export (including a competitor format)/an authenticated automation API/
+behavioral emulation (mouse/typing/scroll)/mobile fingerprint profiles. Security posture is
+real and documented (`SECURITY.md`): encrypted credentials with an honestly-caveated fallback,
+CSP hardened, IPC validated end to end, adversarial test coverage. Every known technical
+limitation this project carries (iOS's inherent Chromium-presenting-as-WebKit mismatch, the
+CSS-measurement font-detection gap, the narrow automation-CDP `navigator.platform` self-inspection
+gap) is investigated, root-caused, and stated plainly rather than hidden or silently claimed as
+solved — the kind of transparency real users benefit from more than a false "fully solved" claim.
+
+**Two real, named gaps — both external dependencies, not code defects, matching this project's
+own honest framing (`scripts/sign.js`, `DEVELOPMENT.md`'s code-signing section):**
+1. **Windows builds are not actually code-signed with real credentials.** The Azure Trusted
+   Signing integration itself is real, tested, and safe-by-default (`scripts/sign.js` verified to
+   leave a build genuinely unsigned when `sign.env` isn't populated, and to correctly attempt
+   real signing when it is) — but no packaged installer has ever been signed with a real
+   credential, because that requires an actual paid Azure Trusted Signing account, which is the
+   user's own external decision, not something further code work here can close.
+2. **macOS builds are unsigned and unnotarized** (`identity: null` in `package.json`, by explicit,
+   documented design) — real users will see Gatekeeper's "unidentified developer" warning.
+   Closing this requires an Apple Developer Program enrollment (paid, external), not a code change.
+
+**Worth naming, not blocking:** the Linux packaging target (`efdc33e`) has exactly one real CI
+success behind it so far — genuinely new, not yet battle-tested the way the Windows path is.
+
+**Recommendation: yes, v1.0 is justified**, with these two signing gaps documented in the release
+notes as known, external, and not blocking (unsigned/notarization-pending builds are a normal,
+common state for an indie/open-source desktop app's first stable release — Gatekeeper/SmartScreen
+warnings are a real UX cost but not a functional defect, and users can still install by choosing
+to trust the app). This is a recommendation only — no version bump was made here.
