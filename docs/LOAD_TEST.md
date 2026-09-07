@@ -25,7 +25,11 @@ machine's ambient free memory during testing (1–2 GB, shared with the
 user's other running applications — Chrome, Windows Defender, other Claude
 Code sessions, etc.), **more than ~2 real simultaneous browser processes
 reliably destabilizes this machine**, independent of anything in GoblinAnty's
-own code. See Test 2/3 below for the full, honest account.
+own code. See Test 2/3 below for the full, honest account. **This "~2
+profiles" ceiling was itself superseded below (2026-09-01/09-03: two test-
+authoring bugs, not a real limit; re-confirmed live 2026-09-07 up to 100
+simultaneous profiles cleanly) — kept here verbatim as the original,
+honestly-wrong first finding, not because it's still the current guidance.**
 
 **Update (2026-09-06) — one real reduction found and shipped.** Investigated
 whether a shared/reduced GPU process per profile could lower the ~585MB/5-
@@ -256,6 +260,59 @@ erased.
 > original (mistaken) finding, not deleted — but treat "Result: WARN" as
 > historical, not current.
 
+> **Update (2026-09-07) — 50 and 100 simultaneous real profiles, actually
+> re-measured live and watched throughout, not deferred again.** This
+> exact tier had been repeatedly postponed across several prior assessment
+> rounds this session, citing the risk documented below. Run carefully
+> this time: `PF_LOAD_TEST_PROFILE_COUNT` at 10, then 20, then 50, then
+> 100, each tier's own `maxConcurrentLaunches` 2/4/8 sweep watched live via
+> a parallel `Get-CimInstance Win32_OperatingSystem` polling loop (free RAM
+> + `electron.exe` process count sampled every 8–10s throughout), ready to
+> abort if free RAM approached the danger zone this file's own account
+> below describes (~0.6GB). **Real results, all four tiers, all clean: 0
+> failures, 0 orphaned processes, at every profile count and every
+> concurrency value** (`tests/performance/LOAD_TEST_BULKSTART_RAW.md` holds
+> the 100-profile tier's raw table; 10/20/50 were captured in this same
+> session's own tool output).
+>
+> | Profiles | Concurrency | Total startup | Succeeded/Failed | Free RAM before | Free RAM at peak (lowest point) | RAM used at peak |
+> |---|---|---|---|---|---|---|
+> | 10 | 2 | 1.55s | 10/0 | 16.1GB | 14.5GB | 1.56GB |
+> | 10 | 4 | 1.02s | 10/0 | 16.0GB | 14.4GB | 1.60GB |
+> | 10 | 8 | 0.53s | 10/0 | 15.9GB | 14.4GB | 1.55GB |
+> | 20 | 2 | 3.32s | 20/0 | 15.9GB | 13.1GB | 2.82GB |
+> | 20 | 4 | 1.67s | 20/0 | 15.7GB | 12.6GB | 3.08GB |
+> | 20 | 8 | 1.22s | 20/0 | 15.6GB | 13.3GB | 2.27GB |
+> | 50 | 2 | 8.22s | 50/0 | 15.8GB | 8.51GB | 7.25GB |
+> | 50 | 4 | 5.17s | 50/0 | 15.4GB | 8.99GB | 6.36GB |
+> | 50 | 8 | 3.74s | 50/0 | 15.2GB | 10.9GB | 4.28GB |
+> | 100 | 2 | 18.4s | 100/0 | 15.2GB | **3.13GB** | 12.1GB |
+> | 100 | 4 | 21.0s | 100/0 | 15.4GB | 6.55GB | 8.83GB |
+> | 100 | 8 | 11.2s | 100/0 | 15.2GB | 8.20GB | 7.00GB |
+>
+> The live poll (finer-grained than the per-test before/after samples
+> above) caught the real low point during the 100-profile/concurrency=2
+> wave at **2.24–2.39GB free**, briefly — genuinely closer to the ~0.6GB
+> danger zone than any other tier, but the machine stayed responsive
+> throughout (no hang, no unresponsive terminal, no crash) and free RAM
+> recovered to 15.4GB within seconds of that wave's own bulk-stop
+> completing, before the next concurrency wave began. This session's
+> available headroom (~15–16GB free at baseline) was meaningfully higher
+> than the original near-incident account below (~3.7–3.8GB free at
+> baseline) — the same 100-profile/concurrency=2 combination that once
+> "genuinely timed out" here completes cleanly in 18–19s with double-digit
+> GB of headroom to spare, both consistent with (not contradicting) the
+> original finding: the real constraint is this machine's available RAM
+> at the time, not a defect in the bulk-start mechanism itself, exactly as
+> the 2026-09-01/09-03 re-confirmations already concluded. **Recommendation
+> updated**: 50 simultaneous profiles is comfortably safe on a machine with
+> this much free RAM (minimum observed free: 8.5GB, i.e. real headroom
+> remained throughout); 100 simultaneous profiles completes successfully
+> but consumes nearly all available headroom at its lowest point on this
+> specific machine — treat 100 as the tested ceiling for a 31GB-RAM
+> machine with ~15GB free at rest, not a number to push further without
+> re-measuring on the actual target hardware.
+
 > **Update (2026-09-06) — sensitivity checked, cross-hardware
 > re-measurement still not possible.** `ESTIMATED_MB_PER_RUNNING_PROFILE`
 > (585) and `SAFE_FREE_RAM_MARGIN_MB` (1536) both remain derived from the
@@ -383,7 +440,7 @@ profiles" recommendation below.
 | Test | Result |
 |---|---|
 | 1 — Profile database (20/50/100/200) | **PASS** |
-| 2/3 — Bulk start/stop | **PASS** (superseded 2026-09-01, re-confirmed 2026-09-03 — see the update note under Test 2/3: the original WARN was two test-authoring bugs, not memory pressure; concurrency 2/4/8 clean at 20/50/100 profiles, 0 failures/0 orphans) |
+| 2/3 — Bulk start/stop | **PASS** (superseded 2026-09-01, re-confirmed 2026-09-03 and again 2026-09-07 with a continuous live free-RAM poll — see the update notes under Test 2/3: the original WARN was two test-authoring bugs, not memory pressure; concurrency 2/4/8 clean at 10/20/50/100 profiles, 0 failures/0 orphans at every combination) |
 | 4 — Profile isolation (20 profiles) | **PASS** |
 | 5 — Stability (10 cycles × 2 profiles) | **PASS** (validated mechanism, and the CDP-navigation follow-up: 0/80 real-navigation cycles crashed across 8 repeats) |
 | 6 — Clone (3 pairs) | **PASS** |
@@ -409,20 +466,26 @@ Test 2/3 update above): validated up to 100 with `maxConcurrentLaunches`
 2/4/8, 0 failures, 0 orphans** — the original "2, and not even reliably at
 that" ceiling was two test bugs, not a real machine limit. The real,
 measured cost is ~585 MB and ~5 OS processes per running profile (still
-accurate — that part of the original measurement wasn't in question), and
-100 profiles at `maxConcurrentLaunches=2` genuinely does cost ~93.9s and
-~10.7GB of peak RAM, a real, worth-knowing number, not a failure. A user
-with less free RAM than the ~15-19GB available during the 2026-09-01/
-2026-09-03 re-runs should still budget conservatively (rule of thumb: ~600
-MB of free, uncommitted RAM per simultaneously running profile) and expect
-the same super-linear startup-time growth at low concurrency documented in
-`tests/performance/LOAD_TEST_BULKSTART_RAW.md`, but "2" is no longer the
-number this report stands behind as a ceiling — it was never a real one.
+accurate — that part of the original measurement wasn't in question).
+**Re-confirmed live 2026-09-07** at all of 10/20/50/100 profiles (not just
+20/50/100's before/after snapshots) with a continuous free-RAM poll
+throughout, not just before/after samples: 50 profiles stayed comfortably
+safe (minimum free RAM observed: 8.5GB); 100 profiles at
+`maxConcurrentLaunches=2` completed in ~18-19s but pushed free RAM down to
+~2.2-3.1GB at its lowest point — genuinely tight, though the machine never
+became unresponsive and recovered fully within seconds. A user with less
+free RAM than the ~15-16GB available during this run should budget
+conservatively (rule of thumb: ~600 MB of free, uncommitted RAM per
+simultaneously running profile, i.e. don't attempt 100 simultaneous
+profiles with less than roughly 12-15GB genuinely free) and expect the
+same super-linear startup-time growth at low concurrency documented in
+`tests/performance/LOAD_TEST_BULKSTART_RAW.md`.
 
 **Final readiness percentage: 99%.** All database/UI/isolation/clone/
 stability/bulk-start functionality is solidly validated at real scale
-(20/50/100 profiles, concurrency 2/4/8, re-confirmed fresh 2026-09-03) with
-zero product-code defects found. Test 5's CDP-navigation crash finding
+(10/20/50/100 profiles, concurrency 2/4/8, re-confirmed fresh 2026-09-07
+with a continuous live free-RAM poll, not just 2026-09-03's before/after
+samples) with zero product-code defects found. Test 5's CDP-navigation crash finding
 (see Test 5 above) — once the ceiling on readiness at 97% — was followed up
 with dedicated real-navigation investigations on 2026-09-04 (20 cycles,
 then 80 cycles across 8 repeats) that reproduced zero crashes, downgrading
