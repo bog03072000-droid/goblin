@@ -81,7 +81,10 @@ export class DownloadRepository {
       params['profileId'] = filters.profileId;
     }
     if (filters.search) {
-      sql += ' AND filename LIKE @search';
+      // lower_unicode (db.ts) — plain LIKE is only case-insensitive for
+      // ASCII, silently missing a lowercase Cyrillic search against a
+      // capitalized stored filename (or vice versa).
+      sql += ' AND lower_unicode(filename) LIKE lower_unicode(@search)';
       params['search'] = `%${filters.search}%`;
     }
     if (filters.dateFrom) {

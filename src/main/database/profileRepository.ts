@@ -138,7 +138,10 @@ export class ProfileRepository {
       params.push(filter.tag);
     }
     if (filter?.search) {
-      conditions.push('p.name LIKE ?');
+      // lower_unicode (db.ts) — plain LIKE is only case-insensitive for
+      // ASCII, silently missing a lowercase Cyrillic search against a
+      // capitalized stored profile name (or vice versa).
+      conditions.push('lower_unicode(p.name) LIKE lower_unicode(?)');
       params.push(`%${filter.search}%`);
     }
     if (filter?.groupId) {

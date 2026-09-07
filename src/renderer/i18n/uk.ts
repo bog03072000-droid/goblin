@@ -197,6 +197,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.fingerprint.row.fontsMode': 'Режим шрифтів',
   'editor.fingerprint.row.mediaDevicesMode': 'Режим медіапристроїв',
   'editor.fingerprint.spoofing.title': 'Спуфінг',
+  'editor.fingerprint.spoofing.autosaveHint': 'Кожне поле нижче зберігається автоматично при зміні — кнопка "Зберегти" тут не потрібна (на відміну від ручних полів вище).',
   'editor.fingerprint.spoofing.off': 'Вимкнено',
   'editor.fingerprint.spoofing.noise': 'Шум (детермінований, консистентний для профілю)',
   'editor.fingerprint.spoofing.canvasTooltip':

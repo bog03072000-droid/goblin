@@ -61,7 +61,10 @@ export class ActivityLogRepository {
       params['profileId'] = options.profileId;
     }
     if (options.search) {
-      conditions.push('message LIKE @search ESCAPE \'\\\'');
+      // lower_unicode (db.ts) — plain LIKE is only case-insensitive for
+      // ASCII, silently missing a lowercase Cyrillic search against a
+      // capitalized stored message (or vice versa).
+      conditions.push('lower_unicode(message) LIKE lower_unicode(@search) ESCAPE \'\\\'');
       params['search'] = `%${options.search.replace(/[\\%_]/g, '\\$&')}%`;
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';

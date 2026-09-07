@@ -34,12 +34,26 @@ function runMigrations(db: Database.Database, migrationsDir: string): void {
   }
 }
 
+/** SQLite's built-in `LIKE` is only case-insensitive for the 26 ASCII
+ * letters (no ICU extension loaded) — a search for "мій" silently never
+ * matches a stored "Мій", found during a real UX walkthrough of the Logs
+ * page's search box (any Cyrillic text has this gap, and this app ships
+ * with Ukrainian as one of its two locales). JS's own `.toLowerCase()` is
+ * Unicode-correct, so exposing it as a custom scalar SQL function and
+ * wrapping both sides of a LIKE comparison in it fixes case-insensitivity
+ * for every script, not just ASCII. See profileRepository.ts,
+ * activityLogRepository.ts, downloadRepository.ts for the call sites. */
+function registerCaseInsensitiveSearchFn(db: Database.Database): void {
+  db.function('lower_unicode', (text: unknown) => (text === null || text === undefined ? null : String(text).toLowerCase()));
+}
+
 export function getDb(dbPath: string, migrationsDir: string): Database.Database {
   if (instance) return instance;
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  registerCaseInsensitiveSearchFn(db);
   runMigrations(db, migrationsDir);
   instance = db;
   return db;
@@ -54,6 +68,7 @@ export function closeDb(): void {
 export function createTestDb(migrationsDir: string): Database.Database {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
+  registerCaseInsensitiveSearchFn(db);
   runMigrations(db, migrationsDir);
   return db;
 }

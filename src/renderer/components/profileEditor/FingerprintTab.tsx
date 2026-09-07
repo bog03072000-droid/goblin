@@ -330,6 +330,7 @@ export function FingerprintTab({
           {t('editor.fingerprint.spoofing.title')}
           {spoofingSaving && <span className="spinner" />}
         </h4>
+        <p className="text-dim text-sm mt-0">{t('editor.fingerprint.spoofing.autosaveHint')}</p>
         <label className="field">
           {t('editor.fingerprint.row.canvasMode')}
           <select

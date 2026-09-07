@@ -67,6 +67,11 @@ describe('DownloadRepository', () => {
     expect(list[0]!.filename).toBe('invoice-2024.pdf');
   });
 
+  it('search is case-insensitive for non-ASCII (Cyrillic) filenames too, not just ASCII', () => {
+    repo.create({ profileId: profileAId, filename: 'Рахунок.pdf', savePath: '/r.pdf', url: 'https://x/r.pdf', totalBytes: 1, state: 'completed' });
+    expect(repo.list({ search: 'рахунок' })).toHaveLength(1);
+  });
+
   it('filters by a created_at date range', () => {
     const rec = repo.create({ profileId: profileAId, filename: 'a.zip', savePath: '/a.zip', url: 'https://x/a.zip', totalBytes: 1, state: 'completed' });
     const past = new Date(Date.now() - 86_400_000).toISOString();

@@ -57,6 +57,14 @@ describe('ActivityLogRepository', () => {
     expect(logs.list({ limit: 10, search: '100%_done' })).toHaveLength(1);
   });
 
+  it('search is case-insensitive for non-ASCII (Cyrillic) text, not just ASCII — real bug found in a live UX walkthrough: SQLite\'s built-in LIKE case-folds only the 26 ASCII letters', () => {
+    logs.record('PROFILE_CREATED', 'p1', 'Profile "Мій тестовий профіль" created');
+
+    expect(logs.list({ limit: 10, search: 'мій' })).toHaveLength(1);
+    expect(logs.list({ limit: 10, search: 'МІЙ' })).toHaveLength(1);
+    expect(logs.list({ limit: 10, search: 'Мій' })).toHaveLength(1);
+  });
+
   it('beforeId cursor pagination returns strictly older, non-overlapping pages', () => {
     for (let i = 0; i < 5; i++) logs.record('PROFILE_CREATED', 'p1', `entry ${i}`);
 

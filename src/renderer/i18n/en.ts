@@ -195,6 +195,7 @@ const en = {
   'editor.fingerprint.row.fontsMode': 'Fonts Mode',
   'editor.fingerprint.row.mediaDevicesMode': 'Media Devices Mode',
   'editor.fingerprint.spoofing.title': 'Spoofing',
+  'editor.fingerprint.spoofing.autosaveHint': 'Every field below saves automatically as you change it — no Save button needed here (unlike the manual fields above).',
   'editor.fingerprint.spoofing.off': 'Off',
   'editor.fingerprint.spoofing.noise': 'Noise (seeded, consistent per profile)',
   'editor.fingerprint.spoofing.canvasTooltip':
