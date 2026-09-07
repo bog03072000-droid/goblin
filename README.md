@@ -278,11 +278,11 @@ machine can fully control that profile — read cookies, run arbitrary
 JavaScript on any open page, see everything the profile does. Regenerating
 it (same Advanced tab) immediately invalidates the old one.
 
-### Human-like input (`humanClick`/`humanType`)
+### Human-like input (`humanClick`/`humanType`/`humanScroll`)
 
-`src/shared/automation/humanInputDriver.ts` exports two helpers for
-automation scripts that want mouse/keyboard input to look like a real
-person's rather than a script's instant, linear actions — see
+`src/shared/automation/humanInputDriver.ts` exports three helpers for
+automation scripts that want mouse/keyboard/scroll input to look like a
+real person's rather than a script's instant, linear actions — see
 `docs/BEHAVIORAL_EMULATION.md` for the research and architecture behind
 this (in short: it's a client-side layer over the CDP session you already
 have, not a change to the automation proxy itself, so it works with
@@ -290,7 +290,7 @@ Puppeteer, Playwright, or a raw CDP client identically).
 
 ```js
 const { chromium } = require('playwright');
-const { humanClick, humanType } = require('./src/shared/automation/humanInputDriver');
+const { humanClick, humanType, humanScroll } = require('./src/shared/automation/humanInputDriver');
 
 const browser = await chromium.connectOverCDP('http://127.0.0.1:<port>?token=<token>');
 const context = browser.contexts()[0];
@@ -305,16 +305,23 @@ await humanClick(client, { x: 100, y: 100 }, { x: 400, y: 300 });
 // page.click()) so it actually has focus — humanType only dispatches key
 // events into whatever's currently focused, same as CDP itself.
 await humanType(client, 'hello world', { meanDelayMs: 90, stdDevMs: 30 });
+
+// Scrolls the page 900px down in several uneven bursts with real pauses,
+// rather than one instant jump to the final scroll position. `at` is
+// where the wheel event lands, same as a real mouse wheel.
+await humanScroll(client, { x: 400, y: 300 }, 900, { pauseProbability: 0.2 });
 ```
 
-Both accept the same shape of options documented in
+All three accept the same shape of options documented in
 `humanInput.ts`/`humanInputDriver.ts`'s own JSDoc — notably `overshoot`
-(mouse: a deliberate past-the-target correction) and
+(mouse/scroll: a deliberate past-the-target correction),
 `mistakeProbability` (typing: an occasional plausible wrong-key +
-Backspace, 0/off by default). `CdpSession` is a one-method interface
-(`send(method, params)`), so a raw `chrome-remote-interface` or plain-`ws`
-client works too with a one-line adapter — it doesn't have to be
-Playwright's `newCDPSession`.
+Backspace, 0/off by default), and `pauseProbability` (scroll: an
+occasional extra pause simulating a moment spent reading, 0/off by
+default). `CdpSession` is a one-method interface (`send(method,
+params)`), so a raw `chrome-remote-interface` or plain-`ws` client works
+too with a one-line adapter — it doesn't have to be Playwright's
+`newCDPSession`.
 
 ## Design
 

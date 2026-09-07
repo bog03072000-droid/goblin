@@ -3,18 +3,18 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { humanClick, humanType, type CdpSession } from '../../src/shared/automation/humanInputDriver';
+import { humanClick, humanType, humanScroll, type CdpSession } from '../../src/shared/automation/humanInputDriver';
 
 /**
- * Real, end-to-end confirmation that humanClick/humanType genuinely
- * dispatch multiple real CDP events over real wall-clock time against a
- * live running profile — not a claim resting only on the unit tests'
- * fake CdpSession. Connects to the profile's own automation CDP endpoint
- * (the same one README documents for Puppeteer/Playwright) using nothing
- * but a plain WebSocket client and this project's own driver, then reads
- * back the REAL PAGE's own recorded mousemove/keydown events — proof the
- * browser actually received and processed real input, not just that this
- * test's outgoing CDP calls were made.
+ * Real, end-to-end confirmation that humanClick/humanType/humanScroll
+ * genuinely dispatch multiple real CDP events over real wall-clock time
+ * against a live running profile — not a claim resting only on the unit
+ * tests' fake CdpSession. Connects to the profile's own automation CDP
+ * endpoint (the same one README documents for Puppeteer/Playwright) using
+ * nothing but a plain WebSocket client and this project's own driver,
+ * then reads back the REAL PAGE's own recorded mousemove/keydown/wheel
+ * events — proof the browser actually received and processed real input,
+ * not just that this test's outgoing CDP calls were made.
  *
  * See docs/BEHAVIORAL_EMULATION.md's Part 5 for what this can and can't
  * prove: this confirms the mechanism fires as claimed, not any real
@@ -197,6 +197,40 @@ test('humanClick/humanType dispatch real, multi-event, time-spread input against
     expect(keyCountResult.result.value).toBe(5);
     // 4 real inter-keystroke delays of ~40ms each between 5 characters.
     expect(typeElapsed).toBeGreaterThanOrEqual(120);
+
+    // A tall body so there's real room to scroll, plus a wheel listener
+    // on window (where wheel events actually land for a page-level
+    // scroll), set up before dispatching anything.
+    await session.send('Runtime.evaluate', {
+      expression: `
+        document.body.style.height = '5000px';
+        window.__wheelEvents = [];
+        window.addEventListener('wheel', (e) => window.__wheelEvents.push({ t: Date.now(), deltaY: e.deltaY }));
+        true;
+      `,
+    });
+
+    const scrollStart = Date.now();
+    await humanScroll(session, { x: 400, y: 300 }, 900, { steps: 9, durationMs: 250 });
+    const scrollElapsed = Date.now() - scrollStart;
+
+    const wheelResult = (await session.send('Runtime.evaluate', {
+      expression: 'JSON.stringify({ count: window.__wheelEvents.length, totalDeltaY: window.__wheelEvents.reduce((s, e) => s + e.deltaY, 0), scrollY: window.scrollY })',
+      returnByValue: true,
+    })) as { result: { value: string } };
+    const wheelStats = JSON.parse(wheelResult.result.value) as { count: number; totalDeltaY: number; scrollY: number };
+
+    // Real, multiple intermediate wheel events reached the page — not one
+    // instant jump to the final scroll position.
+    expect(wheelStats.count).toBeGreaterThan(3);
+    // Real Chromium wheel-event delivery introduces a few pixels of its
+    // own rounding/coalescing on top of what was dispatched — this checks
+    // the total landed close to the requested 900px, not bit-exact.
+    expect(Math.abs(wheelStats.totalDeltaY - 900)).toBeLessThan(20);
+    expect(wheelStats.scrollY).toBeGreaterThan(0);
+    // The whole sequence really took real wall-clock time roughly matching
+    // the requested duration, not an instant burst.
+    expect(scrollElapsed).toBeGreaterThanOrEqual(150);
   } finally {
     close();
   }

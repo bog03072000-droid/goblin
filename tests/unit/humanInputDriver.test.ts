@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { humanClick, humanType, type CdpSession } from '../../src/shared/automation/humanInputDriver';
+import { humanClick, humanType, humanScroll, type CdpSession } from '../../src/shared/automation/humanInputDriver';
 
 function makeFakeSession(): { session: CdpSession; calls: Array<{ method: string; params?: Record<string, unknown> }> } {
   const calls: Array<{ method: string; params?: Record<string, unknown> }> = [];
@@ -90,5 +90,44 @@ describe('humanType', () => {
     const elapsed = Date.now() - start;
     // 4 delays of ~50ms between 5 characters (first is instant).
     expect(elapsed).toBeGreaterThanOrEqual(150);
+  });
+});
+
+describe('humanScroll', () => {
+  it('dispatches one mouseWheel event per plan step, at the given coordinates, summing to the requested total', async () => {
+    const { session, calls } = makeFakeSession();
+    await humanScroll(session, { x: 400, y: 300 }, 1000, { steps: 6, durationMs: 0, overshoot: false });
+
+    const wheelEvents = calls.filter((c) => c.method === 'Input.dispatchMouseEvent' && c.params?.type === 'mouseWheel');
+    expect(wheelEvents.length).toBe(6);
+    for (const e of wheelEvents) {
+      expect(e.params).toMatchObject({ x: 400, y: 300, deltaX: 0 });
+    }
+    const totalDeltaY = wheelEvents.reduce((sum, e) => sum + (e.params!.deltaY as number), 0);
+    expect(totalDeltaY).toBeCloseTo(1000, 6);
+  });
+
+  it('a zero-distance scroll dispatches nothing', async () => {
+    const { session, calls } = makeFakeSession();
+    await humanScroll(session, { x: 0, y: 0 }, 0);
+    expect(calls.length).toBe(0);
+  });
+
+  it('actually waits real wall-clock time between wheel events matching the configured duration', async () => {
+    const { session } = makeFakeSession();
+    const start = Date.now();
+    await humanScroll(session, { x: 0, y: 0 }, 600, { steps: 6, durationMs: 150 });
+    const elapsed = Date.now() - start;
+    // 5 non-first delays of 150/6=25ms each — this would fail instantly
+    // (near 0ms) if the driver silently skipped the delays.
+    expect(elapsed).toBeGreaterThanOrEqual(100);
+  });
+
+  it('overshoot dispatches one extra corrective wheel event with the opposite sign', async () => {
+    const { session, calls } = makeFakeSession();
+    await humanScroll(session, { x: 0, y: 0 }, 1000, { steps: 5, durationMs: 0, overshoot: true });
+    const wheelEvents = calls.filter((c) => c.params?.type === 'mouseWheel');
+    expect(wheelEvents.length).toBe(6); // 5 main steps + 1 correction
+    expect(wheelEvents[wheelEvents.length - 1]!.params!.deltaY as number).toBeLessThan(0);
   });
 });

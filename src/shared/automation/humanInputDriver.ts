@@ -1,4 +1,12 @@
-import { buildHumanMousePath, buildHumanTypingPlan, type Point, type HumanMousePathOptions, type HumanTypingOptions } from './humanInput';
+import {
+  buildHumanMousePath,
+  buildHumanTypingPlan,
+  buildHumanScrollPlan,
+  type Point,
+  type HumanMousePathOptions,
+  type HumanTypingOptions,
+  type HumanScrollPlanOptions,
+} from './humanInput';
 
 /**
  * The minimal shape this module needs from a CDP session — deliberately
@@ -95,8 +103,8 @@ async function dispatchKeystroke(session: CdpSession, char: string): Promise<voi
 /**
  * Types `text` into whatever element currently has focus, following a
  * human-like timing plan (`buildHumanTypingPlan`) — a real `keyDown`/
- * `char`/`keyUp` CDP event triplet per character (or `rawKeyDown`/`keyUp`
- * for Backspace), each separated by real wall-clock delay, rather than a
+ * `keyUp` CDP event pair per character (or `rawKeyDown`/`keyUp` for
+ * Backspace), each separated by real wall-clock delay, rather than a
  * single instant value mutation. Does not itself focus or locate the
  * target element — same division of responsibility as CDP's own
  * `Input.dispatchKeyEvent`, which only ever types into whatever already
@@ -107,5 +115,34 @@ export async function humanType(session: CdpSession, text: string, options: Huma
   for (const event of plan) {
     await sleep(event.delayMs);
     await dispatchKeystroke(session, event.char);
+  }
+}
+
+/**
+ * Scrolls the page (or whatever's under `at`) by `totalDeltaY` pixels
+ * following a human-like plan (`buildHumanScrollPlan`) — a real
+ * `Input.dispatchMouseEvent('mouseWheel')` call per discrete chunk, each
+ * separated by real wall-clock delay (including any injected pauses),
+ * rather than a single instant jump to the final scroll position.
+ * `at` is required by CDP's own `mouseWheel` event (it scrolls whatever
+ * element is under that point, same as a real mouse wheel) — pass the
+ * coordinates of wherever the scrollable content actually is.
+ */
+export async function humanScroll(
+  session: CdpSession,
+  at: Point,
+  totalDeltaY: number,
+  options: HumanScrollPlanOptions = {},
+): Promise<void> {
+  const plan = buildHumanScrollPlan(totalDeltaY, options);
+  for (const event of plan) {
+    await sleep(event.delayMs);
+    await session.send('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x: at.x,
+      y: at.y,
+      deltaX: 0,
+      deltaY: event.deltaY,
+    });
   }
 }

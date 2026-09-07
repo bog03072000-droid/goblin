@@ -284,3 +284,105 @@ export function buildHumanTypingPlan(text: string, options: HumanTypingOptions =
 
   return events;
 }
+
+export interface ScrollEvent {
+  /** Pixels to scroll in this one wheel event. Positive scrolls down,
+   * negative scrolls up — same sign convention as CDP's own
+   * `Input.dispatchMouseEvent('mouseWheel')` `deltaY`. */
+  deltaY: number;
+  /** Milliseconds to wait after the previous event before dispatching
+   * this one. Always 0 for the first event. */
+  delayMs: number;
+}
+
+export interface HumanScrollPlanOptions {
+  /** Number of discrete wheel events the total distance is split across.
+   * Defaults to a value proportional to distance, clamped to
+   * [MIN_SCROLL_STEPS, MAX_SCROLL_STEPS]. */
+  steps?: number;
+  /** Total wall-clock time the scroll should take, before any extra
+   * pauses (see `pauseProbability`) are added on top. Defaults to a value
+   * proportional to distance, clamped to
+   * [MIN_SCROLL_DURATION_MS, MAX_SCROLL_DURATION_MS]. */
+  durationMs?: number;
+  /** Probability (0-1) that any given step (other than the first) gets an
+   * extra pause added to its delay — simulating a moment spent actually
+   * reading the page rather than continuously scrolling. 0 disables
+   * pauses entirely. */
+  pauseProbability?: number;
+  /** Extra delay (milliseconds) added on top of a step's normal delay
+   * when a pause is triggered. */
+  pauseMs?: number;
+  /** When true, the plan scrolls slightly past the requested total
+   * distance and adds one corrective event scrolling back — the same
+   * "overshoot and settle" pattern momentum-based (trackpad/some wheel)
+   * scrolling produces. The events' deltaY always sums to exactly
+   * `totalDeltaY` regardless of this setting. */
+  overshoot?: boolean;
+  /** Source of randomness, same [0, 1) contract as
+   * `HumanMousePathOptions.rng`. Defaults to `Math.random`. */
+  rng?: () => number;
+}
+
+const MIN_SCROLL_STEPS = 4;
+const MAX_SCROLL_STEPS = 24;
+const MIN_SCROLL_DURATION_MS = 120;
+const MAX_SCROLL_DURATION_MS = 1000;
+const SCROLL_OVERSHOOT_FRACTION = 0.12; // how far past the target, as a fraction of total distance
+const DEFAULT_PAUSE_MS = 220;
+
+/**
+ * Generates the ordered sequence of discrete wheel-scroll events a
+ * human-like scroll of `totalDeltaY` pixels should send — intended to
+ * become a real `Input.dispatchMouseEvent('mouseWheel')` call per event
+ * (see `humanInputDriver.ts`), each separated by real wall-clock delay,
+ * rather than a single instant jump to the final scroll position.
+ *
+ * The non-uniform speed comes from the same technique
+ * `buildHumanMousePath` uses: events are spaced at uniform wall-clock
+ * time steps, but each step's *distance* is derived from an eased
+ * (slow-fast-slow) curve parameter — so the same fixed time step covers
+ * less distance near the start/end and more in the middle, i.e. the
+ * scroll visibly speeds up then slows down, without needing per-step
+ * variable delays for that effect alone (pauses are the one thing that
+ * does still vary delay directly, on top of this).
+ */
+export function buildHumanScrollPlan(totalDeltaY: number, options: HumanScrollPlanOptions = {}): ScrollEvent[] {
+  const rng = options.rng ?? Math.random;
+  const direction = totalDeltaY < 0 ? -1 : 1;
+  const absTotal = Math.abs(totalDeltaY);
+
+  if (absTotal === 0) return [];
+
+  const steps = Math.round(options.steps ?? clamp(absTotal / 120, MIN_SCROLL_STEPS, MAX_SCROLL_STEPS));
+  const durationMs = options.durationMs ?? clamp(absTotal * 1.5, MIN_SCROLL_DURATION_MS, MAX_SCROLL_DURATION_MS);
+  const pauseProbability = options.pauseProbability ?? 0;
+  const pauseMs = options.pauseMs ?? DEFAULT_PAUSE_MS;
+  const perStepDelay = durationMs / steps;
+
+  // Scroll `mainDistance` first (past the real target when overshoot is
+  // on), then append one corrective event bringing the cumulative total
+  // back to exactly `absTotal`.
+  const mainDistance = options.overshoot ? absTotal * (1 + SCROLL_OVERSHOOT_FRACTION) : absTotal;
+
+  const events: ScrollEvent[] = [];
+  let cumulative = 0;
+  for (let i = 1; i <= steps; i++) {
+    const eased = easeInOutCubic(i / steps);
+    const targetCumulative = eased * mainDistance;
+    const stepDistance = targetCumulative - cumulative;
+    cumulative = targetCumulative;
+
+    let delayMs = i === 1 ? 0 : perStepDelay;
+    if (i > 1 && rng() < pauseProbability) delayMs += pauseMs;
+
+    events.push({ deltaY: direction * stepDistance, delayMs });
+  }
+
+  if (options.overshoot) {
+    const overshootAmount = mainDistance - absTotal;
+    events.push({ deltaY: direction * -overshootAmount, delayMs: perStepDelay * 0.6 });
+  }
+
+  return events;
+}
