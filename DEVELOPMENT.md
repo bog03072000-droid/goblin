@@ -233,12 +233,21 @@ was originally assumed, not just a rename:
   `child_process` — a **JDK or JRE must be installed** on whatever
   machine/CI runner actually signs a release. Nothing else in this
   project needs Java; this is the one exception.
-- It's wired into `package.json`'s `build.win.signtoolOptions.sign` as a
-  plain string (`"electron-azure-trusted-signing"`) — electron-builder
-  resolves and calls it directly. There is no `scripts/sign.js` file
-  anymore; the previous version of this doc had one as a custom hook, but
-  the actual signing logic now lives entirely inside the installed
-  package, so a wrapper script would just be dead indirection.
+- It's wired into `package.json`'s `build.win.signtoolOptions.sign` as
+  `"scripts/sign.js"` — **this paragraph's own earlier claim that
+  "there is no `scripts/sign.js` file anymore" turned out to be wrong and
+  is corrected here rather than silently fixed**: pointing
+  `signtoolOptions.sign` straight at the `electron-azure-trusted-signing`
+  package (no wrapper) was tried first, but that package has no no-op
+  guard of its own — it throws immediately if `sign.env` isn't fully
+  populated, which broke even the *default, unsigned* `npm run package`
+  build (NSIS signs its uninstaller unconditionally whenever any signtool
+  is configured, regardless of `signAndEditExecutable`). `scripts/sign.js`
+  was reintroduced as a thin guard: it checks for real values in
+  `sign.env` first and only delegates to the real package once they're
+  present, restoring "no real credentials → stays unsigned, exactly like
+  before" as the safe default. See that file's own doc comment for the
+  full account.
 - Credentials are read from a **`sign.env` file at the project root**
   (auto-created, empty, as soon as `npm install` runs — `postinstall.js`
   in the package does this — and auto-added to `.gitignore` alongside its
@@ -320,14 +329,113 @@ wants a certificate it fully owns rather than a subscription service:
    consult your CA's Windows/electron-builder signing instructions if you go
    this route, since the exact invocation is CA- and token-specific.
 
+### Option D: SignPath Foundation — genuinely free for qualifying open-source projects, one real named risk
+
+Researched fresh this stage (real web search, not assumed from memory) at
+the explicit request to find a free path beyond Option A that might have
+been missed. **This is a real, currently-active, free option — not a myth
+or a defunct program** — with one honest, unresolved uncertainty specific
+to this project's category, named plainly rather than glossed over.
+
+**What it is.** [SignPath Foundation](https://signpath.org/) is a nonprofit
+that sponsors free code signing for qualifying open-source projects,
+running on the commercial [SignPath.io](https://signpath.io/) platform.
+Approved projects get real OV-level Authenticode signing (private key held
+on SignPath's own HSM — a project never receives or handles it) integrated
+into a signing pipeline, at no cost.
+
+**The one real catch, stated plainly:** the certificate is issued to
+**"SignPath Foundation"**, not to this project or its maintainer — Windows'
+publisher dialog and SmartScreen would show "SignPath Foundation" as the
+signer, not "GoblinAnty". This genuinely clears the "Unknown Publisher"
+warning (a real signature chaining to a trusted root) and, being backed by
+an established signing history, plausibly avoids or shortens SmartScreen's
+reputation-building wait the way Option B/C's paid certs do — but it does
+not build *this project's own* publisher identity the way owning a
+certificate does. A real, honest tradeoff against $0 cost, not a hidden
+downside.
+
+**Real eligibility criteria** (confirmed via [signpath.org/terms](https://signpath.org/terms.html), not assumed):
+- OSI-approved open-source license, no commercial dual-licensing — **this
+  project already qualifies**: `LICENSE` is plain MIT, confirmed via
+  `git show`/GitHub's own license detection (`"license": {"key": "mit"}`
+  via the GitHub API), no dual-licensing anywhere in this repo.
+- No proprietary/non-open-source component, including anything from an
+  affiliated maintainer — **not fully verified this session**; worth one
+  direct check before applying (self-hosted fonts are Poppins/Inter/Space
+  Mono, all genuinely open-licensed families, but a line-by-line audit of
+  every bundled asset wasn't done here).
+- No malware or "potentially unwanted program" — **the one real, named
+  uncertainty**. This project's own `SECURITY.md` is explicit that it does
+  not implement CAPTCHA/auth bypass or credential theft and positions
+  itself as a QA/testing/session-isolation tool, which is the accurate,
+  honest description of what the code actually does — but "antidetect
+  browser" as a *category* sits close enough to fraud/ban-evasion tooling
+  elsewhere in the market that a human SignPath reviewer's judgment call on
+  this specific project cannot be predicted from here. This is a real
+  application-time risk, not a guaranteed rejection or a guaranteed
+  approval — worth attempting precisely because it's free and the honest
+  `SECURITY.md` framing is a genuine asset in making that case, not
+  something to omit from the application.
+- Actively maintained — clearly true (this repository's own commit
+  history).
+- Already released in the form to be signed, downloadable for free from a
+  public repo, with functionality described on the download page —
+  **a real, concrete gap found while checking this, not assumed**: this
+  repo's only actual GitHub Release with attached binaries is
+  [`v0.2.0`](https://github.com/bog03072000-droid/goblin/releases/tag/v0.2.0)
+  (confirmed via the GitHub API: 3 assets). The `v0.3.0` and `v0.4.0` tags
+  pushed later in this project's history have no corresponding GitHub
+  Release or attached binaries yet. **A real GitHub Release for the
+  current version, with built installers attached and the repo's own
+  description field filled in** (currently empty — also confirmed via the
+  API), would need to exist before applying — normal release-publishing
+  work, not a code change, and not done here without the repo owner's own
+  explicit go-ahead, since publishing a public release is exactly the kind
+  of action that needs that.
+- Verifiable build from source — this project's own `.github/workflows/ci.yml`
+  already builds every platform's package from source on GitHub-hosted
+  runners in a repeatable way, which is most of what's needed here; a
+  formal SLSA-style provenance attestation isn't wired up but doesn't
+  appear to be a hard requirement per the terms above.
+
+**Recommendation: worth applying to, in parallel with Option B, not instead
+of it** — free, real, and this project's own honest security posture is a
+genuine asset for the one uncertain criterion, not a liability. Concrete
+next step before applying: cut a real `v0.4.0` GitHub Release with built
+installers attached and fill in the repo's description — both are release-
+administration actions for the repo owner to do (or explicitly ask for),
+not something performed as part of this research.
+
+### Was Sigstore/cosign a realistic alternative? Checked, real answer: no, wrong tool for this
+
+Also researched fresh this stage, since it's free and well-known in the
+supply-chain-security space. **Confirmed not applicable here, not just
+undocumented**: Sigstore/cosign's trust model is for signing and verifying
+container images and arbitrary blobs via its own transparency-log-based
+verification — it has no integration with Windows' native Authenticode
+trust chain (`WinVerifyTrust`), which is specifically what clears the
+"Unknown Publisher" dialog and feeds SmartScreen's reputation system.
+Nothing currently reads Sigstore attestations as part of Windows' own
+code-signing verification, so adding it would add a genuinely useful,
+independent supply-chain-provenance signal (proving a given binary really
+came from this project's own CI, unmodified) but would do nothing to close
+either Windows warning this section is actually about. Worth revisiting as
+a *separate*, additive improvement (build provenance/transparency, not
+Windows trust) if this project ever wants that, but it does not replace or
+cheapen Options B/C/D above.
+
 ### Recommendation for this project
 
-**Option B (Azure Trusted Signing), if the signer is US/Canada-eligible** —
-lowest cost by a wide margin, no hardware token to manage, and clears
-SmartScreen without an EV reputation-building wait. Fall back to **Option
-C with an OV cert** otherwise; skip Option A for anything meant for public
-download, it's documented above for honesty about what it does and
-doesn't solve, not as a real fix.
+**Option D (SignPath Foundation) in parallel with Option B (Azure Trusted
+Signing, if the signer is US/Canada-eligible)** — both are effectively free
+or near-free and can be pursued at the same time without conflict (nothing
+stops applying to SignPath while also having Azure Trusted Signing wired
+up as a fallback). Fall back to **Option C with an OV cert** if neither
+free path works out. Skip Option A for anything meant for public download,
+it's documented above for honesty about what it does and doesn't solve,
+not as a real fix. Sigstore/cosign is not a substitute for any of the
+above — see the dedicated section just above this one.
 
 ## Checking for JA4 drift after an Electron upgrade
 
