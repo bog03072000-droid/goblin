@@ -78,6 +78,57 @@ export type FingerprintDraft = {
   webrtcMode: string;
 };
 
+/** `Fingerprint` -> `FingerprintDraft`, the reverse of `draftToFingerprintPatch`
+ * below. Was duplicated verbatim between ProfileCreateModal.tsx
+ * (`draftFromFingerprint`) and ProfileEditorModal.tsx (`resetDraft`, which
+ * called `setDraft` with this exact same object shape) — extracted here
+ * since both already import `FingerprintDraft` from this file. */
+export function fingerprintToDraft(fp: Fingerprint): FingerprintDraft {
+  return {
+    userAgent: fp.userAgent,
+    platform: fp.platform,
+    locale: fp.locale,
+    languages: fp.languages.join(', '),
+    timezone: fp.timezone,
+    screenWidth: String(fp.screenWidth),
+    screenHeight: String(fp.screenHeight),
+    deviceScaleFactor: String(fp.deviceScaleFactor),
+    hardwareConcurrency: String(fp.hardwareConcurrency),
+    webrtcMode: fp.webrtcMode,
+  };
+}
+
+/** `FingerprintDraft` -> the manual-mode `Fingerprint` fields, the reverse
+ * of `fingerprintToDraft` above. Was duplicated between
+ * ProfileCreateModal.tsx's `applyManualDraft` (merged into local state) and
+ * ProfileEditorModal.tsx's `saveManualFingerprint` (sent as a
+ * `fingerprint:update` payload) — same field list, same
+ * languages-comma-split-trim-filter parsing, same numeric conversions,
+ * copy-pasted in both. Both callers now spread this over their own base
+ * object instead. */
+export function draftToFingerprintPatch(
+  draft: FingerprintDraft,
+): Pick<
+  Fingerprint,
+  'userAgent' | 'platform' | 'locale' | 'languages' | 'timezone' | 'screenWidth' | 'screenHeight' | 'deviceScaleFactor' | 'hardwareConcurrency' | 'webrtcMode'
+> {
+  return {
+    userAgent: draft.userAgent,
+    platform: draft.platform,
+    locale: draft.locale,
+    languages: draft.languages
+      .split(',')
+      .map((l) => l.trim())
+      .filter(Boolean),
+    timezone: draft.timezone,
+    screenWidth: Number(draft.screenWidth),
+    screenHeight: Number(draft.screenHeight),
+    deviceScaleFactor: Number(draft.deviceScaleFactor),
+    hardwareConcurrency: Number(draft.hardwareConcurrency),
+    webrtcMode: draft.webrtcMode as Fingerprint['webrtcMode'],
+  };
+}
+
 const MANUAL_FIELD_KEYS: Array<
   [TranslationKey, 'userAgent' | 'platform' | 'locale' | 'languages' | 'timezone' | 'screenWidth' | 'screenHeight' | 'deviceScaleFactor' | 'hardwareConcurrency']
 > = [

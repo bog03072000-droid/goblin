@@ -10,7 +10,14 @@ import { useProfileStorageData } from '../hooks/useProfileStorageData';
 import { useProfileAutomation } from '../hooks/useProfileAutomation';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { GeneralTab } from './profileEditor/GeneralTab';
-import { FingerprintTab, type FieldOverrides, type FingerprintDraft, type SpoofingPatch } from './profileEditor/FingerprintTab';
+import {
+  FingerprintTab,
+  fingerprintToDraft,
+  draftToFingerprintPatch,
+  type FieldOverrides,
+  type FingerprintDraft,
+  type SpoofingPatch,
+} from './profileEditor/FingerprintTab';
 import { ProxyTab } from './profileEditor/ProxyTab';
 import { StorageTab } from './profileEditor/StorageTab';
 import { AdvancedTab } from './profileEditor/AdvancedTab';
@@ -201,18 +208,7 @@ export function ProfileEditorModal({
   }
 
   function resetDraft(fp: Fingerprint): void {
-    setDraft({
-      userAgent: fp.userAgent,
-      platform: fp.platform,
-      locale: fp.locale,
-      languages: fp.languages.join(', '),
-      timezone: fp.timezone,
-      screenWidth: String(fp.screenWidth),
-      screenHeight: String(fp.screenHeight),
-      deviceScaleFactor: String(fp.deviceScaleFactor),
-      hardwareConcurrency: String(fp.hardwareConcurrency),
-      webrtcMode: fp.webrtcMode,
-    });
+    setDraft(fingerprintToDraft(fp));
   }
 
   /** Only the fields verified to be genuinely enforced in the real browser
@@ -223,19 +219,7 @@ export function ProfileEditorModal({
     await saveAction.run(async () => {
       const updated = await callApi<'fingerprint:update', Fingerprint>('fingerprint:update', {
         id: fingerprint.id,
-        userAgent: draft.userAgent,
-        platform: draft.platform,
-        locale: draft.locale,
-        languages: draft.languages
-          .split(',')
-          .map((l) => l.trim())
-          .filter(Boolean),
-        timezone: draft.timezone,
-        screenWidth: Number(draft.screenWidth),
-        screenHeight: Number(draft.screenHeight),
-        deviceScaleFactor: Number(draft.deviceScaleFactor),
-        hardwareConcurrency: Number(draft.hardwareConcurrency),
-        webrtcMode: draft.webrtcMode as Fingerprint['webrtcMode'],
+        ...draftToFingerprintPatch(draft),
       });
       setFingerprint(updated);
       resetDraft(updated);

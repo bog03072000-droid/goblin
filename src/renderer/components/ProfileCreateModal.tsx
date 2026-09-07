@@ -8,7 +8,14 @@ import { useAsyncAction } from '../hooks/useAsyncAction';
 import { useFingerprintPreview } from '../hooks/useFingerprintPreview';
 import { useProfileFormFields, parseTagsText } from '../hooks/useProfileFormFields';
 import { useTranslation } from '../i18n';
-import { FingerprintTab, type FingerprintDraft, type SpoofingPatch, type FieldOverrides } from './profileEditor/FingerprintTab';
+import {
+  FingerprintTab,
+  fingerprintToDraft,
+  draftToFingerprintPatch,
+  type FingerprintDraft,
+  type SpoofingPatch,
+  type FieldOverrides,
+} from './profileEditor/FingerprintTab';
 
 type Tab = 'general' | 'fingerprint' | 'proxy' | 'storage' | 'advanced';
 
@@ -21,21 +28,6 @@ const CUSTOM_SETUP_HINT_SEEN_KEY = 'profileforge.hint.customSetupSeen';
  * are both already stateless IPC calls that don't require a real id. */
 function toDraftFingerprint(input: FingerprintInput): Fingerprint {
   return { ...input, id: '__draft__', createdAt: '', updatedAt: '' };
-}
-
-function draftFromFingerprint(fp: Fingerprint): FingerprintDraft {
-  return {
-    userAgent: fp.userAgent,
-    platform: fp.platform,
-    locale: fp.locale,
-    languages: fp.languages.join(', '),
-    timezone: fp.timezone,
-    screenWidth: String(fp.screenWidth),
-    screenHeight: String(fp.screenHeight),
-    deviceScaleFactor: String(fp.deviceScaleFactor),
-    hardwareConcurrency: String(fp.hardwareConcurrency),
-    webrtcMode: fp.webrtcMode,
-  };
 }
 
 /**
@@ -121,7 +113,7 @@ export function ProfileCreateModal({
     (generated) => {
       const fp = toDraftFingerprint(generated);
       setFingerprint(fp);
-      setDraft(draftFromFingerprint(fp));
+      setDraft(fingerprintToDraft(fp));
     },
   );
 
@@ -156,24 +148,9 @@ export function ProfileCreateModal({
    * uses, but written to local state instead of a `fingerprint:update` call. */
   function applyManualDraft(): void {
     if (!fingerprint || !draft) return;
-    const updated: Fingerprint = {
-      ...fingerprint,
-      userAgent: draft.userAgent,
-      platform: draft.platform,
-      locale: draft.locale,
-      languages: draft.languages
-        .split(',')
-        .map((l) => l.trim())
-        .filter(Boolean),
-      timezone: draft.timezone,
-      screenWidth: Number(draft.screenWidth),
-      screenHeight: Number(draft.screenHeight),
-      deviceScaleFactor: Number(draft.deviceScaleFactor),
-      hardwareConcurrency: Number(draft.hardwareConcurrency),
-      webrtcMode: draft.webrtcMode as Fingerprint['webrtcMode'],
-    };
+    const updated: Fingerprint = { ...fingerprint, ...draftToFingerprintPatch(draft) };
     setFingerprint(updated);
-    setDraft(draftFromFingerprint(updated));
+    setDraft(fingerprintToDraft(updated));
     void runValidate(updated);
   }
 
