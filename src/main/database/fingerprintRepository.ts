@@ -18,6 +18,7 @@ interface FingerprintRow {
   device_scale_factor: number;
   hardware_concurrency: number;
   device_memory: number;
+  max_touch_points: number;
   webgl_vendor: string;
   webgl_renderer: string;
   canvas_mode: string;
@@ -62,6 +63,7 @@ function rowToFingerprint(row: FingerprintRow): Fingerprint {
     deviceScaleFactor: row.device_scale_factor,
     hardwareConcurrency: row.hardware_concurrency,
     deviceMemory: row.device_memory,
+    maxTouchPoints: row.max_touch_points,
     webglVendor: row.webgl_vendor,
     webglRenderer: row.webgl_renderer,
     canvasMode: row.canvas_mode as Fingerprint['canvasMode'],
@@ -92,13 +94,13 @@ export class FingerprintRepository {
         `INSERT INTO fingerprints (
           id, name, os, os_version, browser_version, user_agent, platform, locale,
           languages, timezone, screen_width, screen_height, device_scale_factor,
-          hardware_concurrency, device_memory, webgl_vendor, webgl_renderer,
+          hardware_concurrency, device_memory, max_touch_points, webgl_vendor, webgl_renderer,
           canvas_mode, audio_mode, webrtc_mode, fonts_mode, media_devices_mode,
           webgl_spoofing_mode, geolocation_mode, geolocation_latitude, geolocation_longitude,
           permissions_mode, service_worker_mode, seed, created_at, updated_at
         ) VALUES (@id, @name, @os, @osVersion, @browserVersion, @userAgent, @platform, @locale,
           @languages, @timezone, @screenWidth, @screenHeight, @deviceScaleFactor,
-          @hardwareConcurrency, @deviceMemory, @webglVendor, @webglRenderer,
+          @hardwareConcurrency, @deviceMemory, @maxTouchPoints, @webglVendor, @webglRenderer,
           @canvasMode, @audioMode, @webrtcMode, @fontsMode, @mediaDevicesMode,
           @webglSpoofingMode, @geolocationMode, @geolocationLatitude, @geolocationLongitude,
           @permissionsMode, @serviceWorkerMode, @seed, @createdAt, @updatedAt)`,
@@ -131,7 +133,7 @@ export class FingerprintRepository {
           locale=@locale, languages=@languages, timezone=@timezone,
           screen_width=@screenWidth, screen_height=@screenHeight,
           device_scale_factor=@deviceScaleFactor, hardware_concurrency=@hardwareConcurrency,
-          device_memory=@deviceMemory, webgl_vendor=@webglVendor, webgl_renderer=@webglRenderer,
+          device_memory=@deviceMemory, max_touch_points=@maxTouchPoints, webgl_vendor=@webglVendor, webgl_renderer=@webglRenderer,
           canvas_mode=@canvasMode, audio_mode=@audioMode, webrtc_mode=@webrtcMode,
           fonts_mode=@fontsMode, media_devices_mode=@mediaDevicesMode,
           webgl_spoofing_mode=@webglSpoofingMode, geolocation_mode=@geolocationMode,

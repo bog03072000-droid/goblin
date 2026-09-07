@@ -28,6 +28,7 @@ afterEach(() => {
 
 function makeFingerprint(overrides: Partial<Fingerprint> = {}): Fingerprint {
   return {
+    os: 'windows',
     userAgent: 'Mozilla/5.0 Test UA',
     platform: 'Win32',
     locale: 'en-US',
@@ -38,6 +39,7 @@ function makeFingerprint(overrides: Partial<Fingerprint> = {}): Fingerprint {
     deviceScaleFactor: 1,
     hardwareConcurrency: 8,
     deviceMemory: 8,
+    maxTouchPoints: 0,
     webglVendor: 'Google Inc.',
     webglRenderer: 'ANGLE',
     webrtcMode: 'default',
@@ -156,6 +158,23 @@ describe('launchProfileProcess', () => {
     const decoded = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
     expect(decoded.timezone).toBe('Europe/Berlin');
     expect(decoded.hardwareConcurrency).toBe(16);
+  });
+
+  it('includes os and maxTouchPoints in the child process config — a real bug caught by a live E2E run: an explicit field allowlist here silently dropped both, so a mobile profile\'s child process never actually received its own OS/touch-point identity', () => {
+    launchProfileProcess({
+      profileId: 'p1',
+      profileName: 'p',
+      userDataDir: '/d',
+      fingerprint: makeFingerprint({ os: 'android', maxTouchPoints: 5 }),
+      proxy: null,
+      proxyPassword: null,
+      dbPath: '/db',
+    });
+    const configArg = lastSpawnCall!.args.find((a) => a.startsWith('--fingerprint-config='))!;
+    const b64 = configArg.slice('--fingerprint-config='.length);
+    const decoded = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
+    expect(decoded.os).toBe('android');
+    expect(decoded.maxTouchPoints).toBe(5);
   });
 
   it('a bare host:port proxy-rules covers both http and https (no scheme prefix) for http/https proxies', () => {

@@ -115,6 +115,7 @@ export function registerIpc(deps: IpcDependencies): void {
       hardwareConcurrencyOptions: profile.hardwareConcurrencyOptions,
       deviceMemoryOptions: profile.deviceMemoryOptions,
       gpuOptions: profile.gpuOptions,
+      maxTouchPoints: profile.maxTouchPoints,
     })),
     browserVersions: BROWSER_VERSIONS,
   }));

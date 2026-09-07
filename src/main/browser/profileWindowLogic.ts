@@ -44,6 +44,7 @@ export function buildSpoofableFingerprint(
     userAgent: args.userAgent,
     platform: String(fingerprintConfig['platform'] ?? 'Win32'),
     hardwareConcurrency: Number(fingerprintConfig['hardwareConcurrency'] ?? 8),
+    maxTouchPoints: Number(fingerprintConfig['maxTouchPoints'] ?? 0),
     serviceWorkerMode: (fingerprintConfig['serviceWorkerMode'] as Fingerprint['serviceWorkerMode']) ?? 'real',
   };
 }

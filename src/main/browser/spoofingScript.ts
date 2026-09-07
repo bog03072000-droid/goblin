@@ -73,6 +73,7 @@ export type SpoofableFingerprint = Pick<
   | 'userAgent'
   | 'platform'
   | 'hardwareConcurrency'
+  | 'maxTouchPoints'
 >;
 
 /** The part of the script that patches THIS global scope's own
@@ -341,6 +342,12 @@ ${iframePropagationScript}
   //
   // deviceMemory has no native override at all anywhere (see Finding 3) —
   // this getter is its only mechanism, unconditionally, same as before.
+  // maxTouchPoints is the same story: CDP's Emulation.setDeviceMetricsOverride
+  // sets it correctly when mobile:true is passed, but that full CDP mobile-
+  // emulation path (viewport meta reinterpretation, touch-event translation)
+  // isn't wired up — this getter is the only mechanism for it here, same
+  // "stored + coherence-checked, JS-level override only" classification as
+  // deviceMemory (see docs/FINGERPRINT_AUDIT.md's "Tenth investigation").
   parts.push(`
   (function overrideNavigatorIdentity() {
     if (!self.navigator) return;
@@ -358,6 +365,7 @@ ${iframePropagationScript}
     try { Object.defineProperty(self.navigator, 'platform', { get: function () { return ${JSON.stringify(fp.platform)}; }, configurable: true }); } catch (e) {}
     try { Object.defineProperty(self.navigator, 'hardwareConcurrency', { get: function () { return ${JSON.stringify(fp.hardwareConcurrency)}; }, configurable: true }); } catch (e) {}
     try { Object.defineProperty(self.navigator, 'deviceMemory', { get: function () { return ${JSON.stringify(fp.deviceMemory)}; }, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'maxTouchPoints', { get: function () { return ${JSON.stringify(fp.maxTouchPoints)}; }, configurable: true }); } catch (e) {}
   })();
 `);
 

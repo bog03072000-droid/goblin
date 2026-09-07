@@ -154,6 +154,9 @@
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         hardwareConcurrency: navigator.hardwareConcurrency,
         deviceMemory: navigator.deviceMemory !== undefined ? navigator.deviceMemory : 'not exposed by this origin',
+        maxTouchPoints: navigator.maxTouchPoints,
+        pointerCoarse: matchMedia('(pointer: coarse)').matches,
+        hoverNone: matchMedia('(hover: none)').matches,
         webglVendor: webgl.vendor,
         webglRenderer: webgl.renderer,
         webglMaxTextureSize: webgl.maxTextureSize,
@@ -173,7 +176,7 @@
     // unenforced field must never be reported as PASS.
     const ENFORCED_FIELDS = new Set([
       'userAgent', 'platform', 'locale', 'languages', 'screenWidth', 'screenHeight',
-      'deviceScaleFactor', 'timezone', 'hardwareConcurrency', 'deviceMemory',
+      'deviceScaleFactor', 'timezone', 'hardwareConcurrency', 'deviceMemory', 'maxTouchPoints',
     ]);
 
     function classify(field, cVal, oVal) {
@@ -237,6 +240,18 @@
             ? [observed.mediaDevices.looksFake ? 'APPLIED' : 'MISMATCH', observed.mediaDevices.summary + ' (fake list: ' + observed.mediaDevices.looksFake + ')']
             : ['NOT_IMPLEMENTED', observed.mediaDevices.summary + ' (real devices — hidden mode off)'],
         ],
+        [
+          'Mobile media queries (pointer/hover)', 'mobileMediaQueries',
+          () => (configured.os === 'android' || configured.os === 'ios' ? 'mobile (coarse pointer, no hover)' : 'desktop (fine pointer, hover)'),
+          () => {
+            const expectMobile = configured.os === 'android' || configured.os === 'ios';
+            const actuallyMobile = observed.pointerCoarse && observed.hoverNone;
+            return [
+              actuallyMobile === expectMobile ? 'PASS' : 'MISMATCH',
+              'pointer: ' + (observed.pointerCoarse ? 'coarse' : 'fine') + ', hover: ' + (observed.hoverNone ? 'none' : 'hover'),
+            ];
+          },
+        ],
       ];
 
       const fieldMap = [
@@ -250,6 +265,7 @@
         ['Timezone', 'timezone', 'timezone', 'timezone'],
         ['Hardware Concurrency', 'hardwareConcurrency', 'hardwareConcurrency', 'hardwareConcurrency'],
         ['Device Memory (GB)', 'deviceMemory', 'deviceMemory', 'deviceMemory'],
+        ['Max Touch Points', 'maxTouchPoints', 'maxTouchPoints', 'maxTouchPoints'],
       ];
 
       const rows = document.getElementById('rows');

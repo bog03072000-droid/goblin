@@ -108,6 +108,7 @@ class FingerprintRepositoryHelper {
       deviceScaleFactor: 1,
       hardwareConcurrency: 8,
       deviceMemory: 16,
+      maxTouchPoints: 0,
       webglVendor: 'Google Inc. (NVIDIA)',
       webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)',
       canvasMode: 'noise',

@@ -1,0 +1,1 @@
+ALTER TABLE fingerprints ADD COLUMN max_touch_points INTEGER NOT NULL DEFAULT 0;

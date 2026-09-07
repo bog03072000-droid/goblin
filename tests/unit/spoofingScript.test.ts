@@ -16,6 +16,7 @@ function baseFp(overrides: Partial<SpoofableFingerprint> = {}): SpoofableFingerp
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36',
     platform: 'Win32',
     hardwareConcurrency: 8,
+    maxTouchPoints: 0,
     ...overrides,
   };
 }
@@ -62,6 +63,14 @@ describe('buildSpoofingScript', () => {
     const script = buildSpoofingScript(baseFp({ deviceMemory: 16 }));
     expect(script).toContain("'deviceMemory'");
     expect(script).toContain('16');
+  });
+
+  it('always applies maxTouchPoints — there is no on/off mode for it, same as deviceMemory', () => {
+    const desktop = buildSpoofingScript(baseFp({ maxTouchPoints: 0 }));
+    expect(desktop).toContain("'maxTouchPoints'");
+    const mobile = buildSpoofingScript(baseFp({ maxTouchPoints: 5 }));
+    expect(mobile).toContain("'maxTouchPoints'");
+    expect(mobile).toContain('5');
   });
 
   it('includes the WebGL override only when webglSpoofingMode is "spoof", and embeds the configured strings', () => {

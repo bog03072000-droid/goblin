@@ -1,7 +1,8 @@
 import type { Session, WebContents } from 'electron';
-import type { GeolocationMode, PermissionsMode, WebrtcMode } from '../../shared/schemas/fingerprint';
+import type { GeolocationMode, Os, PermissionsMode, WebrtcMode } from '../../shared/schemas/fingerprint';
 
 export interface EnforceableFingerprint {
+  os: Os;
   userAgent: string;
   platform: string;
   languages: string[];
@@ -58,13 +59,34 @@ export async function enforceFingerprint(wc: WebContents, fp: EnforceableFingerp
     hardwareConcurrency: fp.hardwareConcurrency,
   });
 
+  // `mobile` genuinely needs to follow the profile's real claimed OS, not
+  // stay hardcoded false: it drives CSS `@media (pointer/hover)` evaluation
+  // and viewport-meta reinterpretation at the Blink layout level, same
+  // category of "CDP vs. JS-override disagreement" this function's own
+  // top comment already warns about for screen dimensions — an android/ios
+  // profile reporting `mobile: false` here would be exactly that mismatch,
+  // this time inside the CDP layer that exists specifically to avoid it.
+  const isMobileOs = fp.os === 'android' || fp.os === 'ios';
   await wc.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
     width: 0,
     height: 0,
     deviceScaleFactor: fp.deviceScaleFactor,
-    mobile: false,
+    mobile: isMobileOs,
     screenWidth: fp.screenWidth,
     screenHeight: fp.screenHeight,
+  });
+
+  // `setDeviceMetricsOverride`'s own `mobile` flag alone does NOT flip
+  // `matchMedia('(pointer: coarse)')`/`(hover: none)` — verified directly
+  // (a real E2E run against this exact code still showed `pointer: fine`/
+  // `hover: hover` with only the metrics override's `mobile: true` set).
+  // Real device emulation (what DevTools' own "device mode" and Puppeteer's
+  // `page.emulate()` both do) pairs it with this separate call — without
+  // it, those media queries keep reading the host machine's own real
+  // mouse/trackpad capability regardless of the claimed OS.
+  await wc.debugger.sendCommand('Emulation.setTouchEmulationEnabled', {
+    enabled: isMobileOs,
+    maxTouchPoints: isMobileOs ? 5 : 1,
   });
 
   // 'real': no override — Chromium's real geolocation provider (or lack of

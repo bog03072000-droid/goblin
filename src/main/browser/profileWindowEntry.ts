@@ -1,7 +1,13 @@
 import { app, BrowserWindow, ipcMain, protocol, screen, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { enforceFingerprint, applyWebrtcPolicy, applyPermissionPolicy, injectSpoofingScriptViaCdp } from './fingerprintEnforcement';
+import {
+  enforceFingerprint,
+  applyWebrtcPolicy,
+  applyPermissionPolicy,
+  injectSpoofingScriptViaCdp,
+  type EnforceableFingerprint,
+} from './fingerprintEnforcement';
 import { buildSpoofingScript } from './spoofingScript';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
@@ -355,6 +361,7 @@ export function runProfileWindowProcess(): void {
 
       const fp = args.fingerprintConfig;
       enforceFingerprint(webviewContents, {
+        os: (fp['os'] as EnforceableFingerprint['os']) ?? 'windows',
         userAgent: args.userAgent,
         platform: String(fp['platform'] ?? 'Win32'),
         languages,

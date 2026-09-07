@@ -35,6 +35,7 @@ describe('buildSpoofableFingerprint', () => {
       mediaDevicesMode: 'hidden',
       platform: 'MacIntel',
       hardwareConcurrency: 12,
+      maxTouchPoints: 5,
       serviceWorkerMode: 'disabled',
     };
     const result = buildSpoofableFingerprint(config, { userAgent: 'UA-string', profileId: 'p1' });
@@ -51,6 +52,7 @@ describe('buildSpoofableFingerprint', () => {
       userAgent: 'UA-string',
       platform: 'MacIntel',
       hardwareConcurrency: 12,
+      maxTouchPoints: 5,
       serviceWorkerMode: 'disabled',
     });
   });
@@ -70,6 +72,7 @@ describe('buildSpoofableFingerprint', () => {
       userAgent: 'UA-string',
       platform: 'Win32',
       hardwareConcurrency: 8,
+      maxTouchPoints: 0,
       serviceWorkerMode: 'real',
     });
   });

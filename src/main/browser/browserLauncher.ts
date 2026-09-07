@@ -53,6 +53,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
 
   const fingerprintConfigB64 = Buffer.from(
     JSON.stringify({
+      os: params.fingerprint.os,
       userAgent: params.fingerprint.userAgent,
       platform: params.fingerprint.platform,
       locale: params.fingerprint.locale,
@@ -63,6 +64,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
       deviceScaleFactor: params.fingerprint.deviceScaleFactor,
       hardwareConcurrency: params.fingerprint.hardwareConcurrency,
       deviceMemory: params.fingerprint.deviceMemory,
+      maxTouchPoints: params.fingerprint.maxTouchPoints,
       webglVendor: params.fingerprint.webglVendor,
       webglRenderer: params.fingerprint.webglRenderer,
       webrtcMode: params.fingerprint.webrtcMode,

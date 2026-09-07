@@ -1877,6 +1877,81 @@ existing behavior already matches genuine Chromium exactly (Result 2) —
 the single best achievable outcome at this layer, arrived at with zero
 lines of new code because none were needed.
 
+## Tenth investigation — Android/iOS platform bundles, and two real coherence bugs a live E2E run caught
+
+Adds `android` and `ios` to `platformProfiles.ts` (previously
+windows/macos/linux only), each a coherent bundle of UA, platform string,
+real-device screen+DPR pairs, hardware options, GPU strings, and
+`maxTouchPoints` (a new field — see below). Verified against a live running
+profile via the existing `PF_E2E_AUTO_DIAGNOSTICS` mechanism
+(`tests/e2e/mobileFingerprint.spec.ts`), same standard as every finding
+above — and that real run caught two genuine bugs neither typecheck, lint,
+nor the unit suite could have found, since both only manifest in the real
+child-process/CDP path:
+
+**Bug 1 — the child process never received `os` or the new `maxTouchPoints`
+field at all.** `browserLauncher.ts`'s `launchProfileProcess()` builds the
+`--fingerprint-config` CLI argument from an explicit field-by-field
+allowlist, not the full `Fingerprint` object — adding `maxTouchPoints` to
+the schema/generator/validator/spoofing script was not, on its own, enough
+to make it reach the actual browser process; the allowlist silently
+dropped it (and had never carried `os` either, though that happened not to
+matter before mobile bundles existed, since every desktop consumer's
+fallback default coincidentally matched). Caught because the diagnostics
+snapshot's `configured.maxTouchPoints` came back `undefined` and
+`observed.maxTouchPoints` came back `0` against a profile whose DB row
+correctly had `5` — a real, direct, unambiguous mismatch, not a subtle one.
+Fixed by adding both fields to the allowlist.
+
+**Bug 2 — `Emulation.setDeviceMetricsOverride`'s `mobile` flag alone does
+NOT flip `matchMedia('(pointer: coarse)')`/`(hover: none)`.** Real
+Chromium's DevTools "device mode" and Puppeteer's own `page.emulate()`
+both pair `setDeviceMetricsOverride` with a separate
+`Emulation.setTouchEmulationEnabled` call — omitting it (as
+`fingerprintEnforcement.ts` did before this stage, for every OS, since
+`mobile` was previously hardcoded `false` regardless of profile) means
+those media queries keep reading the real host machine's own actual
+pointer/hover capability. Caught directly: a real Android profile's
+diagnostics snapshot reported `pointer: fine, hover: hover` — the literal
+opposite of a real touchscreen device — even with `mobile: true` correctly
+set and the right screen/UA/platform already passing. Fixed by adding the
+paired `Emulation.setTouchEmulationEnabled({ enabled, maxTouchPoints })`
+call, keyed off the same `os === 'android' || os === 'ios'` check.
+
+**New field: `maxTouchPoints`.** No native CDP override method exists for
+`navigator.maxTouchPoints` itself (same situation as `deviceMemory`,
+Finding 3) — applied via the same JS-getter-override mechanism in
+`spoofingScript.ts`, unconditionally, same "no on/off mode" posture as
+`deviceMemory`. Classification: **A** (verified PASS end-to-end against a
+real profile, both android and ios).
+
+**Honest, stated limitation — iOS is a categorically weaker spoof than
+every other bundle in this project, not glossed over.** Apple requires
+every iOS browser (including Chrome/Firefox for iOS) to use WebKit, never
+its own engine — there is no real device where a Chromium/V8/Blink engine
+presents an iOS User-Agent. This project's `ios` bundle spoofs every
+JS-visible field it can reach (UA, platform, screen, touch points), the
+same as windows/macos/linux/android, but the underlying rendering/JS
+engine is still genuinely Chromium — a categorically deeper mismatch than
+any other OS this project spoofs, since those are all real Chromium
+presenting as a *different real Chromium* (verified coherent, including
+by this stage's own real captures), while `ios` is real Chromium
+presenting as a browser family that, on real hardware, never runs
+Chromium at all. Two concrete, unfixable-within-this-architecture
+consequences, stated plainly rather than left for someone to discover
+later: (1) real iOS Safari/WebKit does not implement the Device Memory
+API at all — `navigator.deviceMemory` is `undefined` on a real iPhone, not
+a small number, but this project's schema requires a definite number for
+every profile regardless of OS; (2) real WebKit's WebGL renderer strings
+look nothing like Chromium's ANGLE-prefixed ones, so the `ios` bundle's
+GPU strings are the closest coherent-with-Apple-hardware values available,
+not a real capture from an actual iPhone's Safari. Included because it was
+explicitly requested, not because it is claimed to be as trustworthy as
+the `android` bundle — a site checking only the JS-visible surface this
+project reaches would see a coherent iPhone; a site checking engine-level
+behavior (V8-specific `Function.prototype.toString` quirks, error stack
+formats, certain timing characteristics) would not.
+
 ## Automated test coverage
 
 - `tests/e2e/fingerprintEnforcement.spec.ts` (3 tests) — starts a real

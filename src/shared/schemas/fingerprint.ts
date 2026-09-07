@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const OsSchema = z.enum(['windows', 'macos', 'linux']);
+export const OsSchema = z.enum(['windows', 'macos', 'linux', 'android', 'ios']);
 export type Os = z.infer<typeof OsSchema>;
 
 export const CanvasModeSchema = z.enum(['off', 'noise']);
@@ -61,6 +61,12 @@ export const FingerprintSchema = z.object({
   deviceScaleFactor: z.number().min(0.5).max(4),
   hardwareConcurrency: z.number().int().min(1).max(128),
   deviceMemory: z.number().int().min(1).max(128),
+  // navigator.maxTouchPoints — 0 on every real desktop machine without a
+  // touchscreen (the overwhelming majority), 5 on real Android/iOS Chrome.
+  // Always carried regardless of OS (same convention as webglVendor/
+  // webglRenderer above) so switching OS later via a field override
+  // doesn't need a regenerate.
+  maxTouchPoints: z.number().int().min(0).max(10),
   webglVendor: z.string().min(1),
   webglRenderer: z.string().min(1),
   canvasMode: CanvasModeSchema,
@@ -111,6 +117,10 @@ export interface FingerprintPlatformOptions {
   hardwareConcurrencyOptions: number[];
   deviceMemoryOptions: number[];
   gpuOptions: Array<{ vendor: string; renderer: string }>;
+  /** navigator.maxTouchPoints for this platform — see FingerprintSchema's
+   * own field comment. Fixed per platform, not a pick list, since it isn't
+   * something a user would plausibly want to override independently of OS. */
+  maxTouchPoints: number;
 }
 
 export interface FingerprintOptionsResponse {

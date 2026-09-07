@@ -30,6 +30,7 @@ export async function validateFingerprintPreview(source: Fingerprint): Promise<F
     deviceScaleFactor: source.deviceScaleFactor,
     hardwareConcurrency: source.hardwareConcurrency,
     deviceMemory: source.deviceMemory,
+    maxTouchPoints: source.maxTouchPoints,
     webglVendor: source.webglVendor,
     webglRenderer: source.webglRenderer,
     canvasMode: source.canvasMode,

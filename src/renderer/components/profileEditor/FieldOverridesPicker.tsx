@@ -20,6 +20,14 @@ export type FieldOverrides = {
 
 const AUTO = '';
 
+const OS_LABELS: Record<Os, string> = {
+  windows: 'Windows',
+  macos: 'macOS',
+  linux: 'Linux',
+  android: 'Android',
+  ios: 'iOS',
+};
+
 /** Renders the OS/version/browser/CPU/RAM/GPU/resolution pickers — each
  * defaults to "Auto" and only appears in the request to fingerprint:generate
  * once explicitly chosen. Platform (Win32/MacIntel/Linux x86_64) and GPU
@@ -72,7 +80,7 @@ export function FieldOverridesPicker({
             <option value={AUTO}>{t('editor.fingerprint.picker.auto')}</option>
             {fieldOptions.platforms.map((p) => (
               <option key={p.os} value={p.os}>
-                {p.os === 'windows' ? 'Windows' : p.os === 'macos' ? 'macOS' : 'Linux'}
+                {OS_LABELS[p.os]}
               </option>
             ))}
           </select>

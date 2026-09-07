@@ -45,6 +45,7 @@ function makeFingerprintInput() {
     deviceScaleFactor: 1,
     hardwareConcurrency: 8,
     deviceMemory: 8,
+    maxTouchPoints: 0,
     webglVendor: 'Google Inc.',
     webglRenderer: 'ANGLE',
     canvasMode: 'off' as const,

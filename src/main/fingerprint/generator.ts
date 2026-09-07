@@ -5,7 +5,7 @@ import { createSeededRandom, pick } from './seededRandom';
 
 export interface GenerateFingerprintOptions {
   seed: string;
-  os?: 'windows' | 'macos' | 'linux';
+  os?: 'windows' | 'macos' | 'linux' | 'android' | 'ios';
   locale?: string;
   /** Explicit field overrides for the "choose instead of Auto" UI — each is
    * validated to actually belong to the resolved platform bundle where that
@@ -51,6 +51,12 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
       ? platform.screens.find((s) => s.width === options.screenWidth && s.height === options.screenHeight)
       : undefined;
   const screen = screenOverride ?? pick(rng, platform.screens);
+  // A screen that carries its own deviceScaleFactor (every mobile bundle —
+  // see PlatformProfile's own comment) picks DPR and resolution together as
+  // one coherent unit; otherwise fall back to the platform's independently-
+  // picked deviceScaleFactorOptions (desktop DPR is only loosely coupled to
+  // resolution, unlike a phone's fixed model-specific DPR).
+  const deviceScaleFactor = screen.deviceScaleFactor ?? pick(rng, platform.deviceScaleFactorOptions);
 
   const gpuOverride =
     options.webglVendor != null
@@ -84,9 +90,10 @@ export function generateFingerprint(options: GenerateFingerprintOptions): Finger
     timezone: locale.timezone,
     screenWidth: screen.width,
     screenHeight: screen.height,
-    deviceScaleFactor: platform.os === 'macos' ? 2 : 1,
+    deviceScaleFactor,
     hardwareConcurrency,
     deviceMemory,
+    maxTouchPoints: platform.maxTouchPoints,
     webglVendor: gpu.vendor,
     webglRenderer: gpu.renderer,
     canvasMode: 'noise',

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateFingerprint } from '../../src/main/fingerprint/generator';
 import { validateFingerprint } from '../../src/main/fingerprint/validator';
-import { LOCALE_PROFILES } from '../../src/main/fingerprint/platformProfiles';
+import { LOCALE_PROFILES, PLATFORM_PROFILES } from '../../src/main/fingerprint/platformProfiles';
 
 describe('fingerprint generator', () => {
   it('is deterministic for the same seed', () => {
@@ -29,6 +29,51 @@ describe('fingerprint generator', () => {
     const fp = generateFingerprint({ seed: 'mac-seed', os: 'macos' });
     expect(fp.os).toBe('macos');
     expect(fp.platform).toBe('MacIntel');
+  });
+
+  it('android profiles report a real Chrome-for-Android platform string, touch points, and portrait-capable screens', () => {
+    for (let i = 0; i < 15; i++) {
+      const fp = generateFingerprint({ seed: `android-${i}`, os: 'android' });
+      expect(fp.os).toBe('android');
+      expect(fp.platform).toBe('Linux armv8l');
+      expect(fp.userAgent.toLowerCase()).toContain('android');
+      expect(fp.maxTouchPoints).toBe(5);
+      // Real Android hardwareConcurrency is desktop-atypically low.
+      expect(fp.hardwareConcurrency).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('ios profiles report a real iPhone platform string, touch points, and an Apple-referencing WebGL renderer', () => {
+    for (let i = 0; i < 15; i++) {
+      const fp = generateFingerprint({ seed: `ios-${i}`, os: 'ios' });
+      expect(fp.os).toBe('ios');
+      expect(fp.platform).toBe('iPhone');
+      expect(fp.userAgent.toLowerCase()).toContain('iphone');
+      expect(fp.maxTouchPoints).toBe(5);
+      expect(fp.webglRenderer.toLowerCase()).toContain('apple');
+      expect(fp.hardwareConcurrency).toBe(6);
+    }
+  });
+
+  it('every mobile screen\'s deviceScaleFactor is picked together with its resolution, never independently mismatched', () => {
+    for (const os of ['android', 'ios'] as const) {
+      for (let i = 0; i < 20; i++) {
+        const fp = generateFingerprint({ seed: `mobile-dsf-${os}-${i}`, os });
+        const platform = PLATFORM_PROFILES.find((p) => p.os === os)!;
+        const matchingScreen = platform.screens.find((s) => s.width === fp.screenWidth && s.height === fp.screenHeight);
+        expect(matchingScreen, `no bundle screen matched ${fp.screenWidth}x${fp.screenHeight} for os=${os}`).toBeTruthy();
+        expect(fp.deviceScaleFactor).toBe(matchingScreen!.deviceScaleFactor);
+      }
+    }
+  });
+
+  it('a desktop OS never gets a nonzero maxTouchPoints from the generator', () => {
+    for (const os of ['windows', 'macos', 'linux'] as const) {
+      for (let i = 0; i < 10; i++) {
+        const fp = generateFingerprint({ seed: `desktop-touch-${os}-${i}`, os });
+        expect(fp.maxTouchPoints).toBe(0);
+      }
+    }
   });
 
   it('defaults webglSpoofingMode to "spoof" and serviceWorkerMode to "disabled" — both closed by default, not opt-in, because leaving either "off" silently leaked a correlatable real fingerprint on every profile (see docs/FINGERPRINT_AUDIT.md)', () => {
@@ -163,5 +208,54 @@ describe('fingerprint validator', () => {
     const result = validateFingerprint(unusual);
     expect(result.valid).toBe(true);
     expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('does NOT warn about portrait orientation (width < height) on a mobile profile — that is the normal case', () => {
+    const fp = generateFingerprint({ seed: 'android-portrait', os: 'android' });
+    expect(fp.screenWidth).toBeLessThan(fp.screenHeight);
+    const result = validateFingerprint(fp);
+    expect(result.warnings.some((w) => w.includes('unusual for a desktop profile'))).toBe(false);
+  });
+
+  it('DOES still warn about portrait orientation on a desktop profile', () => {
+    const fp = generateFingerprint({ seed: 'win-portrait', os: 'windows' });
+    const portrait = { ...fp, screenWidth: 1080, screenHeight: 1920 };
+    const result = validateFingerprint(portrait);
+    expect(result.warnings.some((w) => w.includes('unusual for a desktop profile'))).toBe(true);
+  });
+
+  it('accepts an Apple GPU renderer on an ios profile (unlike every other non-macOS OS)', () => {
+    const fp = generateFingerprint({ seed: 'ios-apple-gpu', os: 'ios' });
+    const result = validateFingerprint(fp);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects an Apple GPU renderer on an android profile — only macos/ios are allowed to reference Apple', () => {
+    const fp = generateFingerprint({ seed: 'android-fake-apple', os: 'android' });
+    const broken = { ...fp, webglRenderer: 'ANGLE (Apple, Apple M2, OpenGL 4.1)' };
+    const result = validateFingerprint(broken);
+    expect(result.valid).toBe(false);
+  });
+
+  it('warns when a real mobile OS reports maxTouchPoints: 0 (no touchscreen is implausible on a phone)', () => {
+    const fp = generateFingerprint({ seed: 'android-no-touch', os: 'android' });
+    const broken = { ...fp, maxTouchPoints: 0 };
+    const result = validateFingerprint(broken);
+    expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('warns when a desktop OS reports a nonzero maxTouchPoints', () => {
+    const fp = generateFingerprint({ seed: 'win-fake-touch', os: 'windows' });
+    const broken = { ...fp, maxTouchPoints: 5 };
+    const result = validateFingerprint(broken);
+    expect(result.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('rejects a wrong platform string for android/ios, same as every other OS', () => {
+    const androidFp = generateFingerprint({ seed: 'android-wrong-platform', os: 'android' });
+    expect(validateFingerprint({ ...androidFp, platform: 'Win32' }).valid).toBe(false);
+
+    const iosFp = generateFingerprint({ seed: 'ios-wrong-platform', os: 'ios' });
+    expect(validateFingerprint({ ...iosFp, platform: 'MacIntel' }).valid).toBe(false);
   });
 });

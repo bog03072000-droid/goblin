@@ -65,6 +65,7 @@ export class ImportExportService {
         deviceScaleFactor: fingerprint.deviceScaleFactor,
         hardwareConcurrency: fingerprint.hardwareConcurrency,
         deviceMemory: fingerprint.deviceMemory,
+        maxTouchPoints: fingerprint.maxTouchPoints,
         webglVendor: fingerprint.webglVendor,
         webglRenderer: fingerprint.webglRenderer,
         canvasMode: fingerprint.canvasMode,
