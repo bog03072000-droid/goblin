@@ -116,6 +116,20 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(snapshot.statusByField['hardwareConcurrency']).toBe('PASS');
   expect(Number(snapshot.observed['hardwareConcurrency'])).toBe(Number(snapshot.configured['hardwareConcurrency']));
 
+  // WebRTC leak probe (diagnostics.html's own probeWebrtc(), a real
+  // RTCPeerConnection against a public STUN server) has existed since the
+  // fingerprint reality audit stage and runs automatically as part of this
+  // same snapshot — but no E2E test had ever actually asserted on its
+  // result until now (confirmed by grep: zero matches for statusByField
+  // ['webrtc'] anywhere in tests/e2e/ before this line). The default
+  // webrtcMode ('proxy-only') must never show a real LAN-IP "host"
+  // candidate leaking through — MISMATCH is the one outcome that means a
+  // real leak; APPLIED (candidates gathered, none leak) and
+  // NOT_IMPLEMENTED (no candidates gathered at all, e.g. no reachable
+  // STUN server from this sandbox) are both honest "no leak observed"
+  // outcomes, not failures.
+  expect(snapshot.statusByField['webrtc']).not.toBe('MISMATCH');
+
   // deviceMemory is genuinely applied via the preload-injected spoofing
   // script (there's still no CDP Emulation method for it — see Finding 3 —
   // this is the JS-override path; moved off CDP's Page domain onto a real

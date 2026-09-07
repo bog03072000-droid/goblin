@@ -2278,3 +2278,62 @@ independent of whether it alone explained the flake) and
 `tests/e2e/fingerprintEnforcement.spec.ts` (the actual fix for this
 specific flake — an explicit wait sequencing the deferred auto-navigate
 before the test's own navigation).
+
+## Fourteenth investigation — `navigator.plugins`/`navigator.mimeTypes` cross-OS consistency, confirmed clean
+
+**Status: real, checked, no gap found.** Flagged at the start of this session as never actually
+investigated — confirmed by grep before touching anything: zero mentions of `plugins` or
+`mimeTypes` anywhere in `spoofingScript.ts` or `diagnostics.html`, meaning nothing in this
+project reads, overrides, or even watches these two fields. That silence could mean either
+"already fine, no override needed" or "a real, uncaught leak" — worth resolving either way.
+
+**Hypothesis.** If `navigator.plugins`/`navigator.mimeTypes` reflect this real host machine's
+actual Chrome/Electron binary regardless of the profile's configured OS, a site could
+distinguish (or invalidate) a spoofed macOS/Linux profile running on a real Windows host by
+its plugin list not matching what real macOS/Linux Chrome would report.
+
+**Method.** Two real profiles, one configured `windows`, one `macos`, both started for real,
+`navigator.plugins`/`navigator.mimeTypes` read directly from the live loaded page via CDP
+(`tests/e2e/pluginsMimeTypesConsistency.spec.ts`, new) — not simulated.
+
+**Result: identical on both.**
+```
+windows: plugins = [PDF Viewer, Chrome PDF Viewer, Chromium PDF Viewer, Microsoft Edge PDF Viewer, WebKit built-in PDF]
+         mimeTypes = [application/pdf, text/pdf]
+macos:   plugins = [PDF Viewer, Chrome PDF Viewer, Chromium PDF Viewer, Microsoft Edge PDF Viewer, WebKit built-in PDF]
+         mimeTypes = [application/pdf, text/pdf]
+```
+This is genuine, current Chromium behavior, not a coincidence specific to this project: modern
+Chrome (all desktop builds, all platforms, for several years now) standardized its built-in
+PDF-viewer plugin/mimetype registration to this exact same fixed list regardless of host OS —
+there is no real per-platform plugin list left to leak in the first place on desktop Chrome.
+A separate, real CreepJS capture from earlier in this same session
+(`docs/creepjs-results/2026-09-07T14-14-17-629Z.md`, an Android-configured profile) showed
+`mimeTypes (0)`/`plugins (0)` instead — also correct, since real mobile Chrome ships neither;
+that value flips correctly here too because of the same `mobile: true` CDP device-metrics/touch-
+emulation pairing the Tenth investigation's fix already wired up, not because of anything new.
+
+**Conclusion: no fix needed, nothing to add.** This field pair needed no dedicated spoofing
+mechanism because the real, unmodified Chromium engine already produces a coherent, platform-
+appropriate value for free. Documented so this doesn't get re-flagged as an unknown again.
+
+## Fifteenth investigation — the WebRTC ICE-candidate leak probe had never actually been asserted on by any test
+
+**Status: real, confirmed gap in test coverage (not in the underlying protection) — closed.**
+`diagnostics.html`'s `probeWebrtc()` (opens a real `RTCPeerConnection` against a public STUN
+server, inspects the actual ICE candidates Chromium generates, classifies `APPLIED` if only
+srflx/relay candidates appear, `MISMATCH` if a real LAN-IP "host" candidate leaks through,
+`NOT_IMPLEMENTED` if no candidates gather at all) has existed since the original fingerprint
+reality audit stage and already runs automatically as part of every diagnostics snapshot
+(`statusByField.webrtc`, `observed.webrtc`) — but grepping every E2E spec for any reference to
+that field before this stage returned zero matches. The mechanism was real; nothing had ever
+checked its result.
+
+**Fix:** added a real assertion to `fingerprintEnforcement.spec.ts`'s existing
+"writes a real observed-vs-configured snapshot" test — `expect(snapshot.statusByField['webrtc']).not.toBe('MISMATCH')`,
+run against a real profile with the default `webrtcMode: 'proxy-only'`. Deliberately does not
+require `APPLIED` specifically: `NOT_IMPLEMENTED` (no ICE candidates gathered at all, e.g. no
+STUN server reachable from a given sandbox) is an equally honest "no leak observed" outcome,
+distinct from `MISMATCH` (an actual, confirmed real-IP leak) — the one outcome that should never
+be silently accepted. **Verified passing on a real run** (no leak observed on this machine, real
+network, default `proxy-only` mode, no proxy configured on the test profile).
