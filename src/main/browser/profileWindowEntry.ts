@@ -386,24 +386,41 @@ export function runProfileWindowProcess(): void {
         if (navEvent.url && navEvent.url !== 'about:blank') explicitNavigationSeen = true;
       });
 
-      injectSpoofingScriptViaCdp(webviewContents, spoofingScript).catch((err: unknown) => {
-        console.error('[ProfileForge] CDP spoofing-script injection failed:', err);
-      });
-
+      // injectSpoofingScriptViaCdp() and enforceFingerprint() each
+      // independently do `if (!wc.debugger.isAttached()) wc.debugger.attach(...)`
+      // on this same WebContents — real, reproduced race (not a test flake):
+      // firing them concurrently (as this code used to) lets both see
+      // isAttached() === false before either's attach() call has resolved,
+      // so the second attach() throws ("already attached"), that rejection
+      // is swallowed by its own .catch() below, and whichever call lost the
+      // race never actually runs its CDP commands — the spoofing script
+      // silently never gets registered for that session (verified via 10
+      // isolated reproductions of fingerprintEnforcement.spec.ts's Service
+      // Worker test: ~60-70% of runs never removed navigator.serviceWorker
+      // at all, not a read-side timing issue — no amount of waiting on the
+      // test side fixed it). Chaining injectSpoofingScriptViaCdp() first,
+      // then enforceFingerprint() only after it settles, makes the two
+      // debugger.attach() calls strictly sequential instead of racing.
       const fp = args.fingerprintConfig;
-      enforceFingerprint(webviewContents, {
-        os: (fp['os'] as EnforceableFingerprint['os']) ?? 'windows',
-        userAgent: args.userAgent,
-        platform: String(fp['platform'] ?? 'Win32'),
-        languages,
-        hardwareConcurrency: Number(fp['hardwareConcurrency'] ?? 8),
-        screenWidth: Number(fp['screenWidth'] ?? 1920),
-        screenHeight: Number(fp['screenHeight'] ?? 1080),
-        deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
-        geolocationMode,
-        geolocationLatitude: Number(fp['geolocationLatitude'] ?? 0),
-        geolocationLongitude: Number(fp['geolocationLongitude'] ?? 0),
-      })
+      injectSpoofingScriptViaCdp(webviewContents, spoofingScript)
+        .catch((err: unknown) => {
+          console.error('[ProfileForge] CDP spoofing-script injection failed:', err);
+        })
+        .then(() =>
+          enforceFingerprint(webviewContents, {
+            os: (fp['os'] as EnforceableFingerprint['os']) ?? 'windows',
+            userAgent: args.userAgent,
+            platform: String(fp['platform'] ?? 'Win32'),
+            languages,
+            hardwareConcurrency: Number(fp['hardwareConcurrency'] ?? 8),
+            screenWidth: Number(fp['screenWidth'] ?? 1920),
+            screenHeight: Number(fp['screenHeight'] ?? 1080),
+            deviceScaleFactor: Number(fp['deviceScaleFactor'] ?? 1),
+            geolocationMode,
+            geolocationLatitude: Number(fp['geolocationLatitude'] ?? 0),
+            geolocationLongitude: Number(fp['geolocationLongitude'] ?? 0),
+          }),
+        )
         .catch((err: unknown) => {
           console.error('[ProfileForge] fingerprint enforcement failed:', err);
         })

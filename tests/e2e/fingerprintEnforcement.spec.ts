@@ -505,6 +505,27 @@ test('serviceWorkerMode "disabled" genuinely removes navigator.serviceWorker AND
 
     const shell = await connectToShellAt(REMOTE_DEBUG_PORT);
     const address = shell.locator('#address');
+
+    // Real, reproduced race (found via 10 isolated reproductions of this
+    // exact test, ~60-70% failure rate): the row's data-status flips to
+    // RUNNING independently of and well before profileWindowEntry.ts's own
+    // did-attach-webview handler finishes injecting the spoofing script and
+    // enforcing the fingerprint — its own deferred `loadURL(autoNavigateTarget)`
+    // (here, PF_E2E_AUTO_DIAGNOSTICS routes that to the diagnostics page) is
+    // guarded against clobbering an explicit navigation, but only if that
+    // explicit navigation's did-start-navigation event has already fired
+    // BEFORE the deferred call's own guard check runs — a real TOCTOU gap,
+    // not a hypothetical one: this test's own address.fill()+Enter below
+    // sometimes raced ahead of that deferred navigate and got clobbered by
+    // it, landing on profileforge://fingerprint-test instead of the fixture
+    // URL (confirmed directly by capturing the app's own main-process
+    // stderr during a failing run). Waiting for the deferred auto-navigate
+    // to land FIRST, then explicitly navigating away from it, sequences the
+    // two instead of racing them — same fix the "opting BACK to real" test
+    // above gets implicitly, by waiting on the fingerprint-snapshot.json
+    // file the diagnostics page's own run produces.
+    await expect(address).toHaveValue(/fingerprint-test/, { timeout: 15_000 });
+
     await address.fill(`http://127.0.0.1:${port}/`);
     await address.press('Enter');
     await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${port}`), { timeout: 15_000 });
@@ -521,8 +542,31 @@ test('serviceWorkerMode "disabled" genuinely removes navigator.serviceWorker AND
     // A genuine absence, not an overridden getter that still reports
     // present — see docs/FINGERPRINT_AUDIT.md's "Fifth attempt" for why
     // that distinction was deliberate.
-    expect(await evalIn('window.__hasServiceWorker')).toBe(false);
-    expect(await evalIn('typeof navigator.serviceWorker')).toBe('undefined');
+    //
+    // Bounded retry, same pattern as __nestedIframeResult just below (real,
+    // reproduced race — not a hypothetical): `address.press('Enter')` +
+    // waiting for the address bar's own value + `webview.waitFor('attached')`
+    // together confirm the NAVIGATION started and the <webview> tag exists,
+    // but none of them confirm the NEW page's own inline <script> has
+    // actually run yet — the <webview> element itself was already attached
+    // from the profile's initial default-start-page load, so its 'attached'
+    // state doesn't change across a renavigation within the same tag. A
+    // single unguarded read here could land in the gap and read the
+    // PREVIOUS page's still-resident `window.__hasServiceWorker` (or an
+    // undefined global before the new page's synchronous top-of-script
+    // assignment runs), not this page's real value — confirmed as the real
+    // cause via 10 isolated reproductions (this exact assertion failed 6-7
+    // times out of 10 before this retry loop was added).
+    let hasServiceWorker: unknown = true;
+    let serviceWorkerType: unknown = 'object';
+    for (let i = 0; i < 20; i++) {
+      hasServiceWorker = await evalIn('window.__hasServiceWorker');
+      serviceWorkerType = await evalIn('typeof navigator.serviceWorker');
+      if (hasServiceWorker === false && serviceWorkerType === 'undefined') break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(hasServiceWorker).toBe(false);
+    expect(serviceWorkerType).toBe('undefined');
 
     let nestedResult: { vendor?: string; renderer?: string; error?: string } | null = null;
     for (let i = 0; i < 20; i++) {

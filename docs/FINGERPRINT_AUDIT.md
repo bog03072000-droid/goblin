@@ -2199,3 +2199,82 @@ not a fix to the existing `fontsMode` mechanism. `fontsMode: 'restricted'`
 keeps doing exactly what it already did; the Fingerprint tab's hint text
 and both audit sections continue to state the limitation plainly rather
 than imply broader coverage.
+
+## Thirteenth investigation — the fingerprintEnforcement.spec.ts Service Worker test's timing flake, root-caused and fixed
+
+**Status: root-caused and fixed. A real, reproducible race — not "the machine was slow" — between the deferred diagnostics auto-navigate and this test's own navigation. 10/10 clean runs after the fix, versus 3/10 (7 hard failures across 10, one recovered only via retry) measured before it.**
+
+Referenced but never investigated in an earlier session round's assessment
+("known Service Worker timing flake"). Investigated properly this time,
+per the instruction to either root-cause it the way the automation-
+readiness race was fixed, or report honestly that it needs more time than
+available.
+
+**Method.** Ran `tests/e2e/fingerprintEnforcement.spec.ts`'s `serviceWorkerMode
+"disabled"` test in complete isolation (`--grep`), 10 times back to back,
+recording the exact outcome of each run before touching anything.
+
+**Baseline, measured: 3 clean passes, 1 recovered-on-retry, 6 hard failures
+out of 10** — a ~60-70% first-attempt failure rate, high enough that
+"occasional CI flake" undersells it; this is closer to "usually fails."
+
+**First hypothesis, tested and only partially right.**
+`profileWindowEntry.ts`'s `did-attach-webview` handler fires
+`injectSpoofingScriptViaCdp()` and `enforceFingerprint()` uncoordinated —
+both independently do `if (!wc.debugger.isAttached()) wc.debugger.attach(...)`
+on the same `WebContents`, a real double-attach race if both land before
+either's `attach()` call resolves. Serialized them (inject, *then*
+enforce, via `.then()` chaining) — a genuine, worthwhile fix in its own
+right (no downside to making two independent CDP-attach calls strictly
+sequential instead of racing), kept in `profileWindowEntry.ts`. **But
+re-measuring after this change alone showed no real improvement** (5
+hard failures, 3 recovered-on-retry, 1 passed, 1 truncated, out of 10) —
+proving this wasn't the (sole) cause of the specific failure being chased.
+
+**Real root cause, found by capturing the app's own main-process stderr
+during a failing run** (temporarily piped `app.process().stdout`/`stderr`
+into the test's own output, removed once the cause was confirmed): a
+failing run's address bar held `profileforge://fingerprint-test?config=...`
+— the **diagnostics page**, not the fixture HTTP server this test
+explicitly navigates to. The test suite runs under `PF_E2E_AUTO_DIAGNOSTICS=1`,
+which makes `profileWindowEntry.ts`'s deferred
+`loadURL(autoNavigateTarget)` (fired from inside the
+`injectSpoofingScriptViaCdp().then(enforceFingerprint).finally()` chain)
+target the diagnostics page instead of the normal default start page. That
+deferred call is guarded against clobbering an explicit navigation via an
+`explicitNavigationSeen` flag set by a `did-start-navigation` listener —
+but the row's `data-status` flips to `RUNNING` independently of, and well
+before, that whole async chain resolves. This test's own
+`address.fill(fixtureUrl); address.press('Enter')` — issued as soon as
+`RUNNING` is observed — could therefore start **before** the deferred
+diagnostics navigate's guard check ran, lose that race, and get clobbered
+by it a moment later: a genuine TOCTOU gap between "guard check reads
+`explicitNavigationSeen`" and "the test's own navigation actually lands,"
+not a hypothetical one.
+
+**Fix, test-side, matching a guard the file's other Service-Worker test
+already had implicitly.** The `"opting BACK to real"` test just above this
+one in the same file (line ~306) waits on
+`fs.existsSync(snapshotPath)` — the fingerprint-snapshot file the
+diagnostics page's own script writes once it actually runs — before doing
+anything else, which incidentally already serializes it after the deferred
+auto-navigate lands, explaining why that test was never in the observed
+failure set. The fixed test now does the equivalent directly: waits for
+the address bar to actually show `/fingerprint-test/` (proof the deferred
+auto-navigate already landed) before issuing its own navigation to the
+fixture server, turning the race into a strict sequence.
+
+**Verified: 10/10 clean passes** after the test-side fix, versus 3/10
+before. A full-file rerun afterward showed the file's *other* known,
+separately-documented flake (a TZ-initialization timing issue, already
+covered by this project's existing `retries: 1` Playwright config) at a
+low, pre-existing rate (~1-in-5 on the "opting BACK" test, recovered by
+the existing retry) — unrelated to and unaffected by this fix, left as is
+rather than chased further within this investigation's scope.
+
+**Files changed:** `src/main/browser/profileWindowEntry.ts` (double-attach
+race fixed, real production-code correctness improvement, kept
+independent of whether it alone explained the flake) and
+`tests/e2e/fingerprintEnforcement.spec.ts` (the actual fix for this
+specific flake — an explicit wait sequencing the deferred auto-navigate
+before the test's own navigation).
