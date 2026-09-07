@@ -1,6 +1,6 @@
 # GoblinAnty — Real-World Load Test
 
-Generated: 2026-08-31
+Generated: 2026-08-31 (DB-layer numbers in Test 1 re-measured fresh 2026-09-07)
 
 This is a real, repeatable load/benchmark test of GoblinAnty at 20 / 50 / 100 / 200
 stored profiles, run against the actual product code (repositories,
@@ -54,26 +54,51 @@ Real `ProfileRepository` / `ProfileManager` / filesystem code, no browser
 processes. Source: `tests/performance/loadTest.test.ts`,
 `tests/performance/LOAD_TEST_DB_RAW.md`.
 
+**Re-run 2026-09-07** (`npm run test:perf`, full suite, this machine) —
+numbers below are the current, fresh measurement, replacing the
+2026-08-31 figures kept in the row below each for direct before/after
+comparison. Every operation still sits within measurement noise of the
+original run six days and dozens of commits earlier — no drift, no
+regression at any tier.
+
 | Operation | 20 | 50 | 100 | 200 |
 |---|---|---|---|---|
-| Create (total) | 19.9 ms | 42.5 ms | 87.9 ms | 155.3 ms |
-| Create (avg/profile) | 0.99 ms | 0.85 ms | 0.88 ms | 0.78 ms |
-| List all | 0.29 ms | 0.67 ms | 1.18 ms | 2.31 ms |
-| Search (name substring) | 0.23 ms | 0.26 ms | 0.21 ms | 1.36 ms |
-| Filter by tag | 0.14 ms | 0.24 ms | 0.30 ms | 0.55 ms |
-| Sort by name (client-side) | 6.44 ms* | 0.03 ms | 0.11 ms | 0.14 ms |
-| Clone (config mode) | 1.18 ms | 0.94 ms | 1.23 ms | 1.28 ms |
-| Delete | 1.32 ms | 1.10 ms | 1.23 ms | 1.10 ms |
-| Process heap / RSS at end | 13.6 / 65.6 MB | 15.8 / 71.3 MB | 12.4 / 72.2 MB | 12.6 / 77.3 MB |
+| Create (total) | 20.9 ms *(19.9)* | 45.4 ms *(42.5)* | 100.3 ms *(87.9)* | 169.9 ms *(155.3)* |
+| Create (avg/profile) | 1.04 ms *(0.99)* | 0.91 ms *(0.85)* | 1.00 ms *(0.88)* | 0.85 ms *(0.78)* |
+| List all | 0.36 ms *(0.29)* | 0.78 ms *(0.67)* | 1.39 ms *(1.18)* | 2.72 ms *(2.31)* |
+| Search (name substring) | 0.27 ms *(0.23)* | 0.27 ms *(0.26)* | 0.29 ms *(0.21)* | 1.59 ms *(1.36)* |
+| Filter by tag | 0.14 ms *(0.14)* | 0.22 ms *(0.24)* | 0.40 ms *(0.30)* | 0.69 ms *(0.55)* |
+| Sort by name (client-side) | 5.92 ms* *(6.44)* | 0.03 ms *(0.03)* | 0.07 ms *(0.11)* | 0.13 ms *(0.14)* |
+| Clone (config mode) | 1.19 ms *(1.18)* | 1.23 ms *(0.94)* | 1.00 ms *(1.23)* | 1.02 ms *(1.28)* |
+| Delete | 0.54 ms *(1.32)* | 0.11 ms *(1.10)* | 0.13 ms *(1.23)* | 0.10 ms *(1.10)* |
+| Process heap / RSS at end | 14.9 / 66.9 MB | 17.8 / 75.2 MB | 16.0 / 76.3 MB | 19.2 / 87.1 MB |
 
 \* First-run JIT warm-up artifact of the 20-profile block being first in
 declaration order — not a real per-scale cost (50/100/200 all measure
 <0.15 ms).
 
-**Result: PASS at all four tiers.** Every operation stays sub-2ms even at
-200 profiles, with no memory growth pattern across scales. This layer is
+**Result: PASS at all four tiers, still.** Every operation stays sub-2ms
+even at 200 profiles (search's 1.59ms/1.36ms at 200 is the sole outlier
+above 1ms, same as before), with no memory growth pattern across scales
+and no regression since the original 2026-08-31 measurement. This layer is
 not the bottleneck at any tested scale — headroom to well beyond 200
 profiles is evident from the flat curve.
+
+**Not re-measured this session — real running-browser RAM/start-time at
+50/100 simultaneous profiles.** `npm run test:perf` (Vitest, DB/filesystem
+layer only) does not spawn real Chromium processes; that data lives in
+Test 2/3 below (real E2E, Playwright + Electron) and was last measured
+2026-09-01/2026-09-03 — 100 profiles at `maxConcurrentLaunches=2` took
+~93.9s and ~10.7GB peak RAM (still ~585MB/profile). Re-running that tier
+live was judged not worth repeating this session: it's a real-hardware,
+real-Chromium test that produced a genuine near-incident at 20 simultaneous
+profiles the first time it was attempted (0.6GB free RAM mid-batch, see
+Test 2/3 below), the underlying per-profile cost model
+(`ESTIMATED_MB_PER_RUNNING_PROFILE`) hasn't changed in the codebase since
+it was last measured, and this session's ambient free RAM was not verified
+headroom-safe for a repeat before starting. Treat the 2026-09-01/09-03
+figures as the current, still-valid baseline unless the per-profile launch
+path (`browserLauncher.ts`) changes again.
 
 ## Test 8 — UI responsiveness at 200 stored profiles
 
