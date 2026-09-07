@@ -114,6 +114,15 @@ and does not expose:
   that checks for it (`Runtime.enable` side effects and similar) — this is
   inherent to CDP automation itself, not a gap this feature introduces or
   could realistically close; see `docs/FINGERPRINT_AUDIT.md`.
+- **One field an automation client's own CDP reads see differently than a
+  real loaded page does**: `navigator.platform`, read via
+  `page.evaluate()`/`Runtime.evaluate` over your own connection to this
+  API, returns this machine's real host platform, not the profile's
+  configured one — confirmed and root-caused in `docs/FINGERPRINT_AUDIT.md`'s
+  "Eleventh investigation". This does **not** affect what a visited website
+  sees (its own script reads the correctly-spoofed value, verified
+  separately) — it only affects a script you write against this API that
+  inspects the profile's own fingerprint that way.
 
 ## IPC validation
 

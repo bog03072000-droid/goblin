@@ -2020,3 +2020,105 @@ formats, certain timing characteristics) would not.
 above) — the toggle, warning banner, and off-by-request opt-out described in
 this checklist are all still exactly as built here; only which state a new
 profile starts in changed.
+
+## Eleventh investigation — the automation-CDP `navigator.platform` question, resolved
+
+**Status: real, root-caused, narrow-impact gap. `navigator.platform` — and
+only that field — reads the real host value instead of the configured spoof
+when read by a second, independent CDP client (a real external automation
+connection through the token-gated Automation API), not by the profile's own
+loaded page.**
+
+This closes an open question `mobileFingerprint.spec.ts`'s own header
+comment flagged but didn't investigate (out of scope there), and that an
+earlier assessment round in this project's history reported as an
+unconfirmed claim it couldn't verify against this file. It is now
+confirmed directly, with a real, permanent regression test —
+`tests/e2e/automationCdpPlatform.spec.ts` — not by re-reading old notes.
+
+**Method.** Connected to a real running profile exactly the way a real
+external Puppeteer/Playwright/raw-CDP client would: enabled the Automation
+API from the profile editor's Advanced tab, started the profile, `GET
+/json/version?token=...` through the real token-gated proxy
+(`automationProxy.ts`) to get `webSocketDebuggerUrl`, opened a plain
+WebSocket, `Target.attachToTarget`, then `Runtime.evaluate` on the real
+loaded page — the exact minimal-CDP-client pattern already proven in
+`humanInputDriver.spec.ts`. The profile's OS was deliberately set to
+`linux` while running the check on this project's real (Windows) CI/dev
+host, so a real-host leak and a correctly-spoofed value are two genuinely
+different, distinguishable strings (`Win32` vs `Linux x86_64`) — testing
+against a host whose real platform happens to match the spoof would have
+proven nothing either way.
+
+**Result — confirmed, and asymmetric between the two fields the same CDP
+call configures:**
+- `navigator.userAgent`, read via the external session: **correctly
+  spoofed** (`Linux x86_64` appears in the string, `Windows` does not).
+- `navigator.platform`, read via the same external session: **NOT
+  spoofed** — reads this machine's real host platform (`Win32`) instead of
+  the configured `Linux x86_64`.
+
+**Root cause, proven directly rather than inferred.** `enforceFingerprint()`
+(`src/main/browser/fingerprintEnforcement.ts`) applies both fields in one
+`Emulation.setUserAgentOverride({ userAgent, platform, acceptLanguage })`
+call, but over Electron's own internal debugging session
+(`webContents.debugger`, attached at `'1.3'`) — a CDP client connection
+entirely separate from whatever session an external automation client
+opens over the token-gated proxy, even though both attach to the exact same
+render target. The test proves which parameter is session-scoped and which
+isn't: after the external session issues the *identical*
+`Emulation.setUserAgentOverride` call itself (same `userAgent`, same
+`platform: 'linux x86_64'`), `navigator.platform` immediately reads
+correctly **for that session**. So `userAgent` has a genuinely global
+effect (it also changes the real HTTP `User-Agent` request header — a
+network/browser-process-level change, not merely a JS shim) while
+`platform` is Chromium `Emulation`-domain state that only the CDP session
+which most recently set it can see reflected in `navigator.platform` reads
+issued through that same session's `Runtime.evaluate`. Two independent CDP
+sessions attached to the same target — Electron's internal one and an
+external automation client's — simply don't share that particular piece of
+override state.
+
+**Impact — real, but narrower than "the target site can tell," which
+matters for how seriously to weigh it.** A real website's own fingerprint
+script (CreepJS-style or otherwise) executes as ordinary page JavaScript —
+it is not a second CDP client independently asking Blink for
+`navigator.platform` over its own debugging session, it is code running
+*inside* the page whose JS realm the override was already applied to. Every
+existing verification of `navigator.platform` in this project — the
+diagnostics-page-based checks in `fingerprintEnforcement.spec.ts` and
+`mobileFingerprint.spec.ts`, and the real CreepJS captures referenced
+throughout this document — reads it exactly that way (in-page script) and
+all show the correct, spoofed value. **This gap does not weaken what an
+actual visited website observes.** What it does affect: a user's own
+automation script, connected through this project's documented Automation
+API, calling something like `page.evaluate(() => navigator.platform)` (the
+literal Puppeteer/Playwright pattern, which compiles to exactly the
+`Runtime.evaluate` call this test uses) would get a misleading answer for
+this one field specifically — useful to know if someone is auditing their
+own profile's fingerprint via their own script rather than trusting the
+diagnostics page, but not a hole in what a fingerprinting website sees.
+
+**Not fixed in this investigation — out of scope for what was asked (verify
+and document, not implement).** A real fix path exists and is worth
+recording rather than leaving to be rediscovered: every other field this
+project can't cover with a native CDP override (`deviceMemory`,
+`maxTouchPoints`, canvas/audio noise) already uses a JS-level
+`Object.defineProperty` override injected via `Page.addScriptToEvaluateOnNewDocument`
+(`spoofingScript.ts`) instead of the `Emulation` domain — a mechanism that,
+by construction, is baked into the page's JS realm itself before any script
+runs and is therefore visible identically regardless of which CDP session
+(or none) later asks. Moving `navigator.platform` from
+`Emulation.setUserAgentOverride`'s `platform` parameter onto that same
+JS-override mechanism would very likely close this specific gap
+structurally, the same way it already does for the other CDP-session-scoped-
+prone fields — worth a dedicated follow-up investigation, verified the same
+way (real E2E, both the in-page and external-CDP read paths) before
+shipping.
+
+**Classification for the reality matrix above:** `navigator.platform`
+stays **A** (verified PASS end-to-end) for what a real loaded page's own
+script sees — that's the security-relevant surface this project's threat
+model (see SECURITY.md) is about. This investigation adds a documented,
+narrower caveat specific to the Automation API's own external-CDP-read
+path, not a downgrade of the field's real-website-facing classification.
