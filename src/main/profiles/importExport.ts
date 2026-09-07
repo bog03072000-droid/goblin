@@ -15,6 +15,7 @@ import {
   type ProfileExport,
 } from '../../shared/schemas/exportFormat';
 import type { Profile } from '../../shared/schemas/profile';
+import { parseGoLoginProfile } from './competitorImport';
 
 export interface ImportResult {
   created: Profile[];
@@ -253,6 +254,21 @@ export class ImportExportService {
     return this.importFromPaths(result.filePaths);
   }
 
+  /** Same dialog-then-delegate shape as `importProfiles()` above, for a
+   * competitor's own export format instead of this app's own. */
+  async importFromCompetitorDialog(vendor: 'gologin'): Promise<ImportResult> {
+    const result = await dialog.showOpenDialog({
+      title: 'Import Profile(s) from GoLogin',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'GoLogin Export', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return { created: [], errors: [] };
+    return this.importFromCompetitor(result.filePaths, vendor);
+  }
+
   /** Not private: exercised directly by tests so they don't need to mock the
    * native file dialog — still only reachable from trusted main-process code. */
   async importFromPaths(paths: string[]): Promise<ImportResult> {
@@ -313,7 +329,25 @@ export class ImportExportService {
 
     const raw: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
     const manifest = ProfileExportSchema.parse(raw);
+    const created = this.createProfileFromManifest(manifest);
 
+    if (isFull) {
+      const importedBrowserData = path.join(selected, 'browser-data');
+      if (fs.existsSync(importedBrowserData)) {
+        fs.rmSync(path.join(created.profilePath, 'browser-data'), { recursive: true, force: true });
+        fs.cpSync(importedBrowserData, path.join(created.profilePath, 'browser-data'), { recursive: true });
+      }
+    }
+
+    return created;
+  }
+
+  /** Shared by native import (`importOne`, always a `ProfileExport` already)
+   * and competitor import (`importFromCompetitor`, mapped into the same
+   * shape by a vendor-specific parser first) — everything past "I have a
+   * valid ProfileExport manifest" is identical regardless of where it came
+   * from. */
+  private createProfileFromManifest(manifest: ProfileExport): Profile {
     let proxyId: string | null = null;
     if (manifest.proxy) {
       const createdProxy = this.proxies.create({ ...manifest.proxy, password: undefined });
@@ -331,16 +365,58 @@ export class ImportExportService {
       fingerprint.id,
     );
 
-    if (isFull) {
-      const importedBrowserData = path.join(selected, 'browser-data');
-      if (fs.existsSync(importedBrowserData)) {
-        fs.rmSync(path.join(created.profilePath, 'browser-data'), { recursive: true, force: true });
-        fs.cpSync(importedBrowserData, path.join(created.profilePath, 'browser-data'), { recursive: true });
-      }
-    }
-
     this.logs.record('PROFILE_IMPORTED', created.id, `Imported profile as "${created.name}"`);
     return created;
+  }
+
+  /** Imports one or more profiles from a competitor tool's own export
+   * format — see competitorImport.ts's own top comment for why this is a
+   * fundamentally different, lower-fidelity operation than importing this
+   * app's own format, and exactly which fields transfer vs. fall back to a
+   * freshly generated coherent bundle. `vendor` is a closed set (not a
+   * free-form string) since each one needs its own parser — see
+   * competitorImport.ts for which vendors are actually supported and why
+   * (only GoLogin's JSON shape is confirmed from public documentation as
+   * of this stage; a vendor whose export format could not be verified is
+   * deliberately not guessed at). */
+  async importFromCompetitor(paths: string[], vendor: 'gologin'): Promise<ImportResult> {
+    const created: Profile[] = [];
+    const errors: Array<{ path: string; message: string }> = [];
+
+    for (const selected of paths) {
+      try {
+        const raw: unknown = JSON.parse(fs.readFileSync(selected, 'utf-8'));
+        // Array export (multiple profiles in one file) vs. a single profile
+        // object — GoLogin's own API returns both shapes depending on the
+        // endpoint, so both are accepted here rather than requiring the
+        // user to know which one their export happens to be.
+        const entries = Array.isArray(raw) ? raw : [raw];
+        entries.forEach((entry, i) => {
+          try {
+            // `vendor` is a closed union of one member today (see this
+            // method's own doc comment on why only GoLogin is supported) —
+            // written as a switch anyway so adding a second vendor later is
+            // a small, obvious addition rather than a signature change.
+            const seed = `${path.basename(selected)}-${i}-${Date.now()}`;
+            let manifest: ProfileExport;
+            switch (vendor) {
+              case 'gologin':
+                manifest = parseGoLoginProfile(entry, seed);
+                break;
+            }
+            created.push(this.createProfileFromManifest(manifest));
+          } catch (err) {
+            errors.push({
+              path: entries.length > 1 ? `${selected} [entry ${i}]` : selected,
+              message: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+      } catch (err) {
+        errors.push({ path: selected, message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { created, errors };
   }
 
   /** Never collides with an existing name — appends " (imported)", then

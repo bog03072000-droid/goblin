@@ -53,6 +53,18 @@ config, no plan to add one.
 - One-click ZIP backup (config + full browser-data) to
   `<userData>/backups/`, and restore from any such archive — always creates a
   new, independent profile, never overwrites the original.
+- Import a [GoLogin](https://gologin.com) profile export (.json, single
+  profile or an array of them) — see `src/main/profiles/competitorImport.ts`'s
+  own top comment and
+  [docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md)'s "Tenth
+  investigation" for exactly which fields transfer (User-Agent, platform,
+  screen, CPU/RAM/touch points — confirmed from GoLogin's own public API
+  docs) versus which get this app's own generated defaults (WebGL, canvas
+  noise, timezone — not confirmed transferable from GoLogin's format, never
+  guessed). Falls back to a fully coherent generated fingerprint rather than
+  ever shipping an internally-inconsistent one. Dolphin Anty's export format
+  could not be verified from public documentation in this session (its docs
+  are a JS-rendered SPA) — not supported, rather than guessed at.
 
 **Per-profile browser**
 - A real multi-tab browser shell per profile: new/close/switch/duplicate tab,

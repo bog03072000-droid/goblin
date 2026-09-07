@@ -77,6 +77,9 @@ const en = {
   'profiles.customSetup.prompt': 'Need more control?',
   'profiles.customSetup.hint': 'Open the full config modal instead — fingerprint overrides, proxy assignment, manual mode',
   'profiles.import': 'Import',
+  'profiles.importGoLogin': 'Import from GoLogin',
+  'profiles.importGoLogin.hint':
+    "Imports a GoLogin profile export (.json) — carries over User-Agent, platform, screen, CPU/RAM/touch points; everything else (WebGL spoofing, canvas noise, timezone) gets this app's own generated defaults, since those are not confirmed transferable from GoLogin's own format.",
   'profiles.restore': 'Restore',
   'profiles.exportAll': 'Export All',
   'profiles.selectedCount': '{count} selected',

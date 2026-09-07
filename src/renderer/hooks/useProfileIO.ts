@@ -16,6 +16,7 @@ export function useProfileIO(options: { selected: Set<string>; setInfo: (message
   backupOne: (id: string) => Promise<void>;
   restoreProfile: () => Promise<void>;
   importProfiles: () => Promise<void>;
+  importFromGoLogin: () => Promise<void>;
   exportSelected: () => Promise<void>;
   exportAll: () => Promise<void>;
 } {
@@ -65,6 +66,24 @@ export function useProfileIO(options: { selected: Set<string>; setInfo: (message
     });
   }
 
+  async function importFromGoLogin(): Promise<void> {
+    await ioAction.run(async () => {
+      const result = await callApi<
+        'profiles:importFromCompetitor',
+        { created: Profile[]; errors: Array<{ path: string; message: string }> }
+      >('profiles:importFromCompetitor', { vendor: 'gologin' });
+      if (result.created.length > 0) {
+        setInfo(
+          t('profiles.msg.imported', { count: result.created.length }) +
+            (result.errors.length > 0 ? t('profiles.msg.importedWithFailures', { count: result.errors.length }) : ''),
+        );
+        await refresh();
+      } else if (result.errors.length > 0) {
+        ioAction.setError(result.errors.map((e) => `${e.path}: ${e.message}`).join('; '));
+      }
+    });
+  }
+
   async function exportSelected(): Promise<void> {
     await ioAction.run(async () => {
       const dir = await callApi<'profiles:exportSelected', string | null>('profiles:exportSelected', {
@@ -81,5 +100,5 @@ export function useProfileIO(options: { selected: Set<string>; setInfo: (message
     });
   }
 
-  return { ioAction, exportConfig, backupOne, restoreProfile, importProfiles, exportSelected, exportAll };
+  return { ioAction, exportConfig, backupOne, restoreProfile, importProfiles, importFromGoLogin, exportSelected, exportAll };
 }

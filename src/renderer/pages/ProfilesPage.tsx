@@ -166,7 +166,7 @@ export function ProfilesPage(): JSX.Element {
     quickCreateProfile,
     createAction,
   } = create;
-  const { ioAction, exportConfig, backupOne, restoreProfile, importProfiles, exportSelected, exportAll } = useProfileIO({
+  const { ioAction, exportConfig, backupOne, restoreProfile, importProfiles, importFromGoLogin, exportSelected, exportAll } = useProfileIO({
     selected,
     setInfo,
     refresh,
@@ -326,6 +326,7 @@ export function ProfilesPage(): JSX.Element {
         onQuickCreate={() => void quickCreateProfile()}
         quickCreatePending={createAction.pending}
         onImport={() => void importProfiles()}
+        onImportFromGoLogin={() => void importFromGoLogin()}
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}
       />

@@ -79,6 +79,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.customSetup.prompt': 'Потрібно більше налаштувань?',
   'profiles.customSetup.hint': 'Відкрити повну модалку налаштувань — перевизначення fingerprint, призначення проксі, ручний режим',
   'profiles.import': 'Імпорт',
+  'profiles.importGoLogin': 'Імпорт з GoLogin',
+  'profiles.importGoLogin.hint':
+    'Імпортує експорт профілю GoLogin (.json) — переносить User-Agent, платформу, екран, CPU/RAM/touch points; усе інше (WebGL-спуфінг, canvas-шум, часовий пояс) отримує власні згенеровані значення застосунку, оскільки вони не підтверджені як переносні з формату GoLogin.',
   'profiles.restore': 'Відновити',
   'profiles.exportAll': 'Експортувати все',
   'profiles.selectedCount': 'Вибрано: {count}',

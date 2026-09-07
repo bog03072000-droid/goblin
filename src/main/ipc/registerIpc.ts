@@ -179,6 +179,7 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:exportSelected', (p) => deps.importExport.exportSelected(p.ids));
   handle('profiles:exportAll', () => deps.importExport.exportAll());
   handle('profiles:import', () => deps.importExport.importProfiles());
+  handle('profiles:importFromCompetitor', (p) => deps.importExport.importFromCompetitorDialog(p.vendor));
   handle('profiles:backup', (p) => deps.importExport.backupProfile(p.id));
   handle('profiles:restore', () => deps.importExport.restoreProfile());
 

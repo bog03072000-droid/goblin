@@ -60,6 +60,7 @@ function renderToolbar(overrides: Partial<Parameters<typeof ProfilesToolbar>[0]>
     onCreate: vi.fn(),
     onQuickCreate: vi.fn(),
     onImport: vi.fn(),
+    onImportFromGoLogin: vi.fn(),
     onRestore: vi.fn(),
     onExportAll: vi.fn(),
   };
@@ -202,6 +203,7 @@ describe('ProfilesToolbar', () => {
           onQuickCreate={() => {}}
           quickCreatePending={true}
           onImport={() => {}}
+          onImportFromGoLogin={() => {}}
           onRestore={() => {}}
           onExportAll={() => {}}
         />
@@ -245,6 +247,7 @@ describe('ProfilesToolbar', () => {
           onQuickCreate={() => {}}
           quickCreatePending={false}
           onImport={() => {}}
+          onImportFromGoLogin={() => {}}
           onRestore={() => {}}
           onExportAll={() => {}}
         />
@@ -261,12 +264,19 @@ describe('ProfilesToolbar', () => {
 
   it('Import/Restore/Export All each call their own handler', () => {
     const handlers = renderToolbar();
-    fireEvent.click(screen.getByRole('button', { name: /Import/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
     fireEvent.click(screen.getByRole('button', { name: /Restore/ }));
     fireEvent.click(screen.getByRole('button', { name: /Export All/ }));
     expect(handlers.onImport).toHaveBeenCalledTimes(1);
     expect(handlers.onRestore).toHaveBeenCalledTimes(1);
     expect(handlers.onExportAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Import from GoLogin" calls its own handler, distinct from the native "Import"', () => {
+    const handlers = renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: 'Import from GoLogin' }));
+    expect(handlers.onImportFromGoLogin).toHaveBeenCalledTimes(1);
+    expect(handlers.onImport).not.toHaveBeenCalled();
   });
 
   it('the template select lists every provided template and reports a change', () => {

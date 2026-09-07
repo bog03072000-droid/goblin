@@ -96,6 +96,7 @@ export const IpcRequestSchemas = {
   'profiles:exportSelected': z.object({ ids: z.array(ProfileIdSchema).min(1) }),
   'profiles:exportAll': z.object({}),
   'profiles:import': z.object({}),
+  'profiles:importFromCompetitor': z.object({ vendor: z.literal('gologin') }),
   'profiles:backup': z.object({ id: ProfileIdSchema }),
   'profiles:restore': z.object({}),
 
