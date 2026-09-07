@@ -40,6 +40,43 @@ export function isTransientSpawnError(err: unknown): boolean {
   return typeof code === 'string' && TRANSIENT_SPAWN_ERROR_CODES.has(code);
 }
 
+/** `Fingerprint` fields the child process genuinely never needs — DB
+ * bookkeeping (`id`/`name`/`createdAt`/`updatedAt`, already carried
+ * separately as `profileId`/`profileName`) or fields fully subsumed by
+ * another one already sent (`osVersion`/`browserVersion` are baked into the
+ * already-sent `userAgent` string; nothing downstream reads them
+ * independently — confirmed by grepping for both names across
+ * `src/main/browser/`). Every other `Fingerprint` field is forwarded
+ * automatically by `pickChildProcessFingerprintFields` below — this is
+ * deliberately an *exclude* list, not the old *include* allowlist, so a
+ * field added to `FingerprintSchema` in the future reaches the child process
+ * by default instead of silently being dropped. That silent-drop is exactly
+ * what happened twice with `os` and `maxTouchPoints` (see
+ * docs/FINGERPRINT_AUDIT.md's "Tenth investigation") before this file was
+ * changed to build the allowlist by hand for each new field — this removes
+ * that whole bug class structurally rather than promising to remember next
+ * time. */
+const CHILD_PROCESS_EXCLUDED_FINGERPRINT_FIELDS = new Set<keyof Fingerprint>([
+  'id',
+  'name',
+  'osVersion',
+  'browserVersion',
+  'createdAt',
+  'updatedAt',
+]);
+
+/** Exported for direct unit testing — see browserLauncher.test.ts's coverage
+ * asserting every non-excluded `Fingerprint` field survives, and that a
+ * brand new field (simulated via an object literal wider than the real
+ * type) is forwarded without this file needing to change. */
+export function pickChildProcessFingerprintFields(fingerprint: Fingerprint): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(fingerprint).filter(
+      ([key]) => !CHILD_PROCESS_EXCLUDED_FINGERPRINT_FIELDS.has(key as keyof Fingerprint),
+    ),
+  );
+}
+
 /**
  * Launches one profile as an independent Electron/Chromium OS process (rather
  * than a BrowserWindow inside the manager process), the same architecture real
@@ -52,34 +89,7 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
   const entryScript = app.getAppPath();
 
   const fingerprintConfigB64 = Buffer.from(
-    JSON.stringify({
-      os: params.fingerprint.os,
-      userAgent: params.fingerprint.userAgent,
-      platform: params.fingerprint.platform,
-      locale: params.fingerprint.locale,
-      languages: params.fingerprint.languages,
-      timezone: params.fingerprint.timezone,
-      screenWidth: params.fingerprint.screenWidth,
-      screenHeight: params.fingerprint.screenHeight,
-      deviceScaleFactor: params.fingerprint.deviceScaleFactor,
-      hardwareConcurrency: params.fingerprint.hardwareConcurrency,
-      deviceMemory: params.fingerprint.deviceMemory,
-      maxTouchPoints: params.fingerprint.maxTouchPoints,
-      webglVendor: params.fingerprint.webglVendor,
-      webglRenderer: params.fingerprint.webglRenderer,
-      webrtcMode: params.fingerprint.webrtcMode,
-      canvasMode: params.fingerprint.canvasMode,
-      audioMode: params.fingerprint.audioMode,
-      fontsMode: params.fingerprint.fontsMode,
-      mediaDevicesMode: params.fingerprint.mediaDevicesMode,
-      webglSpoofingMode: params.fingerprint.webglSpoofingMode,
-      geolocationMode: params.fingerprint.geolocationMode,
-      geolocationLatitude: params.fingerprint.geolocationLatitude,
-      geolocationLongitude: params.fingerprint.geolocationLongitude,
-      permissionsMode: params.fingerprint.permissionsMode,
-      serviceWorkerMode: params.fingerprint.serviceWorkerMode,
-      seed: params.fingerprint.seed,
-    }),
+    JSON.stringify(pickChildProcessFingerprintFields(params.fingerprint)),
   ).toString('base64');
 
   // Tried and reverted (real measurement, not assumption): a set of

@@ -20,7 +20,9 @@ vi.mock('node:child_process', () => ({
   }),
 }));
 
-const { launchProfileProcess, isTransientSpawnError } = await import('../../src/main/browser/browserLauncher');
+const { launchProfileProcess, isTransientSpawnError, pickChildProcessFingerprintFields } = await import(
+  '../../src/main/browser/browserLauncher'
+);
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -175,6 +177,35 @@ describe('launchProfileProcess', () => {
     const decoded = JSON.parse(Buffer.from(b64, 'base64').toString('utf-8'));
     expect(decoded.os).toBe('android');
     expect(decoded.maxTouchPoints).toBe(5);
+  });
+
+  it('pickChildProcessFingerprintFields forwards a brand new schema field automatically, without this file needing to change — the structural fix for the allowlist bug class (os/maxTouchPoints were each silently dropped once, see docs/FINGERPRINT_AUDIT.md)', () => {
+    const withUnknownField = { ...makeFingerprint(), someFutureField: 'future-value' } as Fingerprint;
+    const picked = pickChildProcessFingerprintFields(withUnknownField);
+    expect(picked['someFutureField']).toBe('future-value');
+  });
+
+  it('pickChildProcessFingerprintFields strips only DB-bookkeeping/redundant fields (id, name, osVersion, browserVersion, createdAt, updatedAt)', () => {
+    const full = {
+      ...makeFingerprint(),
+      id: 'fp-1',
+      name: 'My Fingerprint',
+      osVersion: '11',
+      browserVersion: '128.0',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as Fingerprint;
+    const picked = pickChildProcessFingerprintFields(full);
+    expect(picked).not.toHaveProperty('id');
+    expect(picked).not.toHaveProperty('name');
+    expect(picked).not.toHaveProperty('osVersion');
+    expect(picked).not.toHaveProperty('browserVersion');
+    expect(picked).not.toHaveProperty('createdAt');
+    expect(picked).not.toHaveProperty('updatedAt');
+    // Everything else still comes through.
+    expect(picked['os']).toBe('windows');
+    expect(picked['maxTouchPoints']).toBe(0);
+    expect(picked['seed']).toBe('test-seed');
   });
 
   it('a bare host:port proxy-rules covers both http and https (no scheme prefix) for http/https proxies', () => {
