@@ -2122,3 +2122,80 @@ script sees — that's the security-relevant surface this project's threat
 model (see SECURITY.md) is about. This investigation adds a documented,
 narrower caveat specific to the Automation API's own external-CDP-read
 path, not a downgrade of the field's real-website-facing classification.
+
+## Twelfth investigation — fonts CSS fallback-width-measurement: re-checked for a realistic fix, none found, decision confirmed
+
+**Status: re-investigated independently; same conclusion as the earlier
+"Fonts — re-investigated this stage" section above (still true, not
+superseded) — the CSS-fallback-width-measurement gap has no clean fix
+reachable from page-world JS, only fake-looking workarounds that would
+themselves be a worse, detectable signal or break real sites. Kept as-is,
+`fontsMode: 'restricted'` continues to cover exactly what it already
+covered (`document.fonts.check()`, the Local Font Access API), nothing
+more.**
+
+Re-derived independently (without assuming the earlier write-up's
+conclusion) to check for a narrower fix the earlier pass might not have
+considered — specifically, whether intercepting *only*
+`CanvasRenderingContext2D.prototype.measureText()`, the single most common
+concrete API real font-detection *libraries* (FontDetective-style probes)
+actually call, could work where "intercept every layout-measurement API"
+(rejected in the earlier pass as too broad) was too blunt an instrument.
+
+**Hypothesis explored this stage:** detect the classic candidate+fallback
+CSS pattern (`font-family: "Candidate Font", <generic>`) specifically when
+`measureText()` is called with it, and lie only in that narrow case —
+narrower in principle than patching every layout API, so maybe narrow
+enough to avoid the earlier pass's "corrupts real page layout" objection.
+
+**Why this narrower version fails too, demonstrated with a concrete,
+extremely common real pattern rather than a hypothetical:** the exact same
+`"CandidateName", <generic-fallback>` CSS shape used for font-detection
+probes is *also* the standard, universal way real pages declare **icon
+fonts** — Font Awesome, Material Icons, and essentially every icon-font
+library ship CSS exactly like `font-family: "Font Awesome 6 Free", sans-
+serif` (or equivalent) on every icon glyph, by convention, specifically so
+a missing icon font degrades to *something* rather than an invisible glyph.
+`measureText()` on those glyphs is genuinely, routinely called by real
+pages — canvas-based icon rendering, custom text layout engines, editors
+computing cursor/selection positions around icon characters. There is no
+way to distinguish, from the CSS shape or the call site alone, "a
+font-detection probe checking if `Candidate Font` is installed" from "an
+icon-font-based UI component measuring its own icon glyph's width for
+layout" — they are the identical API call with the identical argument
+shape. Lying about the metrics for the first case necessarily also lies
+for the second, which is not a rare edge case here the way it might be for
+some other heuristic — icon fonts are near-ubiquitous on real, modern
+websites. This is the exact same "corrupts real page layout on a huge
+fraction of real sites" failure mode the earlier pass already identified
+for the broader version, just rediscovered at the narrower `measureText`-
+only scope instead of ruled out by assumption.
+
+**Also checked and rejected: noise/quantization instead of outright
+lying** (the same category of technique this project already uses
+successfully for Canvas/Audio noise) — round `measureText()`'s returned
+width to the nearest few pixels, universally, regardless of font. Rejected
+because it doesn't actually work for this specific detection technique the
+way per-pixel noise works for canvas image fingerprinting: canvas/audio
+noise works because the *entire* signal being fingerprinted is the noise
+floor itself (byte-for-byte pixel/sample output), so swamping it with
+seeded noise genuinely destroys the distinguishing signal. Font-presence
+detection via width comparison relies on a *categorical* difference
+(installed vs. not) that typically produces width deltas of several to
+tens of pixels — large enough that a few pixels of rounding noise doesn't
+meaningfully reduce a real detector's ability to threshold "different
+enough → font is installed." Shipping this would cost real layout
+precision on legitimate `measureText()` callers for a technique that
+doesn't actually close the gap — worse than doing nothing, since it looks
+like protection without providing it.
+
+**Decision: unchanged from the earlier pass.** No realistic fix exists
+without either (a) patching Chromium's text-shaping/layout internals
+directly (out of scope, same conclusion as before), or (b) a genuinely
+different, much larger feature — a real per-profile isolated font
+directory enforced at the OS/Chromium-font-matching level, the way Tor
+Browser actually does it, which is a new capability to design and build,
+not a fix to the existing `fontsMode` mechanism. `fontsMode: 'restricted'`
+keeps doing exactly what it already did; the Fingerprint tab's hint text
+and both audit sections continue to state the limitation plainly rather
+than imply broader coverage.
