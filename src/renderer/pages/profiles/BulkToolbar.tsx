@@ -104,11 +104,21 @@ export function BulkToolbar({
           </option>
         ))}
       </select>
-      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => onSetSchedule(true)}>
+      <button
+        className="btn btn-ghost btn-sm"
+        disabled={bulkBusy}
+        onClick={() => onSetSchedule(true)}
+        title={t('profiles.bulk.scheduleHint')}
+      >
         <CalendarClock size={14} strokeWidth={2.25} />
         {t('profiles.bulk.enableSchedule')}
       </button>
-      <button className="btn btn-ghost btn-sm" disabled={bulkBusy} onClick={() => onSetSchedule(false)}>
+      <button
+        className="btn btn-ghost btn-sm"
+        disabled={bulkBusy}
+        onClick={() => onSetSchedule(false)}
+        title={t('profiles.bulk.scheduleHint')}
+      >
         <CalendarOff size={14} strokeWidth={2.25} />
         {t('profiles.bulk.disableSchedule')}
       </button>

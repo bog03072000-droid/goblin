@@ -93,6 +93,7 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'profiles.bulk.removeProxy': 'Без проксі (видалити)',
   'profiles.bulk.enableSchedule': 'Увімкнути розклад',
   'profiles.bulk.disableSchedule': 'Вимкнути розклад',
+  'profiles.bulk.scheduleHint': 'Лише вмикає/вимикає розклад — не встановлює час чи дні. Налаштуйте їх окремо для кожного профілю в його вкладці "Advanced".',
   'profiles.bulk.addTagPlaceholder': 'Тег + Enter',
   'profiles.bulk.removeTagPlaceholder': 'Видалити тег + Enter',
   'profiles.bulk.clearSelection': 'Зняти вибір',

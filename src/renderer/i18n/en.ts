@@ -91,6 +91,7 @@ const en = {
   'profiles.bulk.removeProxy': 'None (remove proxy)',
   'profiles.bulk.enableSchedule': 'Enable schedule',
   'profiles.bulk.disableSchedule': 'Disable schedule',
+  'profiles.bulk.scheduleHint': "Only turns the schedule on/off — doesn't set a time or days. Configure those per profile in its Advanced tab.",
   'profiles.bulk.addTagPlaceholder': 'Add tag + Enter',
   'profiles.bulk.removeTagPlaceholder': 'Remove tag + Enter',
   'profiles.bulk.clearSelection': 'Clear selection',

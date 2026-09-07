@@ -151,6 +151,13 @@ describe('BulkToolbar', () => {
     expect(input.value).toBe('');
   });
 
+  it('both schedule buttons carry a tooltip explaining bulk-enable does not set a time/days', () => {
+    renderBulkToolbar();
+    const expectedHint = "Only turns the schedule on/off — doesn't set a time or days. Configure those per profile in its Advanced tab.";
+    expect(screen.getByRole('button', { name: 'Enable schedule' })).toHaveAttribute('title', expectedHint);
+    expect(screen.getByRole('button', { name: 'Disable schedule' })).toHaveAttribute('title', expectedHint);
+  });
+
   it('clicking "Enable schedule" calls onSetSchedule(true), and "Disable schedule" calls onSetSchedule(false)', () => {
     const handlers = renderBulkToolbar();
     fireEvent.click(screen.getByRole('button', { name: 'Enable schedule' }));
