@@ -12,6 +12,7 @@ import { buildSpoofingScript } from './spoofingScript';
 import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
 import { findFreePort, startAutomationProxy } from './automationProxy';
+import { humanClick, humanScroll, type CdpSession } from '../../shared/automation/humanInputDriver';
 import {
   resolveLanguages,
   buildSpoofableFingerprint,
@@ -279,6 +280,36 @@ export function runProfileWindowProcess(): void {
       const target = webviewsById.get(webContentsId);
       if (!target) return;
       void target.loadURL(normalizeNavigationUrl(String(url)));
+    });
+
+    // Lets a user visually confirm humanClick/humanScroll actually work
+    // (see the Advanced tab's "Test human input" button) without writing
+    // their own automation script — runs against whatever page is
+    // currently loaded in this tab, over the SAME `webContents.debugger`
+    // CDP session `enforceFingerprint()` already attaches for this tab
+    // (see fingerprintEnforcement.ts), adapted to `CdpSession`'s one-method
+    // shape. A real, visible mouse movement + click near the center of the
+    // page, followed by a scroll — not a no-op smoke test.
+    ipcMain.handle('pf:test-human-input', async (_event, webContentsId: number) => {
+      const target = webviewsById.get(webContentsId);
+      if (!target) throw new Error('No tab is attached yet');
+      if (!target.debugger.isAttached()) target.debugger.attach('1.3');
+      const session: CdpSession = {
+        send: (method, params) => target.debugger.sendCommand(method, params),
+      };
+      // WebContents (main-process) has no getBounds() — that's a
+      // BrowserWindow/<webview>-element method, not available here — so the
+      // real loaded page's own viewport size is read via a script
+      // evaluation instead, the same thing CDP's own coordinate space uses.
+      const viewport = (await target.executeJavaScript('({ w: window.innerWidth, h: window.innerHeight })')) as {
+        w: number;
+        h: number;
+      };
+      const from = { x: Math.round(viewport.w * 0.15), y: Math.round(viewport.h * 0.15) };
+      const to = { x: Math.round(viewport.w * 0.5), y: Math.round(viewport.h * 0.4) };
+      await humanClick(session, from, to, { overshoot: true });
+      await humanScroll(session, to, Math.round(viewport.h * 0.6), { pauseProbability: 0.3 });
+      return { ok: true };
     });
 
     // localStorage editor support (ProfileManager.sendChildRequest, same

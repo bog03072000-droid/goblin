@@ -132,6 +132,25 @@ document.getElementById('address').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') navigate(document.getElementById('address').value);
 });
 document.getElementById('diagnostics').addEventListener('click', () => createTab({ duplicateFromUrl: diagnosticsUrl }));
+document.getElementById('test-human-input').addEventListener('click', async () => {
+  const btn = document.getElementById('test-human-input');
+  const tab = activeTab();
+  if (!tab) return;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    await window.pfHumanInput.test(tab.webview.getWebContentsId());
+    btn.textContent = 'Done — watch the page';
+  } catch (err) {
+    btn.textContent = 'Failed: ' + (err && err.message ? err.message : String(err));
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => {
+      btn.textContent = originalLabel;
+    }, 2500);
+  }
+});
 document.getElementById('home').addEventListener('click', () => navigate(startUrl));
 document.getElementById('back').addEventListener('click', () => activeTab() && activeTab().webview.goBack());
 document.getElementById('fwd').addEventListener('click', () => activeTab() && activeTab().webview.goForward());

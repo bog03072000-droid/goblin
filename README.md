@@ -335,6 +335,13 @@ params)`), so a raw `chrome-remote-interface` or plain-`ws` client works
 too with a one-line adapter — it doesn't have to be Playwright's
 `newCDPSession`.
 
+**Trying it without writing a script:** every profile's own browser window
+has a **"Test human input"** toolbar button — click it while any page is
+loaded to see a real human-like mouse move, click, and scroll happen right
+there, visually, using the exact same `humanClick`/`humanScroll` this
+section documents. It's a way to confirm the feature works at all, not a
+substitute for driving it programmatically from your own automation script.
+
 ## Design
 
 Dark was the only theme through v0.1/v0.2 by deliberate choice, not an

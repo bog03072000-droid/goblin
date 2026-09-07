@@ -41,3 +41,13 @@ contextBridge.exposeInMainWorld('pfNav', {
     ipcRenderer.send('pf:navigate', webContentsId, url);
   },
 });
+
+/** Lets the toolbar's "Test human input" button (see README's Automation
+ * section) trigger a real humanClick+humanScroll against whatever page is
+ * currently loaded in this tab — see profileWindowEntry.ts's
+ * 'pf:test-human-input' handler for what it actually does. A visual,
+ * no-script-required way to confirm the feature works, distinct from
+ * actually using it via an external automation client. */
+contextBridge.exposeInMainWorld('pfHumanInput', {
+  test: (webContentsId: number): Promise<{ ok: boolean }> => ipcRenderer.invoke('pf:test-human-input', webContentsId),
+});
