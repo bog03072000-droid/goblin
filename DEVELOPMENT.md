@@ -381,18 +381,20 @@ downside.
   history).
 - Already released in the form to be signed, downloadable for free from a
   public repo, with functionality described on the download page —
-  **a real, concrete gap found while checking this, not assumed**: this
-  repo's only actual GitHub Release with attached binaries is
+  **partially closed since this was originally written; corrected here
+  rather than left stale.** This repo now has two real GitHub Releases
+  with attached binaries:
   [`v0.2.0`](https://github.com/bog03072000-droid/goblin/releases/tag/v0.2.0)
-  (confirmed via the GitHub API: 3 assets). The `v0.3.0` and `v0.4.0` tags
-  pushed later in this project's history have no corresponding GitHub
-  Release or attached binaries yet. **A real GitHub Release for the
-  current version, with built installers attached and the repo's own
-  description field filled in** (currently empty — also confirmed via the
-  API), would need to exist before applying — normal release-publishing
-  work, not a code change, and not done here without the repo owner's own
-  explicit go-ahead, since publishing a public release is exactly the kind
-  of action that needs that.
+  (3 assets) and
+  [`v0.4.0`](https://github.com/bog03072000-droid/goblin/releases/tag/v0.4.0)
+  (2 assets — Windows `.exe`, macOS `.zip`; confirmed live via the GitHub
+  API: `draft: false`). `v0.3.0` still has no corresponding Release, and
+  no Linux binary exists in any release yet (the `v0.4.0` tag's own code
+  predates Linux packaging support). **One real gap remains**: the
+  repo's own description field is still empty (confirmed via the API) —
+  filling that in is the one concrete step left before this criterion is
+  fully met, a repo-settings action for the owner to do, not a code
+  change.
 - Verifiable build from source — this project's own `.github/workflows/ci.yml`
   already builds every platform's package from source on GitHub-hosted
   runners in a repeatable way, which is most of what's needed here; a
@@ -401,11 +403,12 @@ downside.
 
 **Recommendation: worth applying to, in parallel with Option B, not instead
 of it** — free, real, and this project's own honest security posture is a
-genuine asset for the one uncertain criterion, not a liability. Concrete
-next step before applying: cut a real `v0.4.0` GitHub Release with built
-installers attached and fill in the repo's description — both are release-
-administration actions for the repo owner to do (or explicitly ask for),
-not something performed as part of this research.
+genuine asset for the one uncertain criterion, not a liability. The
+`v0.4.0` Release named above closed the largest concrete gap this section
+found; the one remaining concrete step before applying is filling in the
+repo's own description field — a repo-settings action for the owner to
+do (or explicitly ask for), not something performed as part of this
+research.
 
 ### Was Sigstore/cosign a realistic alternative? Checked, real answer: no, wrong tool for this
 

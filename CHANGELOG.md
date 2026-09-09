@@ -1,5 +1,93 @@
 # Changelog
 
+## 0.5.0 — first real GitHub Release, security-mechanism verification, two confirmed fingerprint leaks, systematic test-flake root-causing
+
+Everything shipped since the `v0.4.0` tag (`git log v0.4.0..HEAD`, 29
+commits) — a documentation-and-verification-heavy cycle rather than a
+big-feature one: closes the release-process gap the previous version
+left open, proves several previously-only-claimed security mechanisms
+end-to-end, and pushes the fingerprint audit two investigations deeper
+(one real gap found and left honestly documented, one fix attempt
+correctly reverted after it broke something else).
+
+- **The first real, published GitHub Release with attached binaries.**
+  `v0.3.0` and `v0.4.0` were tagged but never actually released —
+  `v0.4.0` now has a genuine, non-draft GitHub Release
+  ([tag](https://github.com/bog03072000-droid/goblin/releases/tag/v0.4.0))
+  with two real, checksummed binaries (Windows `.exe`, macOS `.zip`),
+  built from the exact tagged commit via a temporary CI-dispatch branch
+  (`.github/workflows/ci.yml` gained a `workflow_dispatch` trigger for
+  this). Linux was deliberately excluded from that release — the
+  `v0.4.0` tag's own code predates Linux packaging support.
+- **SignPath Foundation eligibility research** (`DEVELOPMENT.md`): a
+  real, free code-signing path for qualifying open-source projects,
+  researched in full (eligibility criteria, the one real named risk for
+  this project's category, a concrete checklist for actually applying).
+  Confirmed Sigstore/cosign is the wrong tool for this specific problem
+  (no integration with Windows' Authenticode trust chain) rather than
+  assumed.
+- **Fingerprint audit, four more real investigations**
+  (`docs/FINGERPRINT_AUDIT.md`):
+  - `navigator.plugins`/`navigator.mimeTypes` cross-OS consistency —
+    checked, no gap (real Chromium already produces the same value
+    regardless of configured OS).
+  - The WebRTC ICE-candidate leak probe existed on the diagnostics page
+    but had never actually been asserted on by any test — fixed.
+  - Permissions/Geolocation — corrected a stale "not implemented, not
+    even in the schema" claim (both had been real, enforced fields
+    since an earlier release) and added the missing E2E proof
+    (`tests/e2e/geolocationPermissionsEnforcement.spec.ts`).
+  - **Two new, real gaps found and honestly left open**:
+    `navigator.connection` (Network Information API) reports the real
+    host's live network conditions regardless of profile config — no
+    clean fix exists without throttling real traffic. `navigator.userAgentData`
+    (User-Agent Client Hints) came back completely empty on every
+    profile, and its `platform`/`mobile` fields were confirmed to leak
+    the real host machine's identity to any website's own script — a
+    fix was attempted (CDP `userAgentMetadata`), found to break
+    `acceptLanguage` enforcement, root-caused to a confirmed
+    incompatibility between that CDP parameter and Electron's
+    `<webview>` guest-target implementation, and correctly reverted
+    rather than shipped.
+- **Three previously-only-documented security mechanisms proven
+  end-to-end for the first time**: the diagnostics preload's
+  `profileforge://`-origin gate (`tests/e2e/diagnosticsPreloadOriginGate.spec.ts`),
+  `contextIsolation`/`sandbox`/the preload's exposed IPC surface
+  (`tests/e2e/contextIsolationSandbox.spec.ts`), and geolocation/permission
+  enforcement (see above) — all previously asserted in `SECURITY.md`'s
+  prose but never actually driven against a live profile before this
+  version.
+- **A real "schedule looks configured but never fires" bug, found via a
+  live walkthrough and fixed**: enabling a profile's scheduled auto-start
+  and picking a day without ever focusing the Time field left
+  `scheduleTime: null` in the database while the UI's own preview showed
+  a confident (false) "next run" time — the real `ProfileScheduler`
+  backend would never have fired it. Fixed for both the enable-checkbox
+  and day-toggle save paths, covering the bulk "Enable schedule" action
+  too.
+- **A systematic root-cause of test flakiness, not just a timeout bump**:
+  traced two reported flaky E2E tests to the same underlying race (every
+  new profile's webview auto-navigates to `https://www.google.com` the
+  instant it attaches, racing a test's own explicit navigation), then
+  swept every other E2E file for the identical pattern and fixed 5 more
+  previously-undetected vulnerable call sites. A separate,
+  genuinely-diagnosed timing issue in `loadTestStabilityCdpNav.spec.ts`
+  now records real "slow navigation" data instead of hard-failing on
+  expected variance deep into an 80-cycle stress run.
+- **A careful 20/50/100-profile bulk-start re-escalation**, watched this
+  time with a continuous 5-second RAM poll rather than discrete
+  before/after samples: caught a real 90MB free-RAM trough during the
+  100-profile tier (an order of magnitude closer to genuine exhaustion
+  than the previous measurement's 2.24–2.39GB) — 0 app failures
+  throughout, but a real, revised safe-concurrency recommendation for
+  low-headroom machines (see `docs/LOAD_TEST.md`).
+- Architecture: deduplicated the `Fingerprint`↔`FingerprintDraft`
+  conversion logic shared by `ProfileCreateModal.tsx`/`ProfileEditorModal.tsx`.
+- Fixed real README/`package.json` staleness found while researching
+  SignPath eligibility: a false "no Linux support planned" claim, a
+  false "Permissions/Geolocation have no schema field" claim, and a
+  missing `repository`/`homepage` field.
+
 ## 0.4.0 — behavioral emulation, mobile fingerprint bundles, competitor import, coverage/architecture hardening
 
 Everything shipped since the `v0.3.0` tag (`git log v0.3.0..v0.4.0`, 48
