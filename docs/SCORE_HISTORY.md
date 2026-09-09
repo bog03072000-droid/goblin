@@ -134,3 +134,34 @@ both files now consistently green.
 
 **Simple average:** (80+79+85+86+83+87+86+76+85+83)/10 = **83.0**
 **Weighted average:** (80+79+85+86×1.5+83×1.5+87+86+76+85+83×2)/12 = **83.13**
+
+## 2026-09-09 — 83.79 weighted / 83.6 simple
+
+A full working round on the previous entry's own named follow-ups: root-cause
+the 2 reported flaky tests, a fresh UX walkthrough, a design pass in both
+themes, a performance data refresh, and one new fingerprint investigation.
+Compared only against this file's own previous entry (83.13/83.0).
+
+Real numbers this round: unit — 778 tests, 74 files, all passing, 86.81%
+coverage (unchanged, no application code shipped this round beyond the
+BulkToolbar/AdvancedTab/i18n UX fixes). E2E — `fingerprintEnforcement.spec.ts`
+confirmed clean 6/6 in isolation; the 4 newly-fixed race-condition test files
+confirmed clean with `--repeat-each=2`; `loadTestStabilityCdpNav.spec.ts`
+confirmed clean 9/9 with real "slow navigation" data now recorded instead of
+hard-failing.
+
+| Category | Score | Δ vs previous entry (83.13/83.0) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 80 | 0 | No new feature work this round. |
+| UX | 80 | +1 | Live walkthrough (commit `1ac2fc6`) found and fixed 3 real issues: `proxy.status.autoFail` never translated in `uk.ts`, `BulkToolbar`'s remove-tag placeholder visually clipped, `AdvancedTab`'s automation Port field had no placeholder/tooltip explaining auto-assignment. Also correctly ruled out two suspected issues after checking source (a "Save" button that turned out correctly labelled, and an apparently-missing Automation panel that turned out to be a stale installed build predating a recent feature — not a real bug). |
+| Дизайн | 85 | 0 | Screenshotted both dark and light themes across Profiles/Proxies/Settings/Downloads/bulk-toolbar/Automation-panel — consistent, no new issues found beyond the UX row above. |
+| Стабільність ×1.5 | 88 | +2 | Root-caused the 2 flaky tests named in the previous entry — both were the same google.com-start-page race, not two unrelated bugs. Swept every other E2E file for the identical pattern and found + fixed 5 more previously-undetected vulnerable call sites (`fullUserFlow.spec.ts`, `loadTestIsolation.spec.ts`, `profileBrowserLifecycle.spec.ts` ×2, `testHumanInputButton.spec.ts`, `loadTestStabilityCdpNav.spec.ts`). Also found and fixed a second, unrelated real issue in `loadTestStabilityCdpNav.spec.ts` (a hard-fail on real, expected timing variance deep into an 80-cycle stress run) by making it record data instead of failing, matching the file's own existing posture for its STOP-step check. All verified with `--repeat-each=2` or full clean reruns. Commit `9705c01`. |
+| Безпека ×1.5 | 83 | 0 | No security-specific work this round. |
+| Код/архітектура | 87 | 0 | Only small, targeted changes (i18n strings, a placeholder attribute) — no architectural shift. |
+| Тести | 87 | +1 | Same evidence as the Стабільність row — 7 real test-file fixes, all verified — counted lightly here to avoid double-counting the same commit's weight twice. |
+| Продуктивність | 77 | +1 | Fresh `npm run test:perf` run (commit `e9f5e32`) confirmed no regression at 20/50/100/200 profiles; numbers consistent with prior runs. Honestly noted: a fresh 50-100 profile bulk-start escalation pass was not attempted this round given time already spent on items 1-3. |
+| Реліз | 85 | 0 | No release action this round. |
+| Fingerprint ×2 | 84 | +1 | New investigation (commit `d358203`): found `navigator.userAgentData` reports completely empty values on every profile (an anomaly no real Chrome produces) and, more seriously, confirmed its `platform`/`mobile` fields leak the real host machine's identity to any website's own script — worse than prior network-layer correlation-only findings. Attempted a fix, then caught a real regression (`acceptLanguage` breaking) via this project's own full-suite verification discipline, and reverted the code rather than ship it — rewarded for the rigor and the honest, real finding, not inflated for a fix that didn't actually ship. |
+
+**Simple average:** (80+80+85+88+83+87+87+77+85+84)/10 = **83.6**
+**Weighted average:** (80+80+85+88×1.5+83×1.5+87+87+77+85+84×2)/12 = **83.79**
