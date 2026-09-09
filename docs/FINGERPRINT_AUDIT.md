@@ -211,6 +211,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | Permissions | ✅ (`permissionsMode`, default `real`) | ✅ (`deny-all` denies every non-geolocation permission) | not on the diagnostics page (no probe added there); ✅ verified directly via `navigator.permissions.query` in a real profile | schema only | ✅ (asserts `notifications` denied under `deny-all`) | `session.setPermissionRequestHandler`/`setPermissionCheckHandler` (`applyPermissionPolicy()`) | **B** |
 | Geolocation | ✅ (`geolocationMode`, default `real`) | ✅ (`spoof`: CDP override; `blocked`: permission denial) | not on the diagnostics page; ✅ verified directly via `navigator.geolocation`/`navigator.permissions` in a real profile | schema only | ✅ (asserts denial for `blocked`, matching coordinates for `spoof`) | CDP `Emulation.setGeolocationOverride` (spoof) + `applyPermissionPolicy()` (blocked) | **B** |
 | Network Information (`navigator.connection`) | ❌ (no schema field) | ❌ | real, live, host-network-dependent value — confirmed to differ between profiles and to drift run-to-run on the same profile (see Seventeenth investigation) | — | — (one-off empirical check only, no permanent test — see below) | none — no CDP `Emulation.*` static override exists; `Network.emulateNetworkConditions` throttles real traffic to a ceiling rather than providing one, a real functional cost not paid anywhere else in this document | **D** |
+| User-Agent Client Hints — `brands`/`fullVersionList` (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ confirmed empty on every profile, an anomaly no real Chrome install produces | n/a | — (one-off empirical check only, no permanent test — a fix attempt was reverted, see Eighteenth investigation) | none currently — a `userAgentMetadata` CDP parameter was attempted and reverted after it broke `acceptLanguage`/`languages` enforcement in the same call, an unresolved regression | **D** |
+| User-Agent Client Hints — `platform`/`mobile`/every other high-entropy field (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ real host value leaks (confirmed on macOS- and Android-configured profiles alike) | n/a | — (one-off empirical check only, no permanent test) | none found — no lever in Electron's own API surface (checked: `electron.d.ts` has no `ClientHint`/`userAgentData` reference), and the one CDP-level attempt didn't affect these fields anyway | **D** |
 
 ## Findings from empirical verification
 
@@ -2487,3 +2489,119 @@ without one.** `navigator.connection` is a real, previously-undocumented
 fingerprint/correlation vector this audit had never once looked at across
 sixteen prior investigations. Added to the Reality matrix below as a new
 row rather than left undocumented now that it's known.
+
+## Eighteenth investigation — User-Agent Client Hints (`navigator.userAgentData`): a real, confirmed leak; a fix attempt reverted after verification caught a regression risk
+
+**Method, same standard as every stage.** Real per-profile Electron/Chromium
+processes, both Windows- and Android-configured, navigated to a real
+`https://example.com` (a secure context — `navigator.userAgentData` doesn't
+exist at all on `about:blank`, the same lesson Finding 1/the geolocation
+work already taught this document), then read `navigator.userAgentData`
+directly.
+
+**Before this stage: a real, previously-undiscovered gap.**
+`navigator.userAgentData` — a modern, separate API from the legacy
+`navigator.userAgent`/`navigator.platform` strings, specifically designed
+by the Client Hints spec to survive UA-string spoofing that misses it — had
+never been mentioned anywhere in this document. Empirically: it existed
+(`typeof navigator.userAgentData !== 'undefined'`) but every field came back
+completely empty (`brands: []`, `platform: ''`, `mobile: false` even on an
+Android-configured profile) regardless of the configured OS. Root cause,
+confirmed by reading `fingerprintEnforcement.ts` directly: the CDP call
+enforcing `navigator.userAgent`/`platform` (`Emulation.setUserAgentOverride`)
+never passed the protocol's own `userAgentMetadata` parameter — omitting it
+appears to blank Client Hints entirely rather than leave real values in
+place (confirmed the real host wasn't leaking through the *empty* state, at
+least). An all-empty Client Hints object is itself an anomaly: no real
+Chrome/Chromium install produces one.
+
+**Fix attempted, then reverted after verification caught a real regression
+risk — not shipped.** Added a `buildUserAgentMetadata()` helper
+(`fingerprintEnforcement.ts`) constructing `brands`, `fullVersionList`,
+`platform`, and `mobile` from the configured `fp.os` and the Chrome version
+already embedded in `fp.userAgent`, passed as `userAgentMetadata` on the
+same CDP call that already sets `userAgent`/`acceptLanguage`/`platform`.
+**Verified, empirically, a real but partial effect while the change was in
+place:** `navigator.userAgentData.brands` (the low-entropy list) populated
+correctly (`[{brand: 'Chromium', version: '128'}, ...]`) instead of `[]`.
+**Confirmed, by direct re-testing, NOT fixed even with the change in
+place:** `userAgentData.platform`, `userAgentData.mobile`, and every
+`getHighEntropyValues()` field still reported the real host machine's
+values, not the configured profile — identically reproduced on both a
+macOS-configured profile (`platform: 'Windows'`, the real host, while
+`navigator.userAgent`/`navigator.platform` correctly said `Macintosh`/
+`MacIntel`) and an Android-configured profile (`platform: 'Windows'`,
+`mobile: false`, while `navigator.userAgent` correctly said `Android`/
+`Mobile`).
+
+**Then, running this project's own standard full verification
+(`fingerprintEnforcement.spec.ts`) before committing, a real problem
+surfaced: with the `userAgentMetadata` change in place, 4 of that file's 6
+tests started failing reproducibly (confirmed twice in a row) —
+`statusByField['languages']` specifically flipped from `PASS` to
+`MISMATCH`, meaning `acceptLanguage` — sent in the exact same CDP call —
+stopped taking effect.** Isolated with a real, controlled A/B: reverted the
+source, rebuilt `dist-electron` (a plain `git stash` alone does **not**
+recompile it — confirmed the hard way, an early A/B was invalidated by
+this and had to be redone properly), reran clean — 6/6 passed. Restored the
+change, rebuilt again, reran twice more — the same 4 tests failed both
+times. This is a real, reproducible correlation between adding
+`userAgentMetadata` and `acceptLanguage`/`languages` enforcement breaking,
+not environmental noise — a separate, genuine source of flakiness was also
+present on this machine during this same session (different, non-repeating
+failures appeared when running the *properly reverted and rebuilt* code,
+consistent with the resource-contention flakiness this session's test-suite
+work already root-caused elsewhere), but it produced a *different, less
+consistent* failure signature each time, distinct from this fix's
+consistent, same-4-tests-twice signature.
+
+**Root cause not fully isolated within this session's time budget** — the
+CDP protocol's `userAgentMetadata` object may need additional fields this
+implementation didn't supply (only `brands`, `fullVersionList`, `platform`,
+`mobile` were sent; the real protocol schema also has `platformVersion`,
+`architecture`, `model`, `bitness`, `wow64`), and an incompletely-shaped
+metadata object may cause Chromium to reject or partially apply the whole
+`Emulation.setUserAgentOverride` call rather than just the extra field —
+consistent with `acceptLanguage`, sent in that same call, silently failing
+alongside it. Not conclusively proven without further isolation.
+
+**Verdict: reverted the code change entirely rather than ship a fix with a
+confirmed, unexplained regression risk to another real enforcement
+mechanism.** The empty-Client-Hints finding and the confirmed
+`platform`/`mobile` host leak are both real and stay documented below,
+exactly as observed on the unmodified, currently-shipping code (verified
+*before* any fix attempt, independent of the regression). No permanent
+test was added for this investigation, since the fix it would have guarded
+was itself reverted — a future attempt should supply the complete
+`userAgentMetadata` shape and re-verify `fingerprintEnforcement.spec.ts` in
+full before considering it safe, not just the one property being changed.
+
+**This is a real, more serious leak than the Ninth/Seventeenth
+investigations' network-layer findings — it directly identifies the host
+platform to any website's own JavaScript, not just a correlation signal.**
+`navigator.userAgentData.platform`/`.mobile` are ordinary, unprivileged,
+synchronous JS reads any page can perform — a detector doesn't need to be
+sophisticated to notice `navigator.platform` says `MacIntel` while
+`navigator.userAgentData.platform` says `Windows` on the same page load.
+
+**Checked for a further fix, real answer: no lever exists in Electron's own
+API surface.** Grepped `electron.d.ts` for `ClientHint`/`userAgentData` —
+zero matches. `session.setUserAgent()`'s own type signature
+(`setUserAgent(userAgent: string, acceptLanguages?: string): void`) has no
+metadata parameter either, and is called earlier in
+`profileWindowEntry.ts` (`ses.setUserAgent(args.userAgent, ...)`) — a
+plausible root cause for why `platform`/`mobile` specifically stay stuck at
+the real host's values even though the later CDP-level override's `brands`
+field does take effect: Electron's own internal Client Hints computation
+for `platform`/`mobile` may happen at this earlier, session/native layer
+using the real OS, before the CDP override even has a chance to apply,
+while `brands` (OS-independent) doesn't have that same real-value to
+conflict with. Not conclusively provable further without instrumenting
+Chromium's own C++ source, which is out of scope for this document.
+
+**Grading, reflecting the unmodified shipping code (no fix landed this
+stage):** `brands`/`fullVersionList` graded **D** — confirmed empty on
+every profile, an anomaly matching no real Chrome install, not fixed.
+`platform`/`mobile`/every high-entropy field also **D** — confirmed real
+leak of the host machine's identity, not fixed, and no clean lever found
+in Electron's own API surface for a future attempt to reach for first.
