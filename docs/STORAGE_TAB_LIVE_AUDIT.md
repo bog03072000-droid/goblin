@@ -67,3 +67,21 @@ Neither point rises to a fix-now bug — both are documented here as real,
 observed friction for a future design pass, per this round's own
 instruction not to force a fix where the honest finding is "it already
 works, with minor rough edges."
+
+## Light theme — card-grid contrast check (2026-09-09)
+
+The Storage tab's card grid (Cookies card, Local Storage card, the "Додати
+cookie"/"Додати запис" forms) had never been screenshotted in light theme in
+any prior audit round — only dark theme had been checked before. This app's
+default theme on this machine is already light, so the live walkthrough
+above doubles as the light-theme check: no separate theme toggle was needed.
+
+Observed: dark text on white/pale-green card backgrounds throughout, a clear
+green accent on the active "Додати" buttons and the focused input border,
+and a light-grey table-header row — all comfortably high-contrast, no
+washed-out or low-contrast text anywhere in the cookie table, the
+add-cookie/add-entry forms, or the two explanatory captions. No readability
+issue found. (A dark-theme equivalent check, if the app's dark theme differs
+structurally rather than just inverting tokens, remains a genuinely separate
+check for a future round — this one only covers light theme, as scoped.)
+
