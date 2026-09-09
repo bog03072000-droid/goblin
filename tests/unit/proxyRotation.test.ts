@@ -84,6 +84,46 @@ describe('GroupRepository proxy pool / rotation', () => {
     expect(groups.pickNextPoolProxy(group.id)).toBe(a.id);
     expect(groups.pickNextPoolProxy(group.id)).toBe(a.id);
   });
+
+  it('emptying the pool mid-rotation (cursor advanced past 0) makes pickNextPoolProxy return null, not throw', () => {
+    const group = groups.create('G');
+    const a = makeProxy('a');
+    const b = makeProxy('b');
+    const c = makeProxy('c');
+    groups.setProxyPool(group.id, [a.id, b.id, c.id]);
+    // Advance the cursor a few times first, so the stored cursor is not left
+    // at its initial 0 when the pool is emptied below.
+    groups.pickNextPoolProxy(group.id);
+    groups.pickNextPoolProxy(group.id);
+
+    groups.setProxyPool(group.id, []);
+
+    expect(() => groups.pickNextPoolProxy(group.id)).not.toThrow();
+    expect(groups.pickNextPoolProxy(group.id)).toBeNull();
+  });
+
+  it('shrinking the pool (not to zero) while the stored cursor is ahead of the new size still returns a valid proxy, not undefined', () => {
+    const group = groups.create('G');
+    const a = makeProxy('a');
+    const b = makeProxy('b');
+    const c = makeProxy('c');
+    groups.setProxyPool(group.id, [a.id, b.id, c.id]);
+    // Cursor is now stored as 2 (about to hand out index 2 == c next).
+    groups.pickNextPoolProxy(group.id); // -> a, cursor becomes 1
+    groups.pickNextPoolProxy(group.id); // -> b, cursor becomes 2
+
+    // Pool shrinks to 2 elements while the stored cursor (2) is out of range.
+    groups.setProxyPool(group.id, [a.id, b.id]);
+
+    const result = groups.pickNextPoolProxy(group.id);
+    expect(result).not.toBeUndefined();
+    expect([a.id, b.id]).toContain(result);
+
+    // Refilling the pool afterward (simulating proxies being re-added) also
+    // keeps working, i.e. the cursor never gets stuck in a broken state.
+    groups.setProxyPool(group.id, [a.id, b.id, c.id]);
+    expect([a.id, b.id, c.id]).toContain(groups.pickNextPoolProxy(group.id));
+  });
 });
 
 describe('ProfileManager.start() proxy rotation integration', () => {
