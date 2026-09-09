@@ -421,7 +421,16 @@ palette addition instead of a redesign.
   timezone, screen, hardware concurrency) can be hand-edited in Manual mode.
 - Concurrent-launch throttling (`maxConcurrentLaunches`, default 4 — real
   measurements across 20-100 profiles showed 4 beats 2 on both speed and
-  peak RAM, see `tests/performance/LOAD_TEST_BULKSTART_RAW.md`) staggers
+  peak RAM at the 20/50-profile scale, see
+  `tests/performance/LOAD_TEST_BULKSTART_RAW.md`). At 100 simultaneous
+  profiles the picture changes: a continuous free-RAM poll caught the
+  system coming within ~90MB of total memory exhaustion at both
+  concurrency 2 and 4 (a risk of OS-level instability, not an app
+  failure — the app itself completed cleanly with 0 failures/0 orphans
+  every time), while concurrency 8 finished faster and never dropped
+  below ~4GB free in the same run. **8 is the safer choice at 100+
+  simultaneous profiles**, not just the faster one — see `docs/LOAD_TEST.md`
+  for the full 20/50/100-profile × 2/4/8-concurrency matrix. This staggers
   the *rate* of new process launches to avoid a startup burst — it does not
   cap the total number of profiles that end up running simultaneously once a
   bulk start completes, which is the intended behavior (the point of a bulk
