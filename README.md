@@ -11,31 +11,24 @@ QA/testing tool: separate cookie jars, separate storage, separate configured
 browser identity per profile — nothing more, nothing less. See
 [SECURITY.md](SECURITY.md) for what is and isn't implemented.
 
-**Windows-verified, macOS-experimental (and currently unbuildable from
-here), v0.1.** Every install path, E2E-tested workflow, and manual smoke
-test in this project so far targets Windows 10/11 specifically (see the
-win32-specific process/RAM measurement code throughout `tests/`) — that
-remains the only platform this app is actually verified on.
-`package.json`'s `build.mac` config (added this stage, `zip` target,
-unsigned) is present and its JSON is valid, but **`electron-builder --mac`
-was actually run from this Windows environment and refused outright**:
-`⨯ Build for macOS is supported only on macOS, please see
-https://electron.build/multi-platform-build` — confirmed directly, not
-assumed; electron-builder blocks macOS packaging from any non-macOS host
-categorically, regardless of target format (`zip` included, not just
-`dmg`). A `package-macos` job now runs on a real `macos-latest` GitHub
-Actions runner (`.github/workflows/ci.yml`) — the first real macOS host
-this config has ever touched. **Confirmed, real result (two runs): the
-macOS build passes end to end** — `release/GoblinAnty-0.3.0-arm64-mac.zip`
-built and its smoke test (launching the actual packaged `.app` and
-confirming it stays running) passed. The first run showed red purely from
-two CI-config bugs unrelated to the app itself (electron-builder
-auto-publishing to GitHub with no token available, and looking for the
-build output under `dist/` when it actually lands under `release/`) — both
-fixed, and the very next run came back green. This is now the one platform
-besides Windows this project has an actual passing build for, not just a
-valid config file. Linux is not targeted at all — no `build.linux`
-config, no plan to add one.
+**v0.4.0 — Windows-verified end to end (development and every automated
+test); macOS and Linux build and pass a real smoke test on CI, but have no
+local dev/test history on either platform.** Every install path, E2E-tested
+workflow, and manual smoke test in this project's own development so far
+happened on Windows 10/11 (see the win32-specific process/RAM measurement
+code throughout `tests/`) — that is the only platform this app has actually
+been *used* on. Both other platforms are unsigned/unnotarized packages
+(see [DEVELOPMENT.md](DEVELOPMENT.md)'s Code signing section for real,
+currently-free options being pursued) verified only by
+`.github/workflows/ci.yml`'s `package-macos`/`package-linux` jobs on real
+`macos-latest`/`ubuntu-latest` GitHub Actions runners: each builds the real
+unsigned package (`.zip` for macOS, `AppImage`+`.deb` for Linux) and
+smoke-tests it by actually launching the packaged binary and confirming it
+stays running, not just checking a file exists. Check those jobs' latest
+runs for the current, real pass/fail rather than trusting this paragraph,
+which will go stale the moment that changes — as an earlier, since-corrected
+version of this same paragraph did when it claimed Linux had "no plan to
+add one."
 
 ## What it does today
 
@@ -88,7 +81,13 @@ config, no plan to add one.
 **Fingerprint**
 - Generate a coherent fingerprint configuration (OS + GPU + UA + screen +
   hardware bundled together, not randomized independently) from a seed, and
-  validate it for internal contradictions.
+  validate it for internal contradictions. Windows, macOS, and Linux
+  desktop bundles, plus real Android/iOS mobile bundles (touch points,
+  device pixel ratio, mobile-appropriate hardware/GPU options, real CDP
+  mobile emulation so `matchMedia('(pointer: coarse)')` etc. actually
+  agree) — see [docs/FINGERPRINT_AUDIT.md](docs/FINGERPRINT_AUDIT.md)'s
+  "Tenth investigation" for the two real coherence bugs a live test caught
+  and fixed while adding these.
 - Genuinely enforce User-Agent, `navigator.platform`, `navigator.languages`,
   timezone, screen dimensions/`devicePixelRatio`, `hardwareConcurrency`,
   device memory, Canvas and AudioContext noise (seeded, deterministic per
@@ -116,7 +115,10 @@ config, no plan to add one.
 
 ## Requirements
 
-- Windows 10/11
+- Windows 10/11 (the only platform this app's own development/testing has
+  actually run on), macOS, or Linux (build/package/smoke-test-verified via
+  CI on real hosts — see the platform-specific build sections below; no
+  local dev/test history on either yet)
 - Node.js 22+
 - npm 10+
 
@@ -175,16 +177,30 @@ confirmed directly, not assumed. `.github/workflows/ci.yml`'s
 `package-macos` job runs `electron-builder --mac --publish never` on a
 real `macos-latest` GitHub Actions runner and smoke-tests the resulting
 `.app` (`continue-on-error: true` — informational, not a merge gate).
-**Confirmed passing** (two real runs): the build produces
-`release/GoblinAnty-0.3.0-arm64-mac.zip` end to end, and the smoke test —
-actually launching the packaged `.app` and confirming it stays running,
-not just that a file exists — passed. The first run showed red purely
-from two CI-config bugs unrelated to the app (electron-builder
-auto-publishing to GitHub with no token available, and looking in the
-wrong output directory) — both fixed, and the corrected workflow's very
-next run came back green. Check that job's latest run for the current,
-real answer rather than trusting this paragraph, which will go stale the
-moment that changes.
+**Confirmed passing on every run since it was added**: the build produces
+a real `.zip`, and the smoke test — actually launching the packaged `.app`
+and confirming it stays running, not just that a file exists — passes.
+Check that job's latest run for the current, real answer rather than
+trusting this paragraph, which will go stale the moment that changes.
+
+## Build a Linux package (also verified only via CI, never run locally on Linux)
+
+```bash
+npm run package:linux
+```
+
+`build.linux` in `package.json` targets `AppImage` and `.deb`, unsigned.
+Unlike macOS, electron-builder can actually cross-package a Linux target
+from this Windows dev machine (confirmed directly — a `--dir`-only build
+produces a real `linux-unpacked/goblinanty` binary here), but nothing in
+this project has ever run that packaged binary on a real Linux host from
+this machine — only `.github/workflows/ci.yml`'s `package-linux` job, on a
+real `ubuntu-latest` runner, has. It runs `electron-builder --linux
+--publish never` and smoke-tests the result by extracting and launching
+the real `AppImage` (`--appimage-extract-and-run`, since CI images
+typically lack FUSE) and confirming it stays running.
+**Confirmed passing** on its first and every run since. Check that job's
+latest run for the current, real answer.
 
 ## Profile storage
 
@@ -389,8 +405,12 @@ palette addition instead of a redesign.
   WebGL capabilities, e.g. `MAX_TEXTURE_SIZE`, unaffected).
 - **Media device identity**: `mediaDevicesMode: 'hidden'` (opt-in, off by
   default) returns a seeded synthetic device list instead of the real one.
-- **Permissions and Geolocation** are not represented in the fingerprint
-  data model at all yet — no schema field, no UI, no enforcement.
+- **Permissions and Geolocation** (`permissionsMode`/`geolocationMode`) are
+  real schema fields with real UI toggles in the Fingerprint tab and real
+  enforcement via CDP `Emulation.setGeolocationOverride`/permission-request
+  handling — this line used to say the opposite (no schema field, no UI, no
+  enforcement at all), which stopped being true once those were built and
+  was simply never corrected here until now.
 - WebRTC leak protection uses Chromium's real `setWebRTCIPHandlingPolicy`,
   but there is no Chromium policy that fully disables the `RTCPeerConnection`
   API — `webrtcMode: 'disabled'` gets the strongest *available* protection,
