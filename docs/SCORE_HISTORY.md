@@ -273,3 +273,105 @@ gaps, but architecturally blocked in the current Electron/`<webview>`
 model, not simply undone work; (3) **version debt** — 28 real commits
 since the `v0.4.0` tag with no new release cut — pure release
 administration, the simplest of the three to close.
+
+## 2026-09-09 — 85.79 weighted / 85.5 simple
+
+A full active-work round (explicitly not measurement-only, unlike the
+comprehensive audit immediately above) — 9 numbered items worked in
+order, each with its own commit, typecheck/lint/unit run after every
+item and E2E where relevant. Compared only against this file's own
+previous entry (84.38/84.2).
+
+**What actually shipped, one item at a time:**
+1. **Release** (`cb0219f`): version 0.4.0 → 0.5.0, a real per-theme
+   `CHANGELOG.md` 0.5.0 section covering all 29 `v0.4.0..HEAD` commits,
+   `DEVELOPMENT.md`'s stale "no GitHub Release" claim corrected (verified
+   false via the GitHub API before editing), local `v0.5.0` tag created
+   — **not pushed**, per this round's own instructions.
+2. **Tests** (`8c2572c`): fixed `loadTestUIResponsiveness.spec.ts`'s
+   stale `.toolbar` selector (renamed to `.toolbar-group` by commit
+   `26d85bc`) — confirmed `LogsPage.tsx`/`ProxiesPage.tsx`'s own
+   `.toolbar` is separately intentional, not stale. Verified via a real
+   E2E run: the previously-failing sort-toggle test now passes.
+3. **Tests** (`92a8ab5`): added 3 real coverage tests for
+   `ProfilesPage.tsx`'s `createGroup`/`renameGroup`/`deleteGroup` — the
+   single biggest real function-coverage gap in the codebase (35/50
+   functions uncovered), found via actual `coverage-final.json` parsing,
+   not guessing.
+4. **Functionality** (`bce739f`): 2 new edge-case unit tests for
+   `groupRepository.ts`'s `advanceRotationCursor` (pool emptied mid-
+   rotation; pool shrinks below the stored cursor). No bug found — the
+   existing `current % poolSize` self-correction already handles both
+   safely, confirmed empirically rather than assumed from reading the code.
+5. **UX** (`219b659`): first-ever live walkthrough of the Storage/Cookie
+   editor (create → not-running explanation → start → add/delete cookie
+   → add/delete localStorage entry → stop → delete profile), driven via
+   computer-use against the real dev build. No crash or data-loss found;
+   2 minor, real friction points documented (no undo/confirm on a
+   destructive delete; ambiguous URL-field scheme expectation) for a
+   future pass, not forced fixes.
+6. **Design** (`1280d50`): first light-theme screenshot check of the
+   Storage tab's card grid. No contrast/readability issue found.
+7. **Security** (`e4260eb`): `registerIpc.ts`'s per-channel Zod
+   validation had only ever been unit-tested with a mocked `ipcMain` —
+   added a real E2E test sending malformed payloads through the actual
+   `window.profileforge.invoke` bridge against a live app, and closed
+   the loop by feeding the real rejection through the renderer's own
+   `describeError()`, confirming it maps to the intended human-readable
+   text, not raw internals.
+8. **Performance** (`26bd0ae`): updated `README.md`'s concurrency
+   recommendation ("4 beats 2") with the fuller 100-profile picture the
+   prior round (`33ed0a1`) already found but never surfaced there —
+   concurrency 8 is the safer choice at that scale, not just the faster
+   one.
+9. **Fingerprint ×2** (`5d556b5`): Nineteenth investigation. Confirmed a
+   real leak — `screen.orientation.type` reported the real desktop
+   host's `landscape-primary` on a portrait (412×919) Android-configured
+   profile, since `Emulation.setDeviceMetricsOverride` never carried a
+   `screenOrientation` param. **Fixed and verified live** (portrait
+   profile now correctly reports `portrait-primary`), **regression-
+   checked on a live desktop profile** (still correctly
+   `landscape-primary`, per this round's standing caution about
+   spoofing-mechanism changes), and given a permanent
+   `fingerprintEnforcement.spec.ts` assertion so it can't silently
+   regress. Second candidate vector, `document.fonts.ready`/enumeration,
+   was also checked empirically — no gap found (`FontFaceSet` only ever
+   reflects a page's own declared fonts, never system fonts) — an honest
+   "no fix needed" result, not forced.
+
+Real numbers this round: unit — **785 tests, 74 files, all passing**
+(+5 net new tests: 3 coverage + 2 edge-case). Fingerprint E2E
+(`fingerprintEnforcement.spec.ts`) — 6/6 passed, including the new
+orientation assertion. Load-test E2E
+(`loadTestUIResponsiveness.spec.ts`) — 8/8 passed, including the
+previously-broken sort-toggle test. New IPC-validation E2E
+(`ipcValidation.spec.ts`) — 3/3 passed. `typecheck` (both configs) and
+`lint` — clean after every single item, not just at the end.
+
+| Category | Score | Δ vs previous entry (84.38/84.2) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 81 | +1 | Item 4's edge-case tests found the existing rotation-cursor logic already correct — real confidence gained on a previously-untested edge case, not a fix, hence a small credit rather than a large one. |
+| UX | 83 | +1 | Item 5's live walkthrough (`219b659`) — the Storage/Cookie editor's core flow confirmed working end-to-end for the first time, with 2 real (if minor) friction points honestly documented rather than glossed over. |
+| Дизайн | 86 | +1 | Item 6 — first light-theme check of the Storage tab, genuinely never done before, clean result. |
+| Стабільність ×1.5 | 88 | 0 | No dedicated stability work this round. |
+| Безпека ×1.5 | 85 | +2 | Item 7 (`e4260eb`) — closed the "only unit-tested" gap in `registerIpc.ts` the user named directly, with a real non-mocked E2E round-trip and a closed-loop check of the actual human-readable error text. |
+| Код/архітектура | 87 | 0 | No architectural work this round — every fix was small and targeted (one CDP param, one selector, one field). |
+| Тести | 90 | +2 | Items 2+3 combined: a real stale-selector E2E fix (not just diagnosis, unlike the previous round which found but didn't fix it) plus 3 new real function-coverage tests targeting the single biggest actual gap in the codebase. |
+| Продуктивність | 79 | 0 | Item 8 is a documentation catch-up for a finding already credited last round (`33ed0a1`), not new performance work — no double-counting. |
+| Реліз | 88 | +3 | Item 1 (`cb0219f`) directly closes the "version debt" this file's own last two entries named as an open recommendation: real version bump, real per-commit changelog, a corrected stale doc claim, and a local tag — the simplest of the three named production-readiness gaps, now closed (still unpushed, as instructed). |
+| Fingerprint ×2 | 88 | +3 | Item 9 (`5d556b5`) — unlike most of this document's fingerprint history (which mostly finds real-but-architecturally-unfixable leaks), this is a real leak found AND shipped AND verified fixed, with a regression check and a permanent test guarding it. The clean "no gap" result on the second vector doesn't add further credit on its own. |
+
+**Simple average:** (81+83+86+88+85+87+90+79+88+88)/10 = **85.5**
+**Weighted average:** (81+83+86+88×1.5+85×1.5+87+90+79+88+88×2)/12 = **85.79**
+
+**Summary:** a genuine, if incremental, improvement (+1.41 weighted /
++1.3 simple) driven by 9 separately-committed, separately-verified
+items rather than one big change — one real shipped fingerprint fix
+(the round's most consequential single deliverable), one real security
+gap closed with an end-to-end test, real test-coverage and edge-case
+additions, and the version-debt release gap finally closed. Two items
+(8, and half of 9) produced honest "already fine" / "no gap found"
+results and were scored accordingly — a small or zero credit, not
+inflated to match the round's overall activity level. **Nothing in this
+round has been pushed — the `v0.5.0` tag and all 9 commits remain
+local, pending explicit confirmation.**
