@@ -196,3 +196,80 @@ this round.
 
 **Simple average:** (80+82+85+88+83+87+88+79+85+85)/10 = **84.2**
 **Weighted average:** (80+82+85+88×1.5+83×1.5+87+88+79+85+85×2)/12 = **84.38**
+
+## 2026-09-09 — 84.38 weighted / 84.2 simple (comprehensive audit, no code changes)
+
+A deliberately exhaustive, measurement-only audit (no fixes made this
+round, per explicit instruction) — full `git log -150`, a fresh read of
+`FINGERPRINT_AUDIT.md`/`SECURITY.md`/`CHANGELOG.md`/`README.md`/
+`DEVELOPMENT.md`/`LOAD_TEST.md`, a real `test:coverage` run, a real full
+E2E run, `test:perf`, both `typecheck` configs, `lint`, and direct
+grep/API confirmation of 12 named systems (automation API + rate-limiting,
+cookie/localStorage editor, design tokens, behavioral emulation, proxy
+encryption, mobile fingerprint, proxy rotation pools, profile scheduler,
+soft-delete/undo, CI pipeline, auto-updater, GitHub Release). Compared
+only against this file's own previous entry (84.38/84.2, the round
+immediately above).
+
+Real numbers this round: unit — 780 tests, 74 files, all passing.
+Coverage — **86.8% statements / 89.55% branches / 75.31% functions /
+86.8% lines** (functions notably the weakest dimension). E2E (full,
+fresh) — **129 tests: 128 passed / 1 failed** (0 flaky, 0 did-not-run —
+the seed-DB prerequisite that previously blocked
+`loadTestUIResponsiveness.spec.ts` now exists from an earlier session
+action, so more of that file's sub-tests actually ran than in prior
+rounds). `test:perf` — 37/37, DB-layer numbers consistent with prior
+runs, no regression. `typecheck` (both `tsconfig.json` and
+`tsconfig.electron.json`) — 0 errors. `lint` — 0 errors, the same 1
+pre-existing `ProxiesPage.tsx` warning. `package.json` version `0.4.0`;
+HEAD is **28 commits ahead of the `v0.4.0` tag** (`git describe --tags`:
+`v0.4.0-28-g09859b7`) — a real, growing version debt.
+
+**Two real findings this round, deliberately left unfixed (measurement-only
+audit):**
+1. The one E2E failure is genuinely reproducible (confirmed via isolated
+   rerun, not flaky) and fully root-caused: `loadTestUIResponsiveness.spec.ts`'s
+   "sort toggle re-orders 200 rows" test targets `.toolbar`, a class that
+   `ProfilesToolbar.tsx` no longer uses (renamed to `toolbar-group`/
+   `toolbar-row` by commit `26d85bc`; `LogsPage.tsx`/`ProxiesPage.tsx` still
+   use the literal `toolbar` class, which is likely why this was missed).
+   This is a stale test selector, not a product regression — the sort
+   button and its `title` attribute are still correctly implemented.
+2. `DEVELOPMENT.md` (Option D / SignPath Foundation section) still claims
+   "the `v0.3.0` and `v0.4.0` tags... have no corresponding GitHub Release
+   or attached binaries yet" — confirmed false via the GitHub API: the
+   `v0.4.0` release is real, published (`draft: false`), with 2 assets.
+   The doc was never updated after that release was actually published
+   earlier this session.
+
+Neither finding was fixed this round (explicit instruction: measurement
+and assessment only). Both are named here rather than silently corrected.
+
+| Category | Score | Δ vs previous entry (84.38/84.2) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 80 | 0 | All 12 named systems re-confirmed present via direct grep/API this round (a broader list than any prior round's 6) — reconfirmation of existing baseline, no new feature work. |
+| UX | 82 | 0 | Not independently re-verified this round (measurement-focused audit, no live walkthrough). |
+| Дизайн | 85 | 0 | Not re-verified this round. |
+| Стабільність ×1.5 | 88 | 0 | Fresh full E2E: 128/129 passed (99.2%), 0 app crashes, 0 orphaned processes. The one failure is the stale-selector test bug above, not a stability regression — not penalized, per this file's own standing convention that a test-only issue doesn't count against product stability. |
+| Безпека ×1.5 | 83 | 0 | Confirmed `AuthRateLimiter` (commit `e79c839`, predates this file) is real and wired into both the HTTP and WebSocket auth paths, with its own existing unit test (`automationProxyRateLimit.test.ts`) — pre-existing work already implicit in the baseline, not new this round. |
+| Код/архітектура | 87 | 0 | No code changed this round. |
+| Тести | 88 | 0 | Real coverage confirmed (86.8%/89.55%/75.31%/86.8% — functions notably weakest). E2E count grew to 129 as a previously-blocked test file's sub-tests now run. The stale-selector finding is a real, honestly-reported gap, deliberately not fixed this round — net neutral per this file's "honest discovery doesn't get penalized" principle. |
+| Продуктивність | 79 | 0 | `test:perf` clean (37/37), no regression; no fresh escalation attempted this round (already done last round). |
+| Реліз | 85 | 0 | v0.4.0 release itself unchanged and still real; the newly-found `DEVELOPMENT.md` staleness is a documentation gap about an already-completed action, not a change to actual release readiness. 28-commit version debt reconfirmed, already an open recommendation. |
+| Fingerprint ×2 | 85 | 0 | No new fingerprint investigation this round. |
+
+**Simple average:** (80+82+85+88+83+87+88+79+85+85)/10 = **84.2**
+**Weighted average:** (80+82+85+88×1.5+83×1.5+87+88+79+85+85×2)/12 = **84.38**
+
+**Honest verdict on production readiness:** ready now for practical,
+non-commercial/QA use on Windows — 780/780 unit and 128/129 E2E support
+that directly. For public distribution, three concrete things remain,
+not vaguely: (1) **code signing — an external factor**, needs the
+maintainer's own action (Azure Trusted Signing with real credentials, or
+a SignPath Foundation application) — no amount of code closes this; (2)
+**two confirmed-unfixable fingerprint leaks** (Service Worker GPU/navigator
+leak; `navigator.userAgentData` platform/mobile leak) — real engineering
+gaps, but architecturally blocked in the current Electron/`<webview>`
+model, not simply undone work; (3) **version debt** — 28 real commits
+since the `v0.4.0` tag with no new release cut — pure release
+administration, the simplest of the three to close.
