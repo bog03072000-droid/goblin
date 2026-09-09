@@ -43,7 +43,18 @@ export function AdvancedTab({
 
   function toggleScheduleDay(day: number): void {
     const next = scheduleDays.includes(day) ? scheduleDays.filter((d) => d !== day) : [...scheduleDays, day].sort();
-    onSaveAutomation({ scheduleDays: next });
+    // Same defensive default as the "Enable scheduled start" checkbox
+    // above, and needed for the same reason here too: a profile that
+    // reached this screen with scheduleEnabled already true but
+    // scheduleTime still null (e.g. the bulk "Enable schedule" action,
+    // which deliberately leaves time/days unset — see
+    // profileSchedule.spec.ts's own bulk test) would otherwise let a user
+    // pick real days here while scheduleTime silently stays null forever,
+    // the exact "looks configured, never actually fires" trap this file
+    // already fixed once for the checkbox alone.
+    const patch: Parameters<typeof onSaveAutomation>[0] = { scheduleDays: next };
+    if (profile.scheduleTime === null && timeDraft) patch.scheduleTime = timeDraft;
+    onSaveAutomation(patch);
   }
 
   function copy(value: string, what: 'port' | 'token' | 'snippet'): void {
@@ -193,7 +204,25 @@ export function AdvancedTab({
             <input
               type="checkbox"
               checked={profile.scheduleEnabled}
-              onChange={(e) => onSaveAutomation({ scheduleEnabled: e.target.checked })}
+              onChange={(e) => {
+                // scheduleTime only otherwise saves on the time input's own
+                // onBlur — a real profile could end up with
+                // scheduleEnabled: true, scheduleDays: [...], but
+                // scheduleTime still null if the user enables the schedule
+                // and picks days without ever focusing the time field.
+                // computeNextScheduledRun() (and ProfileScheduler's own
+                // real trigger check) both treat a null scheduleTime as "no
+                // schedule" — so that combination would show a live "next
+                // run" preview here from timeDraft's own UI-only default,
+                // while the backend would never actually fire it. Saving
+                // the current draft time in the same call the checkbox
+                // itself makes keeps the persisted state honest from the
+                // first toggle, not just after the user happens to touch
+                // the time field too.
+                const patch: Parameters<typeof onSaveAutomation>[0] = { scheduleEnabled: e.target.checked };
+                if (e.target.checked && profile.scheduleTime === null && timeDraft) patch.scheduleTime = timeDraft;
+                onSaveAutomation(patch);
+              }}
             />
             {t('editor.advanced.schedule.enable')}
           </span>

@@ -62,8 +62,14 @@ describe('AdvancedTab — schedule', () => {
     expect(screen.queryByText('Days')).not.toBeInTheDocument();
   });
 
-  it('checking "Enable scheduled start" calls onSaveAutomation with scheduleEnabled: true', () => {
-    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: false }) });
+  it('checking "Enable scheduled start" on a profile with no stored time also saves the UI\'s own default time — a null scheduleTime would otherwise make the schedule never actually fire, even though the "next run" preview looks fine', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: false, scheduleTime: null }) });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enable scheduled start' }));
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleEnabled: true, scheduleTime: '09:00' });
+  });
+
+  it('checking it on a profile that already has a stored time does not re-send scheduleTime redundantly', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: false, scheduleTime: '14:30' }) });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Enable scheduled start' }));
     expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleEnabled: true });
   });
@@ -107,6 +113,12 @@ describe('AdvancedTab — schedule', () => {
     const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1, 3, 5] }) });
     fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
     expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleDays: [1, 5] });
+  });
+
+  it('picking a day on a profile that reached this screen with scheduleEnabled already true but scheduleTime still null (e.g. after the bulk "Enable schedule" action) also saves the default time, not just the day', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: null, scheduleDays: [] }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleDays: [3], scheduleTime: '09:00' });
   });
 
   it('a selected day button carries the primary style, unselected days carry ghost', () => {
