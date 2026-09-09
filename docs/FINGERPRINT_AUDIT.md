@@ -211,8 +211,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | Permissions | ✅ (`permissionsMode`, default `real`) | ✅ (`deny-all` denies every non-geolocation permission) | not on the diagnostics page (no probe added there); ✅ verified directly via `navigator.permissions.query` in a real profile | schema only | ✅ (asserts `notifications` denied under `deny-all`) | `session.setPermissionRequestHandler`/`setPermissionCheckHandler` (`applyPermissionPolicy()`) | **B** |
 | Geolocation | ✅ (`geolocationMode`, default `real`) | ✅ (`spoof`: CDP override; `blocked`: permission denial) | not on the diagnostics page; ✅ verified directly via `navigator.geolocation`/`navigator.permissions` in a real profile | schema only | ✅ (asserts denial for `blocked`, matching coordinates for `spoof`) | CDP `Emulation.setGeolocationOverride` (spoof) + `applyPermissionPolicy()` (blocked) | **B** |
 | Network Information (`navigator.connection`) | ❌ (no schema field) | ❌ | real, live, host-network-dependent value — confirmed to differ between profiles and to drift run-to-run on the same profile (see Seventeenth investigation) | — | — (one-off empirical check only, no permanent test — see below) | none — no CDP `Emulation.*` static override exists; `Network.emulateNetworkConditions` throttles real traffic to a ceiling rather than providing one, a real functional cost not paid anywhere else in this document | **D** |
-| User-Agent Client Hints — `brands`/`fullVersionList` (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ confirmed empty on every profile, an anomaly no real Chrome install produces | n/a | — (one-off empirical check only, no permanent test — a fix attempt was reverted, see Eighteenth investigation) | none currently — a `userAgentMetadata` CDP parameter was attempted and reverted after it broke `acceptLanguage`/`languages` enforcement in the same call, an unresolved regression | **D** |
-| User-Agent Client Hints — `platform`/`mobile`/every other high-entropy field (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ real host value leaks (confirmed on macOS- and Android-configured profiles alike) | n/a | — (one-off empirical check only, no permanent test) | none found — no lever in Electron's own API surface (checked: `electron.d.ts` has no `ClientHint`/`userAgentData` reference), and the one CDP-level attempt didn't affect these fields anyway | **D** |
+| User-Agent Client Hints — `brands`/`fullVersionList` (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ confirmed empty on every profile, an anomaly no real Chrome install produces | n/a | — (one-off empirical checks only, no permanent test — see Eighteenth investigation) | none viable — CDP `Emulation.setUserAgentOverride`'s `userAgentMetadata` parameter was tried twice (once with a minimal shape that threw a protocol error and silently aborted the rest of fingerprint enforcement; once with the complete documented shape, which throws nothing but leaves the guest `<webview>`'s own CDP target unusable afterward) — confirmed fundamentally incompatible with this project's `<webview>`-based architecture, not merely risky | **D** |
+| User-Agent Client Hints — `platform`/`mobile`/every other high-entropy field (`navigator.userAgentData`) | ❌ (no schema field) | ❌ | ❌ real host value leaks (confirmed on macOS- and Android-configured profiles alike) | n/a | — (one-off empirical checks only, no permanent test) | none found — no lever in Electron's own API surface (checked: `electron.d.ts` has no `ClientHint`/`userAgentData` reference), and the one CDP-level mechanism that could plausibly reach this is confirmed to break the webview target it's applied to | **D** |
 
 ## Findings from empirical verification
 
@@ -2490,7 +2490,7 @@ fingerprint/correlation vector this audit had never once looked at across
 sixteen prior investigations. Added to the Reality matrix below as a new
 row rather than left undocumented now that it's known.
 
-## Eighteenth investigation — User-Agent Client Hints (`navigator.userAgentData`): a real, confirmed leak; a fix attempt reverted after verification caught a regression risk
+## Eighteenth investigation — User-Agent Client Hints (`navigator.userAgentData`): a real, confirmed leak; the CDP fix path confirmed fundamentally incompatible with Electron's `<webview>` target, not just risky
 
 **Method, same standard as every stage.** Real per-profile Electron/Chromium
 processes, both Windows- and Android-configured, navigated to a real
@@ -2555,26 +2555,58 @@ work already root-caused elsewhere), but it produced a *different, less
 consistent* failure signature each time, distinct from this fix's
 consistent, same-4-tests-twice signature.
 
-**Root cause not fully isolated within this session's time budget** — the
-CDP protocol's `userAgentMetadata` object may need additional fields this
-implementation didn't supply (only `brands`, `fullVersionList`, `platform`,
-`mobile` were sent; the real protocol schema also has `platformVersion`,
-`architecture`, `model`, `bitness`, `wow64`), and an incompletely-shaped
-metadata object may cause Chromium to reject or partially apply the whole
-`Emulation.setUserAgentOverride` call rather than just the extra field —
-consistent with `acceptLanguage`, sent in that same call, silently failing
-alongside it. Not conclusively proven without further isolation.
+**Root cause fully isolated in a later session round, via a clean
+out-of-app experiment — and the answer is worse than "needed more
+fields."** No commit existed for the reverted attempt (it was reverted with
+`git checkout` before ever being committed, so there was no diff to read
+back) — the exact mechanism was re-derived from first principles instead,
+using a standalone Playwright `CDPSession` sending raw
+`Emulation.setUserAgentOverride` calls directly against a real profile's
+guest `<webview>` target, completely outside `fingerprintEnforcement.ts`,
+so the experiment couldn't itself be muddied by the app's own error
+handling swallowing anything:
 
-**Verdict: reverted the code change entirely rather than ship a fix with a
-confirmed, unexplained regression risk to another real enforcement
-mechanism.** The empty-Client-Hints finding and the confirmed
-`platform`/`mobile` host leak are both real and stay documented below,
-exactly as observed on the unmodified, currently-shipping code (verified
-*before* any fix attempt, independent of the regression). No permanent
-test was added for this investigation, since the fix it would have guarded
-was itself reverted — a future attempt should supply the complete
-`userAgentMetadata` shape and re-verify `fingerprintEnforcement.spec.ts` in
-full before considering it safe, not just the one property being changed.
+1. **The exact minimal shape the reverted attempt used (`platform`,
+   `mobile`, `brands`, `fullVersionList` only — missing `platformVersion`,
+   `architecture`, `model`) throws a hard protocol error**, confirmed
+   directly: `Protocol error (Emulation.setUserAgentOverride): Invalid
+   parameters`. This fully explains the original symptom: `enforceFingerprint()`
+   sends this as its *first* CDP command, so when it throws, every command
+   after it in that same function — hardware concurrency, screen/device
+   metrics, touch emulation, geolocation, and yes, `acceptLanguage` — never
+   runs at all for that page load, silently, because the whole chain is
+   wrapped in one `.catch()` in `profileWindowEntry.ts`. The regression was
+   never "just acceptLanguage" — it was the entire rest of fingerprint
+   enforcement, an even bigger unintended blast radius than first documented.
+2. **Supplying the complete shape (`platformVersion`, `architecture`,
+   `model`, `bitness`, `wow64` added) does stop the protocol error** —
+   confirmed, the same call throws nothing with all fields present.
+3. **But even then, applying `userAgentMetadata` at all — correctly shaped,
+   no error — leaves the guest `<webview>`'s own CDP target unusable
+   afterward**: a subsequent `Page.reload`/any further command against the
+   same target fails with `Target page, context or browser has been
+   closed`. Reproduced twice, both with Playwright's own `page.reload()`
+   and with a raw CDP `Page.reload` sent through the same session, ruling
+   out a Playwright-side tracking quirk. This is not a shape/validation
+   problem at all — it's a real incompatibility between this CDP parameter
+   and Electron's `<webview>` guest-view target implementation in this
+   Electron version: applying it appears to tear down and/or invalidate the
+   target's CDP session outright.
+
+**Verdict: this fix path is confirmed not viable with this project's
+current architecture, not merely risky.** Reverted (as before) rather than
+shipped. This is a materially stronger conclusion than the earlier
+"root cause not fully isolated" — the earlier round correctly declined to
+force a fix under uncertainty; this round removed the uncertainty and
+found the honest answer is still no. A future attempt would need to find
+some other mechanism entirely (not `Emulation.setUserAgentOverride`'s
+`userAgentMetadata` field against a webview target) — supplying more
+fields is not the missing piece, since even a complete, error-free
+metadata object still destabilizes the target. The empty-Client-Hints
+finding and the confirmed `platform`/`mobile` host leak are both real and
+stay documented below, exactly as observed on the unmodified,
+currently-shipping code. No permanent test was added, since there is no
+fix left to guard.
 
 **This is a real, more serious leak than the Ninth/Seventeenth
 investigations' network-layer findings — it directly identifies the host
