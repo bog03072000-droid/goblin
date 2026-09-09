@@ -480,3 +480,13 @@ these exact next steps when it detects a mismatch.
   `Network service crashed, restarting service`) are sandboxing noise from the
   environment, not app bugs — verify by checking the app otherwise starts and
   the manager window loads.
+
+## Periodic honest project assessments
+
+[docs/SCORE_HISTORY.md](docs/SCORE_HISTORY.md) is the single source of
+truth for this project's periodic 10-category self-assessments (0-100 per
+category, real git/code/test verification only — never a number recalled
+from memory or a prior conversation). A new assessment must read that
+file's latest entry first and compare against it; a score that only ever
+existed in a chat message and was never written there does not count as a
+prior baseline.
