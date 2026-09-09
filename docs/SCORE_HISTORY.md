@@ -83,3 +83,54 @@ in the test's own error message — not a code regression).
 
 **Simple average:** (80+79+85+87+83+87+86+76+85+83)/10 = **83.1**
 **Weighted average:** (80+79+85+87×1.5+83×1.5+87+86+76+85+83×2)/12 = **83.25**
+
+## 2026-09-09 — 83.13 weighted / 83.0 simple
+
+A fully independent re-verification, compared only against this file's own
+previous entry (83.25/83.1) — not against any number recalled from chat.
+Triggered by a mis-cited "85.6" score that turned out to have no artifact
+anywhere (the reason this file exists at all). Re-ran `git log -100`, read
+`SECURITY.md`/`docs/FINGERPRINT_AUDIT.md`/`CHANGELOG.md` in full, a fresh
+`npm run test:coverage`, a fresh full E2E run, and fresh independent grep
+confirmation of all 6 previously-cited systems (automation API, cookie/
+storage editor, design tokens, behavioral emulation, proxy encryption,
+mobile fingerprint) — all still real, byte-identical results to the prior
+entry since no application code changed between the two rounds.
+
+Real numbers this round: unit — 778 tests, 74 files, all passing, 86.81%
+coverage (identical to the previous entry). E2E — 126 tests: 119 passed /
+2 flaky (passed on retry) / 1 failed (same known seed-DB prerequisite,
+`loadTestUIResponsiveness.spec.ts`) / 7 did not run (same cascading skip).
+
+The two flaky tests this round — `loadTestClone.spec.ts` ("clone pair 0 of
+2") and `proxyVerification.spec.ts` ("SOCKS5 traffic... real SOCKS5 CONNECT
+request") — are pre-existing tests, not written this session, and did not
+appear as flaky in the immediately-prior full run. Real, newly-observed
+timing sensitivity under full-suite load; not yet root-caused.
+
+Separately, re-running this session's own new security E2E tests
+(`diagnosticsPreloadOriginGate.spec.ts`, `geolocationPermissionsEnforcement.spec.ts`)
+alongside other files surfaced a real, reproducible race: every new
+profile's webview auto-navigates to `BROWSER_START_URL`
+(`https://www.google.com`, `profileWindowEntry.ts:24`) the instant it
+attaches, and both tests typed their target URL into the address bar
+before that landed — a flaky failure with nothing to do with either
+security mechanism under test. Fixed in commit `9aee003` (wait for the
+google.com navigation to land first); confirmed with `--repeat-each=2`,
+both files now consistently green.
+
+| Category | Score | Δ vs previous entry (83.25/83.1) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 80 | 0 | All 6 systems re-confirmed by fresh independent grep — no change. |
+| UX | 79 | 0 | Not independently re-verified this round. |
+| Дизайн | 85 | 0 | Not re-verified deeper this round. |
+| Стабільність ×1.5 | 86 | -1 | The full suite genuinely surfaced 2 previously-undocumented flaky tests (see above) under real full-suite load — a small, real, newly-observed data point, not present in the prior entry's run. |
+| Безпека ×1.5 | 83 | 0 | Same 3 tests re-confirmed; the race fix (`9aee003`) makes them more reliable proof, not a change to the underlying security guarantee itself. |
+| Код/архітектура | 87 | 0 | No application code changed this round (test files only). |
+| Тести | 86 | 0 | A real self-introduced flake was found and fixed with real verification (`9aee003`, `--repeat-each=2`) — a plus; offset by the 2 newly-surfaced pre-existing flaky tests, not yet root-caused — a minus. Net zero. |
+| Продуктивність | 76 | 0 | Not independently re-verified this round. |
+| Реліз | 85 | 0 | No new release action this round. |
+| Fingerprint ×2 | 83 | 0 | No new fingerprint investigation this round (this round was re-verification, not new investigation). |
+
+**Simple average:** (80+79+85+86+83+87+86+76+85+83)/10 = **83.0**
+**Weighted average:** (80+79+85+86×1.5+83×1.5+87+86+76+85+83×2)/12 = **83.13**
