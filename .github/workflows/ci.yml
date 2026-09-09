@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Lets a maintainer manually trigger a run against an arbitrary ref (e.g.
+  # a version tag) — added specifically so package-macos/package-linux can
+  # be run against a real released tag (v0.4.0 and on) to produce the exact
+  # binaries a GitHub Release should attach, independent of whatever has
+  # been pushed to main since that tag. GitHub only offers manual dispatch
+  # for a workflow file version that already has this trigger on the
+  # default branch, so this had to land on main before it could be used.
+  workflow_dispatch:
 
 jobs:
   # Fast, blocking gate: typecheck, lint, unit tests. Every dev-tested and
