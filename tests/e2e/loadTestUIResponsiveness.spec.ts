@@ -144,7 +144,15 @@ test('bulk add-tag across all 200 selected profiles completes and is reflected i
 
 test('sort toggle re-orders 200 rows', async () => {
   const t0 = performance.now();
-  await window.locator('.toolbar').getByTitle(/ascending|descending/i).click();
+  // ProfilesToolbar.tsx's own wrapper is `.toolbar-group` (a real, distinct
+  // class from the simple `.toolbar` LogsPage/ProxiesPage still use for
+  // their single-row toolbars — confirmed both exist deliberately in
+  // global.css, not a leftover) since commit 26d85bc's row-grouping
+  // refactor. This selector kept the pre-refactor class and never matched
+  // anything on this page again — a real, reproducible (not flaky) test
+  // failure, root-caused during a 2026-09-09 audit rather than assumed to
+  // be environmental flakiness.
+  await window.locator('.toolbar-group').getByTitle(/ascending|descending/i).click();
   await expect(window.locator('tbody tr')).toHaveCount(SCALE, { timeout: 10_000 });
   timings['sort direction toggle (200 rows)'] = performance.now() - t0;
 });
