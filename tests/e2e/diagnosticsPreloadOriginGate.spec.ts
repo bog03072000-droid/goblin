@@ -85,13 +85,23 @@ test('a real, arbitrary http:// page loaded in a profile webview never gets wind
   await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
   const shell = await connectToShell();
+  const webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
+
+  // Every new profile's webview auto-navigates to BROWSER_START_URL
+  // (https://www.google.com, profileWindowEntry.ts) as soon as it attaches.
+  // Typing a new URL into the address bar before that initial navigation
+  // has actually landed races against it — the app's own default nav can
+  // overwrite the just-typed value, making the address bar briefly (or, on
+  // a slow run, not-so-briefly) show google.com instead of the real target,
+  // a flaky failure with nothing to do with the origin gate under test.
+  // Waiting for the initial google.com navigation to actually land first
+  // removes that race.
   const address = shell.locator('#address');
+  await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
   await address.fill(`http://127.0.0.1:${serverPort}/`);
   await address.press('Enter');
   await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${serverPort}`), { timeout: 15_000 });
-
-  const webview = shell.locator('webview').first();
-  await webview.waitFor({ state: 'attached', timeout: 15_000 });
   const evalIn = async (expr: string) =>
     webview.evaluate(
       (el, e) => (el as unknown as { executeJavaScript: (s: string) => Promise<unknown> }).executeJavaScript(e),

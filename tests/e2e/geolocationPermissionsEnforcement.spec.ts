@@ -108,7 +108,15 @@ async function createAndStartProfile(
   const webview = shell.locator('webview').first();
   await webview.waitFor({ state: 'attached', timeout: 15_000 });
 
+  // Every new profile's webview auto-navigates to BROWSER_START_URL
+  // (https://www.google.com, profileWindowEntry.ts) as soon as it attaches.
+  // Typing the real test server's URL before that lands races against it —
+  // found as a real, reproducible flake (address bar briefly reading
+  // google.com instead of the real target) when re-running this file
+  // alongside others. Waiting for the initial navigation to actually land
+  // first removes the race.
   const address = shell.locator('#address');
+  await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
   await address.fill(`http://127.0.0.1:${serverPort}/`);
   await address.press('Enter');
   await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${serverPort}`), { timeout: 15_000 });
