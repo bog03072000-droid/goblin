@@ -4,6 +4,11 @@
   "description": "Multi-profile Chromium browser with persistent isolated profiles, proxy management, and coherent fingerprint configuration.",
   "author": "GoblinAnty",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bog03072000-droid/goblin.git"
+  },
+  "homepage": "https://github.com/bog03072000-droid/goblin#readme",
   "private": true,
   "main": "dist-electron/main/main.js",
   "type": "commonjs",
