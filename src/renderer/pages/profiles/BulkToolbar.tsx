@@ -135,7 +135,7 @@ export function BulkToolbar({
       />
       <input
         placeholder={t('profiles.bulk.removeTagPlaceholder')}
-        className="w-140"
+        className="w-180"
         disabled={bulkBusy}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {

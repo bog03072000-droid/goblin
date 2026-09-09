@@ -116,6 +116,8 @@ export function AdvancedTab({
                 type="number"
                 min={1024}
                 max={65535}
+                placeholder={t('editor.advanced.automation.portPlaceholder')}
+                title={t('settings.defaultAutomationPort.hint')}
                 value={portDraft}
                 onChange={(e) => setPortDraft(e.target.value)}
                 onBlur={() => {

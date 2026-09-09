@@ -298,6 +298,7 @@ const en = {
     'Connect Puppeteer, Playwright, or any raw Chrome DevTools Protocol client directly to this profile while it runs. Off by default — enabling opens a local, token-gated port.',
   'editor.advanced.automation.enable': 'Enable automation access',
   'editor.advanced.automation.port': 'Port (127.0.0.1 only)',
+  'editor.advanced.automation.portPlaceholder': 'auto',
   'editor.advanced.automation.portInvalid': 'Enter a port between 1024 and 65535.',
   'editor.advanced.automation.token': 'Access token',
   'editor.advanced.automation.copyToken': 'Copy the token to your clipboard',
