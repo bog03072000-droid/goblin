@@ -210,6 +210,7 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | Media devices | ✅ (`mediaDevicesMode`, default `real`) | opt-in (`hidden` mode) | ✅ real enumeration unless opted in | schema only | ✅ (asserts NOT_IMPLEMENTED by default) | `navigator.mediaDevices.enumerateDevices` override returning a seeded synthetic device list — see §Media devices (implemented) | **C** (→ **B** when `hidden`) |
 | Permissions | ✅ (`permissionsMode`, default `real`) | ✅ (`deny-all` denies every non-geolocation permission) | not on the diagnostics page (no probe added there); ✅ verified directly via `navigator.permissions.query` in a real profile | schema only | ✅ (asserts `notifications` denied under `deny-all`) | `session.setPermissionRequestHandler`/`setPermissionCheckHandler` (`applyPermissionPolicy()`) | **B** |
 | Geolocation | ✅ (`geolocationMode`, default `real`) | ✅ (`spoof`: CDP override; `blocked`: permission denial) | not on the diagnostics page; ✅ verified directly via `navigator.geolocation`/`navigator.permissions` in a real profile | schema only | ✅ (asserts denial for `blocked`, matching coordinates for `spoof`) | CDP `Emulation.setGeolocationOverride` (spoof) + `applyPermissionPolicy()` (blocked) | **B** |
+| Network Information (`navigator.connection`) | ❌ (no schema field) | ❌ | real, live, host-network-dependent value — confirmed to differ between profiles and to drift run-to-run on the same profile (see Seventeenth investigation) | — | — (one-off empirical check only, no permanent test — see below) | none — no CDP `Emulation.*` static override exists; `Network.emulateNetworkConditions` throttles real traffic to a ceiling rather than providing one, a real functional cost not paid anywhere else in this document | **D** |
 
 ## Findings from empirical verification
 
@@ -2403,3 +2404,86 @@ pass on a real run.
 found protective code with zero E2E coverage (WebRTC, then this). Worth
 treating as a standing question for any future fingerprint feature, not a
 one-off: does a real test exercise it, or only the schema/generator?
+
+## Seventeenth investigation — the Network Information API (`navigator.connection`), never previously checked, a real gap with no clean fix
+
+**Method, same standard as every stage above.** Two real per-profile Chromium
+processes (Windows-configured, macOS-configured) were started, each with
+`navigator.connection.effectiveType/downlink/rtt/saveData` read directly from
+a live webview via CDP. This property has never been mentioned anywhere in
+this document before — colorDepth/pixelDepth, `navigator.getBattery`,
+`doNotTrack`, and `pdfViewerEnabled` were checked in the same pass and found
+to be non-issues (see below), but `navigator.connection` is a real,
+previously-undiscovered gap.
+
+**Result — `colorDepth`/`pixelDepth`/`doNotTrack`/`pdfViewerEnabled`: no gap,
+same pattern as the Fourteenth investigation's plugins/mimeTypes finding.**
+Both profiles reported `colorDepth: 24, pixelDepth: 24` (the fixed value
+every real desktop Chromium install reports, OS-independent — there is no
+real per-platform value left to leak), `doNotTrack: null` (Chromium's own
+unconfigured default, identical on both), and `pdfViewerEnabled: true`
+(same built-in-PDF-viewer fact as the plugins/mimeTypes finding).
+`navigator.getBattery` is `undefined` in both — the Battery Status API was
+removed from Chromium's default-enabled surface across origins years ago
+for exactly this fingerprinting reason; nothing for this project to spoof
+because the vector doesn't exist in this browser build at all.
+
+**Result — `navigator.connection` is real, present, and genuinely
+unaddressed.**
+
+```
+Windows profile: effectiveType=4g downlink=1.75 rtt=150 saveData=false
+macOS profile:   effectiveType=4g downlink=1.5  rtt=100 saveData=false
+```
+
+`downlink`/`rtt` differ between the two profiles above — but not because of
+anything OS-configured. Chromium's `NetworkQualityEstimator` (what backs
+this API) estimates these numbers from the *real, live* network conditions
+of the actual host machine's actual network connection at the moment the
+page reads them, with zero connection to a profile's spoofed platform/UA/
+canvas/etc. identity. Confirmed by re-reading it a second time on the same
+profile: the numbers drift run-to-run (live measurement, not a stored
+value), exactly what a real live network estimator does and a stored
+per-profile fingerprint field never would.
+
+**Why this matters, stated precisely — a real correlation signal, not a
+uniqueness signal.** Same shape of risk as the Ninth investigation's JA4
+finding: this doesn't make one profile identifiable on its own (every real
+Chrome user's `navigator.connection` also reflects their own real network).
+The actual risk is cross-profile correlation on one machine: a
+fraud-detection system doing userbase-wide linkage could notice that
+multiple accounts, claiming to be different people on different profiles,
+consistently report `downlink`/`rtt` values clustering around the same real
+range — because they're all measuring the same real network link — as one
+weak corroborating signal among many. This is a structural property of
+running multiple browser identities from one machine's one network
+connection, the same category of residual risk the Ninth investigation
+already named for JA4, not a new class of problem this document hasn't
+already been honest about.
+
+**Is there a clean fix? Investigated, real answer: no, not without a
+functional cost this project doesn't take elsewhere for a spoofable
+value.** CDP `Network.emulateNetworkConditions` is a real, existing
+Chromium mechanism (this is literally what DevTools' own network-throttling
+presets use) and does influence `NetworkQualityEstimator`'s live estimate —
+but it does so by **actually throttling the real network traffic** to the
+configured ceiling, not by making `navigator.connection` report an arbitrary
+fixed value while browsing normally. Two real problems with reaching for it
+here: (1) it's a *ceiling* the live estimator still measures around, not a
+deterministic override — the reported `downlink`/`rtt` would still drift
+with real conditions, just bounded, so it wouldn't produce the same clean
+"configured value in, configured value out" story canvas/audio noise or the
+CDP `Emulation.*` overrides do; (2) unlike every other spoofing mechanism in
+this document, it would genuinely slow down real page loads for the whole
+profile session to whatever ceiling was chosen — a real, felt cost to
+ordinary browsing, not a one-time setup step. No CDP `Emulation.*` method
+exposes a static override the way `setUserAgentOverride`/
+`setDeviceMetricsOverride`/`setHardwareConcurrencyOverride` do for
+everything already graded A.
+
+**Verdict: real gap, honestly graded D, not implemented this stage — a
+decision for the maintainer, not something to fabricate a mitigation for
+without one.** `navigator.connection` is a real, previously-undocumented
+fingerprint/correlation vector this audit had never once looked at across
+sixteen prior investigations. Added to the Reality matrix below as a new
+row rather than left undocumented now that it's known.
