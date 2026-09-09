@@ -208,8 +208,8 @@ The detailed per-field mechanism, empirical findings, and A/B/C/D grading
 | WebRTC | ✅ (`webrtcMode`) | ✅ (best available) | live ICE-candidate probe | n/a | ✅ | `webContents.setWebRTCIPHandlingPolicy()` (see Finding 5) | **B** |
 | Fonts | ✅ (`fontsMode`, default `system`) | opt-in (`restricted` mode) | real fonts unless opted in | schema only | ✅ (asserts NOT_IMPLEMENTED by default) | `document.fonts.check`/`navigator.fonts.query` override to a fixed allow-list — partial coverage only, see §Fonts (implemented) | **C** (→ **B** when `restricted`) |
 | Media devices | ✅ (`mediaDevicesMode`, default `real`) | opt-in (`hidden` mode) | ✅ real enumeration unless opted in | schema only | ✅ (asserts NOT_IMPLEMENTED by default) | `navigator.mediaDevices.enumerateDevices` override returning a seeded synthetic device list — see §Media devices (implemented) | **C** (→ **B** when `hidden`) |
-| Permissions | — | ❌ | — | — | — | not in the data model at all yet | **D** |
-| Geolocation | — | ❌ | — | — | — | not in the data model at all yet | **D** |
+| Permissions | ✅ (`permissionsMode`, default `real`) | ✅ (`deny-all` denies every non-geolocation permission) | not on the diagnostics page (no probe added there); ✅ verified directly via `navigator.permissions.query` in a real profile | schema only | ✅ (asserts `notifications` denied under `deny-all`) | `session.setPermissionRequestHandler`/`setPermissionCheckHandler` (`applyPermissionPolicy()`) | **B** |
+| Geolocation | ✅ (`geolocationMode`, default `real`) | ✅ (`spoof`: CDP override; `blocked`: permission denial) | not on the diagnostics page; ✅ verified directly via `navigator.geolocation`/`navigator.permissions` in a real profile | schema only | ✅ (asserts denial for `blocked`, matching coordinates for `spoof`) | CDP `Emulation.setGeolocationOverride` (spoof) + `applyPermissionPolicy()` (blocked) | **B** |
 
 ## Findings from empirical verification
 
@@ -470,14 +470,51 @@ profiles got.
 
 ## Permissions and geolocation
 
-Not implemented, and — more fundamentally — **not represented in the
-fingerprint data model at all** (`src/shared/schemas/fingerprint.ts` has no
-`permissions` or `geolocation` field). Real, legitimate mechanisms exist for
-future work (`session.setPermissionRequestHandler` for permissions; CDP
-`Emulation.setGeolocationOverride` for geolocation) but were not explored
-further in this stage since there's no schema/UI to configure them yet —
-adding the mechanism without the data model and validation around it would
-be exactly the kind of half-implemented feature this project's rules forbid.
+**Stale as of a later stage — this section described a real gap that was
+since closed.** `geolocationMode`/`permissionsMode` (plus
+`geolocationLatitude`/`geolocationLongitude`) were added to
+`src/shared/schemas/fingerprint.ts` in commit `ccda7ca`
+("feat(fingerprint): add geolocation and permissions to the fingerprint
+model", 2026-09-03), with real UI in the Fingerprint tab and real enforcement
+in `src/main/browser/fingerprintEnforcement.ts`: CDP
+`Emulation.setGeolocationOverride` for `geolocationMode: 'spoof'`, and
+`session.setPermissionRequestHandler`/`setPermissionCheckHandler`
+(`applyPermissionPolicy()`) denying geolocation outright for `'blocked'` and
+every other permission type for `permissionsMode: 'deny-all'`. This was
+missed by a later audit stage's Reality matrix (still graded both **D** —
+fixed there too) until this investigation actually re-checked the claim
+against the current schema rather than trusting the original text.
+
+**Real end-to-end verification added this stage**
+(`tests/e2e/geolocationPermissionsEnforcement.spec.ts`) — the mechanism
+existed but, like the WebRTC probe found earlier, had never been driven
+against a real live profile before now:
+- `geolocationMode: 'blocked'` → `navigator.permissions.query({name:
+  'geolocation'})` reports `'denied'`, and `getCurrentPosition` fails with
+  `PERMISSION_DENIED` (code 1), in a real per-profile Electron/Chromium
+  process.
+- `geolocationMode: 'spoof'` → `getCurrentPosition` resolves with
+  coordinates matching the profile's own stored `geolocationLatitude`/
+  `geolocationLongitude` (read back via `fingerprint:get`, not hardcoded).
+- `permissionsMode: 'deny-all'` → an unrelated permission (`notifications`)
+  is also denied, confirming the policy isn't geolocation-specific.
+
+One real finding while building this test: the webview's default
+`about:blank` document is not a secure context, so `getCurrentPosition`
+fails with `PERMISSION_DENIED` there regardless of `geolocationMode` — an
+earlier version of the "blocked" test above passed for the wrong reason
+(insecure context, not the permission handler). Fixed by navigating to a
+real `http://127.0.0.1` page (a genuine Chromium "potentially trustworthy
+origin" exception) before exercising the API — the same class of "test the
+real mechanism, not an artifact of the test harness" lesson this document
+has hit before (e.g. Finding 1's `--lang` leak).
+
+**Updated grading:** Permissions **B**, Geolocation **B** (`'real'`: no
+override, honest default; `'spoof'`: CDP override, E2E-verified; `'blocked'`:
+permission denial, E2E-verified — not **A** only because, same as WebRTC's
+`disabled` mode, Chromium has no way to make `navigator.geolocation` vanish
+entirely, only deny the permission, which is the strongest available
+mechanism and exactly what's implemented).
 
 ## Consistency engine improvements made this stage
 
@@ -2337,3 +2374,32 @@ STUN server reachable from a given sandbox) is an equally honest "no leak observ
 distinct from `MISMATCH` (an actual, confirmed real-IP leak) — the one outcome that should never
 be silently accepted. **Verified passing on a real run** (no leak observed on this machine, real
 network, default `proxy-only` mode, no proxy configured on the test profile).
+
+## Sixteenth investigation — Permissions/Geolocation: a stale "not implemented" claim, and the same dead-check pattern as WebRTC
+
+**Status: two separate real findings, both closed.**
+
+**Finding A — this document's own "Permissions and geolocation" section
+(above) was stale, not accurate.** It claimed
+`src/shared/schemas/fingerprint.ts` had "no `permissions` or `geolocation`
+field" and graded both **D** in the Reality matrix. Direct grep of the
+actual current schema shows `geolocationMode`, `geolocationLatitude`,
+`geolocationLongitude`, and `permissionsMode` all present, added in commit
+`ccda7ca` — a real feature (schema, UI, and CDP/session enforcement in
+`fingerprintEnforcement.ts`) that simply outlived the audit-stage prose
+describing it as absent. Fixed above and in the Reality matrix.
+
+**Finding B — same class of gap as the Fifteenth investigation's WebRTC
+probe: a real mechanism, never once driven by an E2E test.** Grepping every
+`tests/e2e/*.spec.ts` for `geolocation`/`permission` returned zero matches
+before this stage, despite `applyPermissionPolicy()` and the CDP
+`Emulation.setGeolocationOverride` call being live code paths since
+`ccda7ca`. Added `tests/e2e/geolocationPermissionsEnforcement.spec.ts`,
+three real assertions against a live per-profile Chromium process (detailed
+above in the corrected "Permissions and geolocation" section) — all three
+pass on a real run.
+
+**Why this is worth stating explicitly:** this is the second time this audit
+found protective code with zero E2E coverage (WebRTC, then this). Worth
+treating as a standing question for any future fingerprint feature, not a
+one-off: does a real test exercise it, or only the schema/generator?
