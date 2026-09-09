@@ -165,3 +165,34 @@ hard-failing.
 
 **Simple average:** (80+80+85+88+83+87+87+77+85+84)/10 = **83.6**
 **Weighted average:** (80+80+85+88×1.5+83×1.5+87+87+77+85+84×2)/12 = **83.79**
+
+## 2026-09-09 — 84.38 weighted / 84.2 simple
+
+A focused round revisiting the previous entry's own named follow-ups: fully
+isolate the userAgentMetadata regression (not just "risky" — confirmed not
+viable), a careful 20/50/100-profile escalation that was skipped last
+round, another live UX pass, and re-verifying the race-pattern fix
+actually covers every file. Compared only against this file's own
+previous entry (83.79/83.6).
+
+Real numbers this round: unit — 780 tests, 74 files, all passing (+2 new
+tests for the schedule-time fix). E2E — `profileSchedule.spec.ts` (2/2),
+`profileManagerPolish.spec.ts` (10/10), `fingerprintEnforcement.spec.ts`
+(5 passed/1 flaky-recovered) all confirmed clean after every code change
+this round.
+
+| Category | Score | Δ vs previous entry (83.79/83.6) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 80 | 0 | No new feature work (the schedule fix is a correctness fix, credited under UX below per this file's own convention of crediting the discovery method). |
+| UX | 82 | +2 | Live walkthrough of the CURRENT dev build's Automation/Schedule panel (commit `ac4be36`) found a real, significant bug: enabling a schedule and picking a day without ever touching the Time field leaves `scheduleTime: null` in the database — confirmed directly via `profiles:list` — while the UI's own "next run" preview shows a confident, false "Mon 09:00". The real `ProfileScheduler` backend would never have fired it. Fixed both save paths (checkbox + day-toggle), covering the bulk "Enable schedule" flow too. Also completed a systematic sweep of all 423 i18n keys for the same class of bug the previous round found — zero further real ones (10 byte-identical matches, all legitimate technical terms). |
+| Дизайн | 85 | 0 | No dedicated design pass this round. |
+| Стабільність ×1.5 | 88 | 0 | Re-swept every E2E file with an `address.fill` call site (commit-free verification, no code changed) — confirmed all 12 files are genuinely covered against the google.com race, either by this session's own fix or a pre-existing equivalent guard. No file was missed; also nothing new to fix. |
+| Безпека ×1.5 | 83 | 0 | No security-specific work this round. |
+| Код/архітектура | 87 | 0 | Only the schedule-time fix (small, targeted) — no architectural shift. |
+| Тести | 88 | +1 | 2 new unit tests for the schedule-time fix, both real regression guards (one for the checkbox path, one for the bulk-enable/day-toggle path) — not padding, each maps to a real, previously-unguarded code path. |
+| Продуктивність | 79 | +2 | The escalation skipped last round, done carefully this time (commit `33ed0a1`): 20/50/100 profiles, continuous 5-second RAM polling throughout. Found a real, more alarming trough than the 2026-09-07 baseline — 90MB free RAM at the lowest point during the 100-profile tier (vs. 2.24–2.39GB then), on a machine with less baseline headroom. Still 0 failures, 0 orphans — the app itself never broke — but this revises the safe-concurrency recommendation down for low-headroom machines, real and worth knowing, not a regression in the app. |
+| Реліз | 85 | 0 | No release action this round. |
+| Fingerprint ×2 | 85 | +1 | Fully isolated the previous entry's "root cause not fully isolated" gap (commit `bed7e1b`), via a clean standalone CDP experiment outside the app's own code: the minimal `userAgentMetadata` shape throws a hard protocol error that silently aborted the *entire* rest of fingerprint enforcement (not just acceptLanguage — a bigger blast radius than first documented); the complete shape stops that error but still leaves the guest `<webview>`'s own CDP target unusable afterward. This is a materially stronger, more certain conclusion than "risky" — confirmed not viable with this project's `<webview>`-based architecture at all. The underlying leak stays open (unchanged from last round), so the bump is for the diagnostic certainty gained, not a fix that shipped. |
+
+**Simple average:** (80+82+85+88+83+87+88+79+85+85)/10 = **84.2**
+**Weighted average:** (80+82+85+88×1.5+83×1.5+87+88+79+85+85×2)/12 = **84.38**
