@@ -2637,3 +2637,105 @@ every profile, an anomaly matching no real Chrome install, not fixed.
 `platform`/`mobile`/every high-entropy field also **D** — confirmed real
 leak of the host machine's identity, not fixed, and no clean lever found
 in Electron's own API surface for a future attempt to reach for first.
+
+## Nineteenth investigation — `screen.orientation`: a real, confirmed mismatch on mobile profiles, fixed; `document.fonts.ready`/enumeration checked, no gap found
+
+**Two new vectors, neither previously mentioned anywhere in this document.**
+Same method as every prior stage: hypothesis, then a real per-profile
+Electron/Chromium process navigated to a real page (`https://www.google.com`),
+read directly via DevTools console (not simulated).
+
+**`screen.orientation` — real, confirmed leak, fixed.** Hypothesis: a
+mobile-configured profile's screen dimensions are overridden via
+`Emulation.setDeviceMetricsOverride`'s `screenWidth`/`screenHeight` (see the
+Tenth investigation), but that call never set the protocol's own
+`screenOrientation` parameter — so `screen.orientation.type`/`.angle` had no
+reason to reflect anything but the real host machine's own orientation.
+
+Verified empirically on a live Android-configured profile (seeded to
+`screenWidth: 412, screenHeight: 919` — genuinely portrait, `width < height`):
+
+```
+{"orientType":"landscape-primary","orientAngle":0,"w":412,"h":919,"mobile":true}
+```
+
+A confirmed, internally-inconsistent fingerprint: `screen.width < screen.height`
+(portrait) while `screen.orientation.type` says `landscape-primary` — exactly
+the real host desktop machine's own orientation, unrelated to the claimed
+device. Any detector checking these two facts against each other (a trivial,
+well-known check — CreepJS-class tools already check far subtler
+cross-signal consistency than this) would flag the profile as emulated
+immediately, regardless of how correct every other spoofed field is.
+
+**Fixed** (`fingerprintEnforcement.ts`, `enforceFingerprint()`): added a
+`screenOrientation: { type, angle: 0 }` field to the same
+`Emulation.setDeviceMetricsOverride` call, computed from the same
+`fp.screenWidth`/`fp.screenHeight` already being sent (`portraitPrimary` when
+`width < height`, else `landscapePrimary`) — one CDP parameter, no new
+mechanism, consistent with this project's existing preference for a native
+Chromium lever over a JS-level monkeypatch wherever one exists (see this
+function's own top comment).
+
+**Verified fixed, on the same live profile, after rebuilding and fully
+restarting the app** (a plain rebuild is not enough — the running main
+process must actually restart for a `fingerprintEnforcement.ts` change to
+take effect, confirmed the hard way once already this session for a
+different file):
+
+```
+{"orientType":"portrait-primary","orientAngle":0,"w":412,"h":919,"mobile":true}
+```
+
+**Regression-checked on a real desktop (landscape) profile**, per this
+round's explicit caution not to force a fingerprint-mechanism change through
+without checking for exactly the kind of side effect the `acceptLanguage`/
+`userAgentMetadata` regression (Eighteenth investigation) caused: a
+Windows-configured profile (`screenWidth: 2560, screenHeight: 1440`,
+landscape) still correctly reports `{"orientType":"landscape-primary",
+"orientAngle":0,...}` — unchanged from before this fix, no regression.
+
+One separate, pre-existing fact surfaced during this check, **not a
+regression from this fix and not a new bug**: `matchMedia('(orientation:
+portrait)').matches` returned `false` on the same mobile profile even after
+the `screen.orientation` fix. This is expected, not a mismatch — the CSS
+`orientation` media feature is defined by the layout *viewport*'s aspect
+ratio, and this function's own top comment already documents, by design,
+that `width`/`height` are deliberately sent as `0` ("don't override") so the
+real window viewport is left alone; only the claimed *monitor* dimensions
+(`screen.width`/`height`) and now `screen.orientation`) are overridden. A
+future round wanting `matchMedia('(orientation: ...)')` to also match the
+claimed device would need to actually resize the window/viewport to the
+mobile bundle's own dimensions — a materially bigger, separate change
+(affecting real page layout, not just a fingerprint-reporting API), not a
+gap in this fix.
+
+**`document.fonts.ready` / enumeration — checked, no gap found, existing
+partial-coverage design confirmed still correct.** Hypothesis: the fonts
+mode's existing `document.fonts.check()`/`navigator.fonts.query()` patch
+(Twelfth investigation, `fontsMode: 'restricted'`) is explicitly documented
+as partial coverage — could `document.fonts.ready` or iterating
+`document.fonts` directly (`Array.from(document.fonts)`) leak real installed
+system fonts around that patch?
+
+Verified empirically: `document.fonts.ready` resolves normally
+(`status: "loaded"`), and enumerating `document.fonts` returns only the
+page's own declared `@font-face` entries actually used on that page
+(`Google Sans` ×2 on this real google.com load) — never arbitrary system
+fonts. This is expected per spec: `FontFaceSet` (`document.fonts`) only ever
+contains fonts the page itself declared via CSS `@font-face` or added via
+`FontFace`/`document.fonts.add()`, not the OS's installed-font list — there
+is no API-level path from `.ready` or enumeration to real system fonts
+distinct from what `.check()` already covers. **No new gap; no fix needed.**
+This narrows, rather than widens, the fonts section's own already-documented
+"partial coverage" caveat: the CSS fallback-width-measurement technique
+(Twelfth investigation) remains the one real, unfixable-within-this-
+architecture gap for fonts — `.ready`/enumeration were a reasonable
+hypothesis but empirically add nothing to it.
+
+**Grading:** `screen.orientation` — was an unfixed **D**-class gap
+(equivalent severity to the Tenth investigation's screen-dimension class of
+issue, since it is the same category of CDP-vs-claim internal
+inconsistency), now fixed and verified, both on the failing case and
+regression-checked on the passing case: **A**. `document.fonts.ready`/
+enumeration — no gap existed to begin with; stays covered under the
+existing fonts grading from the Twelfth investigation, unchanged.

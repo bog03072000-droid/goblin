@@ -116,6 +116,14 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   expect(snapshot.statusByField['hardwareConcurrency']).toBe('PASS');
   expect(Number(snapshot.observed['hardwareConcurrency'])).toBe(Number(snapshot.configured['hardwareConcurrency']));
 
+  // screen.orientation is also enforced via setDeviceMetricsOverride (its
+  // own `screenOrientation` param), added after a live E2E check caught it
+  // reporting the real host's orientation regardless of the configured
+  // screen's own portrait/landscape shape — see FINGERPRINT_AUDIT.md's
+  // Nineteenth investigation. A profile with screenWidth < screenHeight
+  // must report 'portrait-primary', not the desktop host's landscape.
+  expect(snapshot.statusByField['screenOrientation']).toBe('PASS');
+
   // WebRTC leak probe (diagnostics.html's own probeWebrtc(), a real
   // RTCPeerConnection against a public STUN server) has existed since the
   // fingerprint reality audit stage and runs automatically as part of this

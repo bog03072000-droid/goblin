@@ -67,6 +67,15 @@ export async function enforceFingerprint(wc: WebContents, fp: EnforceableFingerp
   // profile reporting `mobile: false` here would be exactly that mismatch,
   // this time inside the CDP layer that exists specifically to avoid it.
   const isMobileOs = fp.os === 'android' || fp.os === 'ios';
+  // `screen.orientation.type`/`.angle` are NOT derived from `screenWidth`/
+  // `screenHeight` by `setDeviceMetricsOverride` on its own — verified
+  // empirically: a mobile profile (412x919, portrait) reported
+  // `screen.orientation.type: "landscape-primary"` (the real desktop host's
+  // orientation) until this `screenOrientation` param was added. Without it,
+  // any script checking `screen.width < screen.height` (portrait) against
+  // `screen.orientation.type` (landscape) catches an internally-inconsistent,
+  // clearly-emulated environment — the same class of CDP-vs-claim mismatch
+  // this function's own top comment already documents for the `mobile` flag.
   await wc.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
     width: 0,
     height: 0,
@@ -74,6 +83,10 @@ export async function enforceFingerprint(wc: WebContents, fp: EnforceableFingerp
     mobile: isMobileOs,
     screenWidth: fp.screenWidth,
     screenHeight: fp.screenHeight,
+    screenOrientation: {
+      type: fp.screenWidth < fp.screenHeight ? 'portraitPrimary' : 'landscapePrimary',
+      angle: 0,
+    },
   });
 
   // `setDeviceMetricsOverride`'s own `mobile` flag alone does NOT flip

@@ -166,6 +166,7 @@
         audioOverridden: isOverridden(window.AudioBuffer && AudioBuffer.prototype.getChannelData),
         webglOverridden: isOverridden(window.WebGLRenderingContext && WebGLRenderingContext.prototype.getParameter),
         fontsOverridden: isOverridden(document.fonts && document.fonts.check),
+        orientationType: screen.orientation ? screen.orientation.type : 'not exposed',
         mediaDevices: await getMediaDevices(),
         webrtc: await probeWebrtc(),
       };
@@ -250,6 +251,19 @@
               actuallyMobile === expectMobile ? 'PASS' : 'MISMATCH',
               'pointer: ' + (observed.pointerCoarse ? 'coarse' : 'fine') + ', hover: ' + (observed.hoverNone ? 'none' : 'hover'),
             ];
+          },
+        ],
+        [
+          // Nineteenth investigation, docs/FINGERPRINT_AUDIT.md: screen.orientation
+          // is derived from screenWidth/screenHeight, NOT from the mobile flag —
+          // a portrait mobile profile with a landscape orientation.type is a
+          // real, internally-inconsistent fingerprint even when every other
+          // field is correct.
+          'Screen orientation', 'screenOrientation',
+          () => (configured.screenWidth < configured.screenHeight ? 'portrait-primary' : 'landscape-primary'),
+          () => {
+            const expected = configured.screenWidth < configured.screenHeight ? 'portrait-primary' : 'landscape-primary';
+            return [observed.orientationType === expected ? 'PASS' : 'MISMATCH', observed.orientationType];
           },
         ],
       ];
