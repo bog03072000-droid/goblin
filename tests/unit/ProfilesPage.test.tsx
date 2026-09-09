@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { I18nProvider } from '../../src/renderer/i18n';
 import { ProfilesPage } from '../../src/renderer/pages/ProfilesPage';
@@ -286,5 +286,103 @@ describe('ProfilesPage', () => {
     // the raw message — this matches errorMessages.ts's own fallback copy
     // ('common.unexpectedError') for a message it doesn't specifically know.
     expect(await screen.findByText('Something went wrong. Please try again.')).toBeInTheDocument();
+  });
+
+  // The three tests below cover ProfilesPage's own createGroup/renameGroup/
+  // deleteGroup wrapper functions — real IPC-calling glue between
+  // GroupsModal's callback props and the backend, previously untested here
+  // (GroupsModal.test.tsx only ever exercises the modal standalone, with
+  // vi.fn() stand-ins for onCreate/onRename/onDelete, so ProfilesPage's own
+  // wiring — which channel each callback actually calls, with what payload,
+  // and whether it refreshes afterward — was never covered by any test
+  // until now; found via a real function-coverage gap, not padding).
+
+  it('creating a group via the Groups modal calls groups:create and refreshes the group list', async () => {
+    const invoke = mockInvoke(
+      baseHandlers({
+        'groups:create': () => undefined,
+      }),
+    );
+    renderPage();
+    await screen.findByRole('button', { name: 'Manage Groups' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Groups' }));
+    const input = await screen.findByPlaceholderText('New group name');
+    fireEvent.change(input, { target: { value: 'Marketing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('groups:create', { name: 'Marketing' }));
+    // groups:list is called once on mount and again by refreshGroups() after create.
+    await waitFor(() => expect(invoke.mock.calls.filter((c) => c[0] === 'groups:list').length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('renaming a group via the Groups modal calls groups:rename with that group\'s id and refreshes', async () => {
+    const invoke = mockInvoke(
+      baseHandlers({
+        'groups:list': () => [{ id: '33333333-3333-3333-3333-333333333333', name: 'Sales', createdAt: '', profileCount: 3 }],
+        'groups:rename': () => undefined,
+      }),
+    );
+    renderPage();
+    await screen.findByRole('button', { name: 'Manage Groups' });
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Groups' }));
+    // "Sales" alone is ambiguous — it also appears in the toolbar's "All
+    // groups" filter dropdown as "Sales (3)" — scope to the modal itself.
+    // ("Manage Groups" text is ALSO ambiguous once open — the modal's own
+    // header title uses the same i18n key as the button — so query the
+    // modal's container class directly instead of by text.)
+    const modal = await waitFor(() => {
+      const el = document.querySelector('.modal-panel-groups');
+      if (!el) throw new Error('modal not found yet');
+      return el as HTMLElement;
+    });
+    within(modal).getByText('Sales');
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Rename' }));
+    const renameInput = within(modal).getByDisplayValue('Sales');
+    fireEvent.change(renameInput, { target: { value: 'Sales EU' } });
+    fireEvent.keyDown(renameInput, { key: 'Enter' });
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('groups:rename', { id: '33333333-3333-3333-3333-333333333333', name: 'Sales EU' }));
+  });
+
+  it('deleting a group via the Groups modal calls groups:delete with that group\'s id, refreshes groups and profiles, and clears an active group filter matching it', async () => {
+    const invoke = mockInvoke(
+      baseHandlers({
+        'groups:list': () => [{ id: '33333333-3333-3333-3333-333333333333', name: 'Marketing', createdAt: '', profileCount: 0 }],
+        'groups:delete': () => undefined,
+      }),
+    );
+    renderPage();
+    await screen.findByRole('button', { name: 'Manage Groups' });
+    fireEvent.click(screen.getByRole('button', { name: 'Manage Groups' }));
+    // "Marketing" alone is ambiguous — it also appears in the toolbar's
+    // "All groups" filter dropdown as "Marketing (0)" — scope to the modal
+    // (queried by container class, not text — the modal's own header title
+    // shares the same "Manage Groups" i18n key as the button that opens it).
+    const modal = await waitFor(() => {
+      const el = document.querySelector('.modal-panel-groups');
+      if (!el) throw new Error('modal not found yet');
+      return el as HTMLElement;
+    });
+    within(modal).getByText('Marketing');
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Delete' }));
+    await screen.findByText('Delete group "Marketing"? Profiles in it will become ungrouped.');
+    // ConfirmDialog renders as a sibling of .modal-panel-groups (inside the
+    // shared .modal-overlay, but outside the panel div itself) — not
+    // nested inside it, so its own "Delete" confirm button isn't reachable
+    // via within(modal). Query at the screen level instead: the toolbar's
+    // "Marketing (0)" filter option is an <option>, not a button, so no
+    // third match to disambiguate from. The second "Delete" button is the
+    // confirm dialog's, same disambiguation GroupsModal.test.tsx itself
+    // already uses for this exact flow.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[1]!);
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('groups:delete', { id: '33333333-3333-3333-3333-333333333333' }));
+    // profiles:list is called once on mount and again by deleteGroup()'s own
+    // refresh() call — confirms the (group, profile-list) double-refresh
+    // this wrapper does, not just the groups:delete call itself.
+    await waitFor(() => expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list').length).toBeGreaterThanOrEqual(2));
   });
 });
