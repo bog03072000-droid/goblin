@@ -212,6 +212,11 @@ for (const [tierIdx, tier] of TIERS.entries()) {
 
         const shell = await connectToShell(remoteDebugPort);
         const address = shell.locator('#address');
+        // Same race found and fixed in loadTestClone.spec.ts (commit
+        // 9aee003): the webview auto-navigates to google.com the instant
+        // it attaches, and overwriting the address bar before that lands
+        // is flaky. Wait for it first.
+        await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
         await address.fill(`http://127.0.0.1:${serverPort}/`);
         await address.press('Enter');
         await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${serverPort}`), { timeout: 15_000 });

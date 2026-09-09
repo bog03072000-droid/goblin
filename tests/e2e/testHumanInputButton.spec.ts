@@ -90,6 +90,9 @@ test('"Test human input" button drives a real mouse move+click+scroll into the l
 
   const shell = await connectToShell();
   const address = shell.locator('#address');
+  // Same race found and fixed in loadTestClone.spec.ts (commit 9aee003):
+  // the webview auto-navigates to google.com the instant it attaches.
+  await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
   await address.fill('https://example.com');
   await address.press('Enter');
   await expect(address).toHaveValue(/example\.com/, { timeout: 15_000 });

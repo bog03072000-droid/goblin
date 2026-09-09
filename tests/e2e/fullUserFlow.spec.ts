@@ -127,6 +127,11 @@ test('the complete practical workflow: create, configure, browse, download, rest
     await expect(shell.locator('.tab')).toHaveCount(2);
 
     const address = shell.locator('#address');
+    // The new tab's own webview auto-navigates to BROWSER_START_URL
+    // (google.com) the instant it attaches — the same race found and fixed
+    // in loadTestClone.spec.ts/diagnosticsPreloadOriginGate.spec.ts (commit
+    // 9aee003). Waiting for that to land first removes it here too.
+    await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
     await address.fill('https://example.com');
     await address.press('Enter');
     await expect(address).toHaveValue(/example\.com/, { timeout: 15_000 });

@@ -150,12 +150,20 @@ for (let i = 0; i < PAIRS; i++) {
     await sourceRow.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(sourceRow).toHaveAttribute('data-status', 'RUNNING', { timeout: 45_000 });
     let shell = await connectToShell();
+    let webview = shell.locator('webview').first();
+    await webview.waitFor({ state: 'attached', timeout: 15_000 });
     let address = shell.locator('#address');
+    // Every new profile's webview auto-navigates to BROWSER_START_URL
+    // (https://www.google.com, profileWindowEntry.ts:24) the instant it
+    // attaches. Typing the real target URL before that lands races
+    // against it — the same reproducible flake found and fixed in
+    // diagnosticsPreloadOriginGate.spec.ts/geolocationPermissionsEnforcement.spec.ts
+    // (commit 9aee003). Waiting for the initial navigation to land first
+    // removes the race here too.
+    await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
     await address.fill(`http://127.0.0.1:${serverPort}/`);
     await address.press('Enter');
     await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${serverPort}`), { timeout: 15_000 });
-    let webview = shell.locator('webview').first();
-    await webview.waitFor({ state: 'attached', timeout: 15_000 });
     await execInWebview(webview, `document.cookie = "load_clone_marker=pair${i}; path=/"`);
     await cdp?.close();
     cdp = undefined;
@@ -165,12 +173,13 @@ for (let i = 0; i < PAIRS; i++) {
     await cloneRow.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(cloneRow).toHaveAttribute('data-status', 'RUNNING', { timeout: 45_000 });
     shell = await connectToShell();
+    webview = shell.locator('webview').first();
+    await webview.waitFor({ state: 'attached', timeout: 15_000 });
     address = shell.locator('#address');
+    await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
     await address.fill(`http://127.0.0.1:${serverPort}/`);
     await address.press('Enter');
     await expect(address).toHaveValue(new RegExp(`127\\.0\\.0\\.1:${serverPort}`), { timeout: 15_000 });
-    webview = shell.locator('webview').first();
-    await webview.waitFor({ state: 'attached', timeout: 15_000 });
     const cloneCookie = String(await execInWebview(webview, 'document.cookie'));
     const storageIndependent = !cloneCookie.includes(`load_clone_marker=pair${i}`);
     await cdp?.close();

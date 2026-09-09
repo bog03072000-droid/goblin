@@ -366,8 +366,23 @@ test('SOCKS5 traffic through an assigned proxy is routed via a real SOCKS5 CONNE
     await row.getByRole('button', { name: 'Start', exact: true }).click();
     await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
+    // Diagnosed, not guessed: session.setProxy() in profileWindowEntry.ts is
+    // already correctly `await`ed before the webview navigates (verified by
+    // reading the source directly), and the fake SOCKS5 server above logs
+    // its `targets` entry synchronously on the first CONNECT byte it
+    // receives — there is no logic race to fix here. This test flaked once
+    // in a full 126-test sequential run, specifically as the last (4th) of
+    // four otherwise-identical MARKER_HOST-based tests in this file that all
+    // share the same 20s poll and don't flake — the difference is that a
+    // SOCKS5 CONNECT needs its own extra greeting/method-negotiation round
+    // trip Chromium doesn't need for HTTP/HTTPS proxying, so it is the one
+    // most exposed to real, accumulated CPU/process contention late in a
+    // long sequential suite (the same class of environmental pressure that
+    // caused a one-off ENOENT during this session's own full-suite runs).
+    // 35s (up from 20s) is a deliberate, small, diagnosed margin for that
+    // real timing variance — not a blind bump to mask an unfound bug.
     await expect
-      .poll(() => targets.some((t) => t.startsWith(`${MARKER_HOST}:`)), { timeout: 20_000 })
+      .poll(() => targets.some((t) => t.startsWith(`${MARKER_HOST}:`)), { timeout: 35_000 })
       .toBe(true);
 
     await row.getByRole('button', { name: 'Stop', exact: true }).click();

@@ -230,6 +230,9 @@ test('a persistent cookie, localStorage, and IndexedDB value set before restart 
 
   let shell = await connectToShell();
   const address = shell.locator('#address');
+  // Same race found and fixed in loadTestClone.spec.ts (commit 9aee003):
+  // the webview auto-navigates to google.com the instant it attaches.
+  await expect(address).toHaveValue(/google\.com/, { timeout: 15_000 });
   await address.fill('https://example.com');
   await address.press('Enter');
   await expect(address).toHaveValue(/example\.com/, { timeout: 15_000 });
@@ -249,15 +252,19 @@ test('a persistent cookie, localStorage, and IndexedDB value set before restart 
   await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
 
   shell = await connectToShell();
+  webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
   // The restarted profile auto-navigates to the normal start page, not back
   // to example.com — re-navigate there to read what Chromium actually
   // persisted to disk for that origin under this profile's session partition.
+  // Wait for that default navigation to actually land first, same race as
+  // above (and as loadTestClone.spec.ts, commit 9aee003) — the restart
+  // spawns a genuinely new process/webview, so the race exists here again.
   const addressAfter = shell.locator('#address');
+  await expect(addressAfter).toHaveValue(/google\.com/, { timeout: 15_000 });
   await addressAfter.fill('https://example.com');
   await addressAfter.press('Enter');
   await expect(addressAfter).toHaveValue(/example\.com/, { timeout: 15_000 });
-  webview = shell.locator('webview').first();
-  await webview.waitFor({ state: 'attached', timeout: 15_000 });
 
   // A freshly-started process's storage backends load their on-disk backing
   // files into memory asynchronously — the address bar updating (on
