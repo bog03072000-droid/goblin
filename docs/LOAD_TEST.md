@@ -313,6 +313,57 @@ erased.
 > machine with ~15GB free at rest, not a number to push further without
 > re-measuring on the actual target hardware.
 
+> **Update (2026-09-09) — re-run with less baseline headroom than
+> 2026-09-07 (13.3GB free at rest here, vs. ~15–16GB then), and a real,
+> more alarming low point caught this time.** Same escalation (20→50→100,
+> `maxConcurrentLaunches` 2/4/8 each), watched with a genuinely continuous
+> 5-second-interval `Get-CimInstance Win32_OperatingSystem` poll running
+> for the whole escalation (finer-grained than 2026-09-07's own 8–10s
+> poll). **Still 0 failures, 0 orphaned processes, every tier, every
+> concurrency** — the app itself never broke. But the continuous poll's
+> true minimum across the run was **90MB free** — an order of magnitude
+> closer to real exhaustion than 2026-09-07's already-flagged 2.24–2.39GB
+> low point, on a machine with less headroom to begin with. The
+> per-test discrete before/after sampling (in the raw table below) only
+> caught it dropping to 1.01GB at 100 profiles/concurrency=2 — the
+> continuous poll is what actually caught the real 90MB trough between
+> samples, the same reason 2026-09-07's poll existed in the first place.
+>
+> | Profiles | Concurrency | Succeeded/Failed | Free RAM before | Free RAM at peak (test's own sample) | RAM used at peak |
+> |---|---|---|---|---|---|
+> | 20 | 2 | 20/0 | 13.10GB | 10.21GB | 2.89GB |
+> | 20 | 4 | 20/0 | 12.89GB | 9.96GB | 2.93GB |
+> | 20 | 8 | 20/0 | 12.81GB | 10.15GB | 2.67GB |
+> | 50 | 2 | 50/0 | 12.97GB | 6.43GB | 6.53GB |
+> | 50 | 4 | 50/0 | 12.61GB | 7.63GB | 4.98GB |
+> | 50 | 8 | 50/0 | 12.44GB | 7.72GB | 4.73GB |
+> | 100 | 2 | 100/0 | 12.24GB | **1.01GB** | 11.23GB |
+> | 100 | 4 | 100/0 | 12.93GB | 1.77GB | 11.17GB |
+> | 100 | 8 | 100/0 | 13.20GB | 4.65GB | 8.55GB |
+>
+> Full raw table in `tests/performance/LOAD_TEST_BULKSTART_RAW.md` (this
+> run overwrote the 2026-09-07 numbers there — both are preserved here in
+> this file for the historical comparison). System recovered to 13.4GB
+> free with zero leftover `electron.exe` processes within seconds of the
+> run finishing, confirmed directly. **Revised recommendation: 100
+> simultaneous profiles at `maxConcurrentLaunches` 2 or 4 is not safe to
+> recommend on a machine with only ~13GB free at rest** — it completed
+> without the app itself failing, but came within roughly 90MB of total
+> system memory exhaustion, which risks OS-level instability unrelated to
+> this app (other running programs failing to allocate, disk cache
+> thrashing, or a full hang) rather than a clean, contained app-level
+> failure. `maxConcurrentLaunches: 8` stayed meaningfully safer at every
+> tier tested so far (100-profile low point 4.65GB, never below ~4GB) —
+> consistent with 2026-09-07's own finding that higher concurrency
+> finishes faster and spends less *time* in the high-pressure state, not
+> a coincidence specific to one run. 50 simultaneous profiles remains
+> comfortably safe — the continuous poll's own true minimum during the
+> 20-and-50-profile window (before the 100-profile tier started) was
+> 5.45GB free, nowhere near the 90MB trough that only appeared once 100
+> profiles were reached. No tier beyond 100 was attempted this round,
+> consistent with the escalation stopping once a real risk signal
+> appeared, not because of a fixed schedule.
+
 > **Update (2026-09-06) — sensitivity checked, cross-hardware
 > re-measurement still not possible.** `ESTIMATED_MB_PER_RUNNING_PROFILE`
 > (585) and `SAFE_FREE_RAM_MARGIN_MB` (1536) both remain derived from the
