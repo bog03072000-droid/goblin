@@ -303,7 +303,9 @@ const en = {
   'editor.advanced.automation.token': 'Access token',
   'editor.advanced.automation.copyToken': 'Copy the token to your clipboard',
   'editor.advanced.automation.regenerate': 'Regenerate',
-  'editor.advanced.automation.regenerateHint': 'Generates a new token and invalidates the old one immediately.',
+  'editor.advanced.automation.regenerateHint': 'Generates a new token. Takes effect the next time this profile starts.',
+  'editor.advanced.automation.regenerateWhileRunning':
+    "This profile is currently running — the OLD token stays valid, and the new one won't work, until you restart it.",
   'editor.advanced.automation.snippetHint': 'Puppeteer connection example:',
   'editor.advanced.automation.warning':
     'Anyone with this token and local access to this machine can fully control this browser profile — read cookies, run JavaScript on any open page, and see everything it does. Treat it like a password.',

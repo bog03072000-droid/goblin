@@ -212,3 +212,29 @@ describe('AdvancedTab — live schedule validation', () => {
     expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
   });
 });
+
+describe('AdvancedTab — automation token regenerate while running', () => {
+  // Found via a live E2E check: startAutomationProxy() captures its token
+  // once at profile-process launch, with no live channel telling an
+  // already-running profile's proxy that the DB's token changed —
+  // regenerating while RUNNING does not actually take effect until the
+  // profile restarts, contradicting the button's own former "invalidates
+  // immediately" wording. This warning is the fix for the false claim,
+  // shown only when it's actually true.
+  it('shows the "takes effect after restart" warning when the profile is RUNNING', () => {
+    renderTab({ profile: makeProfile({ automationEnabled: true, automationPort: 9222, status: 'RUNNING' }) });
+    expect(
+      screen.getByText("This profile is currently running — the OLD token stays valid, and the new one won't work, until you restart it."),
+    ).toBeInTheDocument();
+  });
+
+  it('does not show the warning when the profile is stopped', () => {
+    renderTab({ profile: makeProfile({ automationEnabled: true, automationPort: 9222, status: 'STOPPED' }) });
+    expect(screen.queryByText(/currently running/)).not.toBeInTheDocument();
+  });
+
+  it('the Regenerate button hint no longer overclaims "immediately"', () => {
+    renderTab({ profile: makeProfile({ automationEnabled: true, automationPort: 9222 }) });
+    expect(screen.getByTitle('Generates a new token. Takes effect the next time this profile starts.')).toBeInTheDocument();
+  });
+});

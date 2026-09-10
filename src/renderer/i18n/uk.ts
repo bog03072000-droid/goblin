@@ -305,7 +305,9 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'editor.advanced.automation.token': 'Токен доступу',
   'editor.advanced.automation.copyToken': 'Скопіювати токен у буфер обміну',
   'editor.advanced.automation.regenerate': 'Оновити',
-  'editor.advanced.automation.regenerateHint': 'Генерує новий токен і одразу анулює старий.',
+  'editor.advanced.automation.regenerateHint': 'Генерує новий токен. Набуде чинності після наступного запуску профілю.',
+  'editor.advanced.automation.regenerateWhileRunning':
+    'Цей профіль зараз запущено — СТАРИЙ токен лишається дійсним, а новий не працюватиме, поки ви не перезапустите профіль.',
   'editor.advanced.automation.snippetHint': 'Приклад підключення Puppeteer:',
   'editor.advanced.automation.warning':
     'Будь-хто з цим токеном і локальним доступом до цієї машини може повністю керувати цим профілем браузера — читати cookies, виконувати JavaScript на будь-якій відкритій сторінці і бачити все, що там відбувається. Ставтеся до нього як до пароля.',

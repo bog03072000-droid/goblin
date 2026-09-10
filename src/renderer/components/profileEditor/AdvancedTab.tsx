@@ -165,6 +165,19 @@ export function AdvancedTab({
               </div>
             </label>
 
+            {/* Found via a live E2E check: regenerating while RUNNING does
+                NOT actually take effect for that already-running process —
+                startAutomationProxy() captures its token once at launch,
+                with no live-reload channel. The old token stays valid and
+                the newly-shown one doesn't work until the profile is
+                restarted — surfaced here instead of silently contradicting
+                the button's own former "invalidates immediately" claim. */}
+            {profile.status === 'RUNNING' && (
+              <div className="banner banner-warn mt-8 mb-0 text-xs">
+                {t('editor.advanced.automation.regenerateWhileRunning')}
+              </div>
+            )}
+
             {profile.automationPort && (
               <div className="mt-10">
                 <p className="text-dim text-xs mb-4">{t('editor.advanced.automation.snippetHint')}</p>
