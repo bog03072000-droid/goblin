@@ -437,6 +437,49 @@ erased.
 > something a future session with access to different hardware should
 > re-measure.
 
+> **Update (2026-09-10) — the LowMemoryError guard verified against
+> genuinely real low free RAM, not just a mocked `os.freemem()` input.**
+> Every prior check of this mechanism (2026-09-06 above, and
+> `tests/unit/memoryGuard.test.ts` generally) exercises
+> `checkMemoryHeadroom()`/`safeAdditionalStartCount()` as pure functions
+> given a simulated `freeMemBytes` number — real, but never proving the
+> full integration (`ProfileManager.start()` → `os.freemem()` →
+> `LowMemoryError` → the renderer's confirm-and-retry dialog) actually
+> fires against the OS's own real memory state. Checked whether this
+> machine could genuinely simulate a low-RAM machine rather than a
+> mocked one: **yes** — a small throwaway Node script (not committed)
+> allocated and pinned real physical memory in 512MB chunks
+> (`Buffer.alloc().fill()`, which forces real commit rather than a lazy
+> zero-page) until this machine's actual `os.freemem()` genuinely read
+> ~2GB free, confirmed independently via a separate
+> `Get-CimInstance Win32_OperatingSystem` check (not just the script's
+> own self-report).
+>
+> With real free RAM held at ~1.7-2.0GB, starting a profile in the real,
+> running app correctly triggered the confirm dialog: *"Вільно лише
+> 1681МБ ОЗП. Запуск ще одного профілю (~585МБ) може дестабілізувати
+> систему. Запустити попри це?"* — the real numbers, not placeholders.
+> Declining left the profile cleanly `STOPPED` with a clear banner, no
+> partial state. Releasing the memory pressure (killing the allocator
+> process) and retrying started the profile immediately with no
+> warning at all — confirming the check is genuinely dynamic (reads
+> `os.freemem()` fresh at click-time), not a cached or one-time read.
+> **No `acknowledgeLowMemory`-override path was left unverified either**
+> (already covered by this file's own end-to-end intent, and by
+> `registerIpc.test.ts`'s existing coverage of that flag) — this round's
+> new ground covered was specifically the real-OS-integration path, which
+> had never been checked against genuinely reduced system memory before.
+>
+> **No bug found — confirmed working correctly end-to-end.** No new
+> automated test was added for this specific scenario: deliberately
+> consuming 10+GB of real RAM is not something to encode into a
+> repeatable CI/local test run (unlike the bulk-start escalations above,
+> which only ever consume RAM as a side effect of real profiles the app
+> itself needs to run anyway) — the pure-function formula already has
+> permanent unit coverage, and this live check's job was specifically to
+> confirm the *integration* around it, once, deliberately, rather than
+> leave it as an assumption.
+
 **This is the one place this report cannot give a clean PASS, and that is
 reported honestly rather than worked around.**
 
