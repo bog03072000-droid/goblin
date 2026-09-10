@@ -198,3 +198,78 @@ test('cloning a profile copies its config (proxy/group/tags/fingerprint identity
   await sourceRow.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(sourceRow).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
+
+/** Calls a manager IPC channel directly from the renderer's own exposed
+ * bridge — 'full' clone mode is real, unit-tested, and reachable this way
+ * (automation/scripted use), even though the manager UI's own Clone button
+ * only ever sends mode:'config' (see this file's own top comment). Same
+ * pattern reliability.spec.ts already uses for backend-only scenarios. */
+function invokeIpc(win: Page, channel: string, payload: unknown): Promise<unknown> {
+  return win.evaluate(
+    ([c, p]) => (window as unknown as { profileforge: { invoke: (c: string, p: unknown) => Promise<unknown> } }).profileforge.invoke(c, p),
+    [channel, payload] as const,
+  );
+}
+
+test('full-mode clone of a RUNNING profile (real Chromium holding open file handles on its storage) does not corrupt or fail, and the clone starts cleanly afterward', async () => {
+  // Unlike tests/integration/profileIsolation.test.ts's "full clone copies
+  // storage" test (which only ever clones a STOPPED source with a static
+  // marker file), this is the one scenario that test harness structurally
+  // can't reach: a real Chromium process actively holding its SQLite
+  // Cookies DB / LevelDB localStorage files open (WAL mode, live writes)
+  // while fs.cpSync copies the same directory tree out from under it.
+  // Hypothesis: Windows file-locking semantics or a mid-write copy could
+  // either throw (EBUSY-class error) or silently produce a corrupted clone
+  // that then fails to start.
+  await window.getByPlaceholder('New profile name').fill('Clone While Running Source');
+  await window.getByRole('button', { name: 'Custom setup' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: /^Clone While Running Source$/ }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+  // Give the real Chromium process a moment to actually open/write its
+  // profile files (Cookies DB, Preferences, etc.) before cloning out from
+  // under it — starting alone doesn't guarantee those files are open yet.
+  await window.waitForTimeout(2_000);
+
+  const sourceId = await row.getAttribute('data-profile-id');
+  const clone = (await invokeIpc(window, 'profiles:clone', {
+    id: sourceId,
+    mode: 'full',
+    name: 'Clone While Running Result',
+  })) as { id: string };
+  expect(clone.id).toBeTruthy();
+
+  // ProfilesPage.tsx only re-polls the list automatically while some OTHER
+  // profile is STARTING/STOPPING (see its own comment) — a clone created via
+  // this raw IPC call, bypassing the UI's own cloneOne() handler, never
+  // triggers refresh() on its own. Real users only ever reach 'full' mode
+  // through the same button that already calls refresh() after mutating;
+  // this direct-IPC path needs to force one itself, same as any other
+  // externally-changed state the UI must pick up on its own next action.
+  await window.getByPlaceholder('Search profiles...').fill('Clone While Running Result');
+  const cloneRow = window.locator('tr', { has: window.locator('td', { hasText: 'Clone While Running Result' }) });
+  await expect(cloneRow).toBeVisible({ timeout: 15_000 });
+
+  // The real test: does the copied-while-live storage actually work? If
+  // fs.cpSync captured a torn/corrupted SQLite or LevelDB file, Chromium
+  // would fail to start against it (or crash shortly after) rather than
+  // failing at copy time.
+  await cloneRow.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(cloneRow).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+  await window.waitForTimeout(1_000);
+  await expect(cloneRow).toHaveAttribute('data-status', 'RUNNING');
+
+  await cloneRow.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(cloneRow).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+
+  // Clear the search filter above before touching the source row again —
+  // it's filtered out of the list while "Clone While Running Result" is
+  // the active search term.
+  await window.getByPlaceholder('Search profiles...').fill('');
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});
