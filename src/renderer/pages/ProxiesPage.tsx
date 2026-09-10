@@ -148,6 +148,33 @@ export function ProxiesPage(): JSX.Element {
     });
   }
 
+  /** Clears every cached test/geolocation result for a proxy after its
+   * host/port/protocol/credentials change — found via a live UX walkthrough:
+   * editing a proxy's port left the OLD test result (referencing the old
+   * port in its error text, e.g. "127.0.0.1:8080" after editing to 9090)
+   * visible and unchanged, since editing only ever called refresh() for the
+   * proxy list itself, never touching the separate results/geo/history state
+   * a manual Test/Geolocate click had populated. A stale result for a config
+   * that no longer exists is actively misleading, not just outdated. */
+  function clearStaleCheckState(id: string): void {
+    setResults((prev) => {
+      const { [id]: _drop, ...rest } = prev;
+      return rest;
+    });
+    setGeo((prev) => {
+      const { [id]: _drop, ...rest } = prev;
+      return rest;
+    });
+    setHistory((prev) => {
+      const { [id]: _drop, ...rest } = prev;
+      return rest;
+    });
+    setMismatchedProfileCount((prev) => {
+      const { [id]: _drop, ...rest } = prev;
+      return rest;
+    });
+  }
+
   /** Geolocates the proxy — routed through the proxy's own real CONNECT
    * tunnel for http/https proxies (genuinely verified, not just the
    * proxy's advertised host), falling back to a host-only lookup for
@@ -491,7 +518,14 @@ export function ProxiesPage(): JSX.Element {
         />
       )}
       {editingProxy && (
-        <EditProxyModal proxy={editingProxy} onClose={() => setEditingProxy(null)} onSaved={() => void refresh()} />
+        <EditProxyModal
+          proxy={editingProxy}
+          onClose={() => setEditingProxy(null)}
+          onSaved={() => {
+            clearStaleCheckState(editingProxy.id);
+            void refresh();
+          }}
+        />
       )}
     </>
   );

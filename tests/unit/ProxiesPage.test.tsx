@@ -209,6 +209,42 @@ describe('ProxiesPage', () => {
     expect(invoke.mock.calls.filter((c) => c[0] === 'proxy:checkHistory')).toHaveLength(2);
   });
 
+  it('editing a proxy (e.g. changing its port) drops the stale Test/Geolocate/History results for it, instead of leaving a result that now refers to the old config', async () => {
+    // Found via a live UX walkthrough: testing a proxy against a dead
+    // 127.0.0.1:8080, then editing it to port 9090, left the OLD result
+    // ("Failed: connect ECONNREFUSED 127.0.0.1:8080") displayed unchanged —
+    // referring to a port the proxy no longer even uses. Editing only ever
+    // called refresh() for the proxy list itself, never clearing the
+    // separate in-memory results/geo/history state a manual Test/Geolocate
+    // click had populated.
+    const invoke = mockInvoke({
+      'proxy:list': () => [makeProxy({})],
+      'proxy:test': () => ({ success: false, error: 'connect ECONNREFUSED 1.2.3.4:8080' }),
+      'proxy:update': (p) => ({ ...makeProxy({}), ...(p as object) }),
+      'proxy:checkHistory': () => [{ id: 'h1', status: 'FAIL', latencyMs: null, checkedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    renderPage();
+    await screen.findByText('My Proxy');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    expect(await screen.findByText('Failed: connect ECONNREFUSED 1.2.3.4:8080')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const portInput = screen.getByLabelText('Port');
+    fireEvent.change(portInput, { target: { value: '9090' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:update', expect.objectContaining({ port: 9090 })));
+    // The stale failure text (which names the OLD port) must be gone — not
+    // still showing, and not replaced by some other leftover fragment of it.
+    expect(screen.queryByText('Failed: connect ECONNREFUSED 1.2.3.4:8080')).not.toBeInTheDocument();
+
+    // History must also re-fetch rather than show whatever was cached under
+    // the old config, same guarantee the manual-Test case above already has.
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:checkHistory', { id: 'proxy-1' }));
+  });
+
   describe('bulk import', () => {
     function openBulkImport() {
       fireEvent.click(screen.getByRole('button', { name: 'Bulk import' }));
