@@ -641,3 +641,121 @@ like code signing or second hardware) — not pushed toward 92 or any other
 number that would require those external factors. **Nothing from this
 round has been pushed — the four commits above and this entry remain
 local, pending explicit confirmation.**
+
+## 2026-09-10 (second entry) — 87.67 weighted / 87.3 simple
+
+Pushed the previous entry's five commits (`b77d328`, `d32cbe3`,
+`98c3395`, `32c8e7d`, `2f1fed6`) first, per explicit instruction —
+confirmed via `git log`/`git status`. Then worked the same method
+through: the known-but-undone Downloads auto-refresh gap (UX), two more
+Функціональність edge cases, a continued Fingerprint pass, and — for the
+first time this session — a *dedicated* systematic TOCTOU/race pass
+(Стабільність), rather than races turning up incidentally while checking
+something else. Compared only against this file's own previous entry
+(86.79/86.5).
+
+**UX**: the specific "list doesn't auto-refresh after a background
+redownload completes" gap this file's own previous entry named as
+left-unfixed. Root cause: nothing polled the Downloads list after
+`downloads:redownload` kicked off a background profile launch. Fixed
+with a bounded 2s-interval poll (matching `ProfilesPage.tsx`'s own
+existing `hasTransitionalProfile` pattern) that starts only once the
+redownload genuinely launched (not on a rejected "already running" call)
+and stops after 20s. Verified live end-to-end — the completed file
+appeared automatically with the page left untouched. Two new permanent
+tests (`vi.advanceTimersByTimeAsync`, since a plain `advanceTimersByTime`
+doesn't let the interval's own async IPC call resolve between ticks).
+
+**Функціональність**: two real, substantial findings, not just confirmed
+non-issues this time. (1) `ProfileRepository.update()` read the full
+current row, merged the caller's patch over it in JS, and wrote the
+whole merged row back — a classic TOCTOU lost-update if a second SQLite
+connection (this app has no `requestSingleInstanceLock()` anywhere, and
+`db.ts` turns on WAL mode specifically because two real connections to
+one file is a supported scenario) committed its own change in the gap.
+Fixed structurally: the UPDATE's SET clause is now built only from the
+columns actually present in the patch, so an untouched column can never
+be reverted regardless of timing. Proven red (real FK-free data loss
+against the old code) and green (fixed) via two real on-disk connections
+and a forced-stale `getById()` mock — a genuine reproduction, unlike an
+initial flawed draft of the same test that used hand-rolled SQL and
+"passed" against both old and new code alike. (2) The automation token
+Regenerate button's own UI copy claimed the old token is invalidated
+"immediately" — a live E2E check (start a profile, regenerate its token
+while running, hit the live automation proxy with both tokens) proved
+that's false: `startAutomationProxy()` captures its token once at launch
+with no live-reload channel, so the OLD token keeps working and the NEW
+one doesn't until the profile restarts. Fixed the honest way for
+security-critical code — corrected the UI copy and added a visible
+warning while running — rather than building a riskier live-reload
+mechanism.
+
+**Fingerprint ×2**: cross-profile `navigator.mediaDevices
+.enumerateDevices()` consistency, checked live across two real,
+separately-created profiles left at every default. Real finding:
+`deviceId`/`groupId` correctly differ per profile (Chromium's own
+per-origin salt), but every device `label` (exact monitor model, headset
+model, "OBS Virtual Camera") is byte-identical across profiles — a
+same-machine correlation signal, readable with no `getUserMedia` prompt
+at all since `permissionsMode: 'real'` auto-grants camera/mic silently
+(confirmed in `fingerprintEnforcement.ts`). Not a new bug:
+`mediaDevicesMode: 'hidden'` and `permissionsMode: 'deny-all'` already
+close this and were re-verified to genuinely do so — the actual gap was
+the `mediaDevicesMode` tooltip explaining *what* Real mode reports but
+not *why it costs cross-profile correlation*, now fixed. Also confirmed
+`Notification.permission` auto-grants via the identical policy path, not
+an independent vector.
+
+**Стабільність ×1.5**: the first round this session with dedicated,
+requested race-hunting rather than races found incidentally. Two real
+bugs, both in areas the user named as candidates. (1)
+`bulkAddTags`/`bulkRemoveTags` had the exact same read-merge-write shape
+`update()` used to have, applied to the `profile_tags` join table
+specifically (`setTags()`'s full DELETE-then-reinsert) — a second
+connection's own concurrent tag change got silently reverted. Fixed by
+adding `addTags()`/`removeTags()` that do the SQL add/remove directly
+with no prior read at all. (2) `ProxyRepository.recordCheckResult()`
+(shared by the health-check scheduler and the manual "Test" button)
+inserts into `proxy_check_history`, which has `ON DELETE CASCADE` under
+`foreign_keys = ON` — a proxy deleted while its own multi-second network
+probe is in flight throws a real FK violation. The scheduler already
+tolerated this per-item; the manual "Test" button did not and would have
+surfaced the raw SQLite error to the renderer. Fixed once, in the
+repository method itself (check-exists-inside-the-transaction, no-op if
+gone), covering every caller rather than requiring each call site to
+remember its own try/catch. Both findings proven red/green against real
+two-connection tests, same rigor as the Функціональність fix above.
+
+Real numbers: unit — **799 tests, 76 files, all passing** (+10 net new
+tests this entry: 2 Downloads polling, 3 AdvancedTab warning, 2
+`profileRepositoryUpdateRace`, 2 `profileTagsRace`, 1
+`recordCheckResult`-vs-delete). `typecheck`/`lint` — clean after every
+item (one pre-existing, unrelated `ProxiesPage.tsx` warning throughout).
+
+| Category | Score | Δ vs previous entry (86.79/86.5) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 85 | +2 | Two real fixes landed, not just confirmed-safe hypotheses: a structural TOCTOU fix in `ProfileRepository.update()` (`6f744d0`) and a corrected false security-relevant UI claim on token regenerate (`70e6034`), both with genuine red/green verification. |
+| UX | 89 | +2 | Shipped the specific auto-refresh gap this file itself named as left-unfixed last entry (`5174721`) — closes a real, previously-documented friction point with permanent tests, not just a new finding. |
+| Дизайн | 86 | 0 | No design work this round. |
+| Стабільність ×1.5 | 91 | +3 | First round with *dedicated* race-hunting rather than incidental finds — two real, previously-unknown TOCTOU bugs found and structurally fixed (`89da583`), both proven red/green against real two-connection tests. |
+| Безпека ×1.5 | 85 | 0 | The token-regenerate UI fix is credited under Функціональність (its commit scope); no separate security-category work this round to avoid double-counting the same fix. |
+| Код/архітектура | 87 | 0 | Every fix stayed small and targeted (SQL clause changes, two new narrow repository methods) — same "no architectural shift" pattern as prior small-fix rounds. |
+| Тести | 90 | 0 | New tests credited to the categories whose gap they closed, same convention as every prior round. |
+| Продуктивність | 81 | 0 | No performance work this round. |
+| Реліз | 88 | 0 | No release work this round. |
+| Fingerprint ×2 | 91 | +1 | One genuinely new, previously-undocumented mechanism identified (real-mode `mediaDevices` label correlation + silent permission auto-grant) and a UI-copy gap closed — no enforcement bug, since the existing `hidden`/`deny-all` opt-outs already cover it. |
+
+**Simple average:** (85+89+86+91+85+87+90+81+88+91)/10 = **87.3**
+**Weighted average:** (85+89+86+91×1.5+85×1.5+87+90+81+88+91×2)/12 = **87.67**
+
+**Summary:** a somewhat larger movement than the last few rounds
+(+0.88 weighted / +0.8 simple), honestly earned rather than inflated: this
+round happened to land two independently real, structurally-fixed TOCTOU
+bugs (Стабільність) plus two more real fixes in Функціональність, on top
+of the usual UX and Fingerprint work — more shipped fixes in one round
+than several recent rounds combined, not a change in grading generosity.
+Still well inside this session's stated realistic ceiling (84-90 without
+external factors like code signing or second hardware). **Nothing from
+this round has been pushed — `5174721`, `6f744d0`, `70e6034`, `321db64`,
+`89da583`, and this entry all remain local, pending explicit
+confirmation.**
