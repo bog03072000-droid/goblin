@@ -364,6 +364,58 @@ erased.
 > consistent with the escalation stopping once a real risk signal
 > appeared, not because of a fixed schedule.
 
+> **Update (2026-09-10) — re-run on a machine with substantially more
+> total/free RAM than either prior escalation (31.1GB total, ~18-19GB
+> free at rest here, vs. ~13.3GB free on 2026-09-09's machine and
+> ~15-16GB on 2026-09-07's), and a genuinely different result: no
+> real-risk signal at any tier.** Same escalation (20→50→100,
+> `maxConcurrentLaunches` 2/4/8 each), same continuous 5-second
+> `Get-CimInstance Win32_OperatingSystem` poll running independently of
+> the test's own before/after sampling (a detached background
+> PowerShell process, so it survives the whole ~13-minute run rather
+> than being tied to any one test step). **0 failures, 0 orphaned
+> `electron.exe` processes at every tier and every concurrency** — same
+> clean result as every prior round.
+>
+> | Profiles | Concurrency | Succeeded/Failed | Free RAM before | Free RAM at peak (test's own sample) | RAM used at peak |
+> |---|---|---|---|---|---|
+> | 20 | 2 | 20/0 | 18.19GB | 15.10GB | 3.09GB |
+> | 20 | 4 | 20/0 | 17.77GB | 14.79GB | 2.98GB |
+> | 20 | 8 | 20/0 | 18.24GB | 15.40GB | 2.84GB |
+> | 50 | 2 | 50/0 | 17.90GB | 11.33GB | 6.57GB |
+> | 50 | 4 | 50/0 | 17.35GB | 11.99GB | 5.35GB |
+> | 50 | 8 | 50/0 | 17.28GB | 12.85GB | 4.43GB |
+> | 100 | 2 | 100/0 | 17.41GB | 6.66GB | 10.75GB |
+> | 100 | 4 | 100/0 | 17.46GB | 8.22GB | 9.24GB |
+> | 100 | 8 | 100/0 | 17.37GB | 9.55GB | 7.82GB |
+>
+> Full raw table in `tests/performance/LOAD_TEST_BULKSTART_RAW.md` (this
+> run overwrote the 2026-09-09 numbers there — both rounds are preserved
+> here for the historical comparison). **The continuous poll's true
+> minimum across the entire ~13-minute escalation was 4.65GB free** —
+> lower than any single tier's own discrete "peak" sample caught
+> (100/concurrency=2's own sample only saw 6.66GB), the same "continuous
+> catches a deeper trough than before/after sampling" pattern every
+> prior round has also found, but on this machine that deeper trough is
+> still nowhere near exhaustion — an order of magnitude more headroom
+> than 2026-09-09's 90MB low point on a smaller-RAM machine, not a
+> coincidence: 2026-09-09's machine had ~13.3GB total-visible headroom
+> at rest to begin with, this one has ~31GB. **This is the real,
+> load-bearing conclusion of this round: safe-concurrency headroom
+> scales with the machine's own total RAM, not a fixed number of
+> profiles** — the same 100-profile/`maxConcurrentLaunches`-2-or-4
+> combination that came within 90MB of exhaustion on a ~13GB-total
+> machine leaves a comfortable multi-GB floor on a ~31GB-total one.
+> **Recommendation, restated once more for this machine class**: on a
+> machine with roughly 30GB+ total RAM and mid-teens GB free at rest,
+> 100 simultaneous profiles is safe at every tested concurrency,
+> including 2 — the concurrency-8-is-safer-at-100-profiles finding from
+> 2026-09-09 is real but is specifically a low-headroom-machine
+> recommendation, not a universal one. No tier beyond 100 was attempted,
+> consistent with this round's own explicit escalation ceiling, not
+> because any risk signal appeared to justify stopping earlier — unlike
+> every prior escalation, this one never needed to stop early.
+
 > **Update (2026-09-06) — sensitivity checked, cross-hardware
 > re-measurement still not possible.** `ESTIMATED_MB_PER_RUNNING_PROFILE`
 > (585) and `SAFE_FREE_RAM_MARGIN_MB` (1536) both remain derived from the

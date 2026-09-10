@@ -429,8 +429,13 @@ palette addition instead of a redesign.
   failure — the app itself completed cleanly with 0 failures/0 orphans
   every time), while concurrency 8 finished faster and never dropped
   below ~4GB free in the same run. **8 is the safer choice at 100+
-  simultaneous profiles**, not just the faster one — see `docs/LOAD_TEST.md`
-  for the full 20/50/100-profile × 2/4/8-concurrency matrix. This staggers
+  simultaneous profiles on a machine with limited free RAM at rest**
+  (that finding's own machine had ~13GB total) — a re-run on a
+  ~31GB-total-RAM machine found 0 risk signal at *any* concurrency,
+  including 2, confirming this specific recommendation scales with the
+  machine's own headroom rather than being a universal rule. See
+  `docs/LOAD_TEST.md` for the full 20/50/100-profile × 2/4/8-concurrency
+  matrix across both machine classes. This staggers
   the *rate* of new process launches to avoid a startup burst — it does not
   cap the total number of profiles that end up running simultaneously once a
   bulk start completes, which is the intended behavior (the point of a bulk
