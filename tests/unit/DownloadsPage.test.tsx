@@ -10,6 +10,7 @@ import type { Profile } from '../../src/shared/schemas/profile';
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function makeDownload(overrides: Partial<DownloadWithStatus> = {}): DownloadWithStatus {
@@ -212,6 +213,49 @@ describe('DownloadsPage', () => {
 
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('downloads:redownload', { id: 'd1' }));
     expect(await screen.findByText('This profile is already running.')).toBeInTheDocument();
+  });
+
+  it('a successful Re-download polls the list again on its own, without any filter change, so a completed background download actually shows up', async () => {
+    // Found via the same live UX walkthrough as the error-banner fix above:
+    // Redownload genuinely completes in the background (a real profile
+    // process navigating, Electron's own will-download firing again), but
+    // load() only ever re-ran on a filter change — a user sitting on this
+    // exact page watching their own triggered redownload never saw the
+    // result without switching pages and back. Verifies the bounded
+    // 2s-interval poll this fix added actually fires after a *successful*
+    // redownload (the error-banner test above covers the failure path,
+    // which must NOT start polling for something that never launched).
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const invoke = mockInvoke({
+      'downloads:list': () => [makeDownload({ missing: true })],
+      'profiles:list': () => [],
+      'downloads:redownload': () => undefined,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Re-download/ }));
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith('downloads:redownload', { id: 'd1' }));
+
+    const listCallsBefore = invoke.mock.calls.filter((c) => c[0] === 'downloads:list').length;
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(invoke.mock.calls.filter((c) => c[0] === 'downloads:list').length).toBeGreaterThan(listCallsBefore);
+  });
+
+  it('a FAILED Re-download does not start polling — nothing was launched for it to catch', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const invoke = mockInvoke({
+      'downloads:list': () => [makeDownload()],
+      'profiles:list': () => [],
+      'downloads:redownload': () => {
+        throw new Error('Profile is already running');
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Re-download/ }));
+    await screen.findByText('This profile is already running.');
+
+    const listCallsBefore = invoke.mock.calls.filter((c) => c[0] === 'downloads:list').length;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(invoke.mock.calls.filter((c) => c[0] === 'downloads:list').length).toBe(listCallsBefore);
   });
 
   it('applies the correct status pill variant for missing, completed, cancelled and failed', async () => {

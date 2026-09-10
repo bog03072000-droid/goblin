@@ -28,6 +28,17 @@ export function DownloadsPage(): JSX.Element {
   const [dateTo, setDateTo] = useState('');
   const { error, run } = useAsyncAction();
   const actionRunner = useAsyncAction();
+  // Found via a live UX walkthrough: a triggered Redownload actually
+  // completes correctly in the background (a real profile process
+  // navigating and Electron's own will-download firing again), but this
+  // page never learned about it — load() only ever re-runs when a filter
+  // changes, not on any push/event, since there's no cross-window channel
+  // today from the profile's own browser-shell window (where
+  // will-download actually fires) back to this manager window. Same
+  // bounded-polling shape ProfilesPage.tsx already uses for its own
+  // STARTING/STOPPING transitional state, rather than polling forever.
+  const [pendingRedownloads, setPendingRedownloads] = useState(0);
+  const hasPendingRedownload = pendingRedownloads > 0;
 
   async function load(): Promise<void> {
     await run(async () => {
@@ -50,6 +61,17 @@ export function DownloadsPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, profileId, dateFrom, dateTo]);
 
+  // Polls every 2s for up to 20s after a Redownload is triggered — long
+  // enough for a real small-to-medium file to finish, bounded so this page
+  // doesn't poll forever for a redownload that never completes (a dead
+  // URL, the profile crashing before the download starts, etc).
+  useEffect(() => {
+    if (!hasPendingRedownload) return;
+    const interval = setInterval(() => void load(), 2_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPendingRedownload]);
+
   async function handleOpen(id: string): Promise<void> {
     await actionRunner.run(() => callApi('downloads:open', { id }));
   }
@@ -64,7 +86,21 @@ export function DownloadsPage(): JSX.Element {
     });
   }
   async function handleRedownload(id: string): Promise<void> {
-    await actionRunner.run(() => callApi('downloads:redownload', { id }));
+    // A local flag, not actionRunner.error — that's React state, so reading
+    // it right after awaiting run() below would still see the value from
+    // BEFORE this render's setError() call took effect, not the fresh one.
+    let started = false;
+    await actionRunner.run(async () => {
+      await callApi('downloads:redownload', { id });
+      started = true;
+    });
+    // Only start polling once the profile genuinely started (a rejection —
+    // e.g. "already running" — is handled by the banner above instead;
+    // nothing will complete in the background from a call that never
+    // launched anything).
+    if (!started) return;
+    setPendingRedownloads((c) => c + 1);
+    setTimeout(() => setPendingRedownloads((c) => Math.max(0, c - 1)), 20_000);
   }
 
   function statusPillVariant(d: DownloadWithStatus): string {
