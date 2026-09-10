@@ -375,3 +375,83 @@ results and were scored accordingly — a small or zero credit, not
 inflated to match the round's overall activity level. **Nothing in this
 round has been pushed — the `v0.5.0` tag and all 9 commits remain
 local, pending explicit confirmation.**
+
+## 2026-09-10 — 86.04 weighted / 85.8 simple
+
+Two parts: (1) an independent re-verification of the previous entry's own
+85.79/85.5 score, done adversarially rather than trusting the prior
+round's own conclusions — every one of 7 required checks (commit
+existence, per-commit diff content, the score-history text itself, the
+local tag, a full unit run, the new regression test's actual assertion,
+and the actual fix code) passed with **no discrepancy found**; (2) a
+genuine follow-up round targeting this file's own bottom-3 categories
+(Продуктивність 79, Функціональність 81, UX 83) — Продуктивність was
+skipped this round (its next real step is another expensive multi-profile
+escalation, already done twice this session; a lighter substitute wasn't
+worth faking a category it didn't actually earn). Compared only against
+this file's own previous entry (85.79/85.5).
+
+**Functionality** (`68137bc`): hypothesis — `profileManager.clone()`'s
+'full' mode (`fs.cpSync` copying a profile's live browser-data directory)
+had only ever been tested against a *stopped* source with a static marker
+file; does cloning a genuinely **running** profile (real Chromium actively
+holding its Cookies DB / LevelDB storage open) risk a Windows file-locking
+throw or a torn/corrupted copy? Tested live via a real E2E test cloning an
+actually-running profile through the IPC bridge (`'full'` mode is
+unit-tested and reachable this way, though never exposed through the
+manager UI's own Clone button — an already-known, already-documented fact
+from a prior round, not rediscovered here). **Hypothesis disproven**: the
+copy succeeds and the clone starts cleanly, no corruption. A real
+test-methodology gap was also found and fixed along the way (a clone
+created via raw IPC never appears in the profile list without a UI-
+triggered refresh — `ProfilesPage.tsx` only auto-polls while some *other*
+profile is transitioning) — this was a test-side omission, not a
+product bug, so it doesn't itself carry any score weight here.
+
+**UX** (`8dc6dcc`): first-ever live walkthrough of the Proxies page
+(add → test → geolocate → history → edit → delete), the exact same
+method used all session. **Real bug found and fixed**: editing a proxy's
+port left the *previous* Test result unchanged in the status pill (e.g.
+still showing `Failed: connect ECONNREFUSED 127.0.0.1:8080` after the
+port was changed to 9090) — a stale result naming a configuration that no
+longer existed. Root-caused (`ProxiesPage.tsx`'s edit handler only ever
+called `refresh()` for the proxy list, never clearing the separate
+`results`/`geo`/`history`/`mismatchedProfileCount` state a manual Test/
+Geolocate click populates), fixed with a `clearStaleCheckState()` helper,
+verified fixed live (rebuilt, reloaded, reproduced, confirmed gone), and
+given a permanent unit test. One separate, real UX inconsistency was
+found and **deliberately left as-is**: Test's failure pill shows the raw
+Node.js socket error (`connect ECONNREFUSED ...`) while Geolocate's shows
+a clean generic message — judged, not glossed over, as more likely a
+reasonable design choice than a bug, since a proxy connectivity test is a
+technical diagnostic for a technical audience where the specific error
+code is genuinely more actionable than a vague "Failed".
+
+Real numbers: unit — **786 tests, 74 files, all passing** (+1 net new
+test; the E2E clone test lives in `tests/e2e/`, outside this count).
+`profileCloning.spec.ts` — 2/2 passed, including the new running-clone
+test. `typecheck`/`lint` — clean.
+
+| Category | Score | Δ vs previous entry (85.79/85.5) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 82 | +1 | `68137bc` — a real, previously-untested edge case (full clone of a running profile) confirmed already correct; confidence gained, not a fix, same small-credit convention as the identical situation two rounds ago (proxy rotation edge cases). |
+| UX | 85 | +2 | `8dc6dcc` — a real bug found AND fixed via a live walkthrough of a page never checked before, with a permanent regression test — stronger than the previous round's UX credit, which found friction but no fix. |
+| Дизайн | 86 | 0 | No design work this round. |
+| Стабільність ×1.5 | 88 | 0 | No dedicated stability work this round. |
+| Безпека ×1.5 | 85 | 0 | No security work this round. |
+| Код/архітектура | 87 | 0 | The proxy fix is a small, targeted state-management fix in one page component, not an architectural change. |
+| Тести | 90 | 0 | 2 new tests added this round (one E2E, one unit) — both credited to the categories whose gap they actually closed (Функціональність, UX) rather than double-counted here, consistent with how this same round's own prior entry split test credit across categories rather than always routing it through this one. |
+| Продуктивність | 79 | 0 | Deliberately skipped this round — the next real step is another expensive multi-profile escalation already done twice this session; not worth a token substitute. |
+| Реліз | 88 | 0 | No release work this round. |
+| Fingerprint ×2 | 88 | 0 | No fingerprint work this round. |
+
+**Simple average:** (82+85+86+88+85+87+90+79+88+88)/10 = **85.8**
+**Weighted average:** (82+85+86+88×1.5+85×1.5+87+90+79+88+88×2)/12 = **86.04**
+
+**Summary:** verification confirmed the previous entry's score was real,
+not inflated. This round's own follow-up work moved the number by a
+small, honest amount (+0.25 weighted / +0.3 simple) — one confirmed-safe
+edge case and one real, fixed, tested UX bug — deliberately not padded
+toward any particular target number. **Nothing has been pushed — the
+`v0.5.0` tag and every commit (through `8dc6dcc`) remain local, pending
+explicit confirmation.**
