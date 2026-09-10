@@ -130,6 +130,12 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   // kept as a permanent guard against a future regression.
   expect(snapshot.statusByField['screenAvailArea']).toBe('PASS');
 
+  // Intl.DateTimeFormat/.NumberFormat/.Collator's own ICU locale negotiation
+  // (Twenty-first investigation) checked as a candidate leak of the real
+  // host OS's regional settings, separate from navigator.language — confirmed
+  // clean (ICU normalizes to the base language tag either way).
+  expect(snapshot.statusByField['intlLocale']).toBe('PASS');
+
   // WebRTC leak probe (diagnostics.html's own probeWebrtc(), a real
   // RTCPeerConnection against a public STUN server) has existed since the
   // fingerprint reality audit stage and runs automatically as part of this

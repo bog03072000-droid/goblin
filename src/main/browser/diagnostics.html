@@ -169,6 +169,7 @@
         orientationType: screen.orientation ? screen.orientation.type : 'not exposed',
         availWidth: screen.availWidth,
         availHeight: screen.availHeight,
+        intlDateTimeLocale: Intl.DateTimeFormat().resolvedOptions().locale,
         mediaDevices: await getMediaDevices(),
         webrtc: await probeWebrtc(),
       };
@@ -285,6 +286,25 @@
             const expected = `${configured.screenWidth}x${configured.screenHeight}`;
             const actual = `${observed.availWidth}x${observed.availHeight}`;
             return [actual === expected ? 'PASS' : 'MISMATCH', actual];
+          },
+        ],
+        [
+          // Twenty-first investigation, docs/FINGERPRINT_AUDIT.md: checked
+          // whether Intl.DateTimeFormat/.NumberFormat/.Collator's own resolved
+          // locale (ICU's own locale negotiation, a separate code path from
+          // navigator.language) could leak the real host OS's regional
+          // settings instead of the configured locale. Confirmed clean —
+          // ICU correctly normalizes to the base language tag (e.g. "de-DE"
+          // configured -> "de" resolved, the same normalization a real
+          // Chrome install does for a region without its own distinct ICU
+          // formatting data), not the host's own locale.
+          'Intl resolved locale', 'intlLocale',
+          () => String(configured.locale ?? configured.language ?? '—').split('-')[0],
+          () => {
+            const configuredLocale = String(configured.locale ?? configured.language ?? '');
+            const expectedBase = configuredLocale.split('-')[0];
+            const actualBase = String(observed.intlDateTimeLocale).split('-')[0];
+            return [actualBase === expectedBase ? 'PASS' : 'MISMATCH', observed.intlDateTimeLocale];
           },
         ],
       ];

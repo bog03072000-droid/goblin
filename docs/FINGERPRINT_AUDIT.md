@@ -2805,3 +2805,67 @@ fix, now with its own permanent check. `performance.memory.jsHeapSizeLimit`
 — not applicable to this app's own fingerprint-enforcement grading at all
 (a V8 architecture constant, not a spoofable or leakable field this app's
 mechanisms touch), noted here for completeness rather than graded.
+
+## Twenty-first investigation — `Intl` locale negotiation and `CSS.supports()`, both checked, both clean
+
+**Two more candidates from the session's own running list, same
+live-profile method.** Two of the three originally suggested candidates
+this round turned out to already be covered: `navigator.connection` is the
+Seventeenth investigation's own subject (a real, unfixed **D**-grade gap,
+not rediscovered here), and the basic `Intl.DateTimeFormat().resolvedOptions()
+.timeZone` check is the existing, already-enforced `timezone` field this
+document has tracked since the very first stage. The genuinely new
+sub-questions checked this round:
+
+**`Intl.DateTimeFormat`/`.NumberFormat`/`.Collator`'s own resolved
+locale — checked, no gap found.** Hypothesis: `navigator.language` is
+enforced via `Emulation.setUserAgentOverride`'s `acceptLanguage` parameter,
+but `Intl`'s own locale negotiation (ICU, a genuinely separate code path
+from the UA/Accept-Language mechanism) might independently read the real
+host OS's own regional settings instead.
+
+Verified on a live profile configured for German (`de-DE`, real host OS
+un-related to German):
+
+```
+{"navLang":"de-DE","navLangs":["de-DE","de","en"],"dtfLocale":"de",
+ "dtfTz":"Europe/Berlin","nfLocale":"de","collatorLocale":"de"}
+```
+
+All three `Intl` APIs resolve to `"de"` — the correct base-language
+normalization of the configured `de-DE` (ICU commonly collapses to the
+base tag when it has no region-specific formatting data distinct from the
+generic language, the same normalization a real Chrome install does), not
+the real host's own locale. **No gap; already correct.** Added a
+permanent `diagnostics.html` + `fingerprintEnforcement.spec.ts` check
+(`intlLocale`) anyway, same defensive posture as the Nineteenth/Twentieth
+investigations' checks — comparing the base language tag on both sides so
+this normalization doesn't produce a false MISMATCH.
+
+**`CSS.supports()` — checked, confirmed not applicable, not a vector at
+all.** Hypothesis: browser-feature-support queries (`display: grid`,
+container queries, `:has()`, `subgrid`) might differ in a way that
+reveals something host-specific. Verified: all four queried features
+returned `true`, consistent with the real, unmodified Chromium engine
+actually running (Chrome 128) — `CSS.supports()` has no host-machine or
+OS-identifying component at all; it purely reflects the browser engine's
+own compiled-in feature set, which this app never fakes (only the UA
+*string* is spoofed — the underlying engine really is the claimed Chrome
+version). **Not a leak vector for this app's architecture** — no test
+added, matching the `performance.memory.jsHeapSizeLimit` precedent of not
+encoding a check for a mechanism with no plausible host-identifying
+signal to guard against.
+
+**A pre-existing, unrelated flake noticed in passing, not caused by this
+round's changes:** `fingerprintEnforcement.spec.ts`'s first test
+occasionally shows a MISMATCH on the *existing* `timezone` field on its
+first attempt, self-healing on Playwright's automatic retry both times it
+was observed this round. This round's own diff never touches timezone
+enforcement — noted here for a future session, not investigated further
+now (out of this investigation's scope).
+
+**Grading:** `Intl` locale negotiation — no gap existed; folded into the
+existing timezone/locale enforcement grading, now with its own permanent
+check. `CSS.supports()` — not applicable to this app's fingerprint
+surface, noted for completeness rather than graded, same as
+`jsHeapSizeLimit` last investigation.
