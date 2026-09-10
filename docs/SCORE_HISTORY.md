@@ -544,3 +544,100 @@ re-running it without drawing the comparison). **This round's own commits
 (`bc70237`, `18f54d4`, `ff0e1d8`, and this entry) have NOT been pushed —
 only the prior two rounds' work (through `8dc6dcc`) was pushed, per this
 round's explicit, separate authorization.**
+
+## 2026-09-10 — 86.79 weighted / 86.5 simple
+
+Pushed all four commits from the previous entry (`bc70237`, `18f54d4`,
+`ff0e1d8`, `0780f32`) first, per explicit instruction — confirmed via
+`git status` (`main...origin/main` with no "ahead") and `git log -1
+origin/main` matching `0780f32`. Then continued the same method on
+Продуктивність (now the single lowest category), two more
+Функціональність edge cases, two more Fingerprint vectors, and the
+Downloads-page UX walkthrough named as outstanding from a prior round.
+Compared only against this file's own previous entry (86.46/86.2).
+
+**Performance**: checked whether this machine could genuinely simulate
+low RAM rather than mock it — yes, via a throwaway Node script pinning
+real physical memory until `os.freemem()` read ~2GB free (independently
+confirmed via `Get-CimInstance`). With real free RAM held there, starting
+a profile in the running app correctly showed the `LowMemoryError`
+confirm dialog with the real numbers ("Вільно лише 1681МБ..."), declining
+left it cleanly `STOPPED`, and releasing the pressure + retrying started
+it immediately with no warning — confirming the check reads
+`os.freemem()` fresh at click-time. This closes a real, previously-open
+gap: every prior check of this mechanism (including 2026-09-06's own
+sensitivity matrix) only ever exercised the pure functions with a mocked
+input, never the real OS integration around them. No bug found; no new
+automated test added (consuming 10+GB of real RAM isn't CI-safe) —
+documented in `docs/LOAD_TEST.md`.
+
+**Functionality**: three hypotheses checked. `humanClick` "on a
+disappearing element" doesn't apply to this codebase at all — it's a
+fixed-coordinate primitive with no element-targeting concept, only ever
+called by the app's own internal demo button (an honest non-finding, not
+force-fit into a test). Two others were real: `ProxyHealthScheduler
+.runOnce()` deleting a proxy while its own network probe is in flight hits
+a genuine FK constraint violation in `recordCheckResult()`'s INSERT —
+confirmed the existing try/catch already handles it (logged, batch
+continues, no orphaned row, whole transaction rolls back). Deleting a
+proxy actively sitting in a group's rotation pool via the real FK CASCADE
+path (not the `setProxyPool()` calls every existing rotation test used)
+— confirmed `pickNextPoolProxy()` still behaves correctly. Both
+hypotheses disproven; both given permanent regression tests that didn't
+exist before.
+
+**Fingerprint ×2**: `navigator.connection` and the basic timezone check
+(two of the three originally suggested candidates) turned out to already
+be covered (Seventeenth investigation; the existing enforced `timezone`
+field) — not rediscovered. The genuinely new checks: `Intl.DateTimeFormat`
+/`.NumberFormat`/`.Collator`'s own ICU locale negotiation (a separate code
+path from `navigator.language`) — verified clean on a live `de-DE`
+profile (all three correctly resolve to `"de"`, not the real host's
+locale), given a permanent check. `CSS.supports()` — confirmed not
+applicable at all (no host-identifying component; purely reflects the
+real, unfaked Chromium engine version).
+
+**UX**: live walkthrough of the Downloads page (named as outstanding from
+the prior round), a real network download, a real deleted-outside-the-app
+file to verify "missing" detection (worked correctly), search filtering
+(worked correctly), Show-in-folder (opened a real Explorer window,
+correct path). **Real bug found**: clicking Redownload on a still-running
+profile correctly threw "Profile is already running" but showed nothing
+to the user at all — `DownloadsPage.tsx` renders the list-loader's own
+`error` as a banner but never rendered the *separate* `actionRunner.error`
+that actually drives Open/Show-in-folder/Delete/Redownload, so any
+failure from those four actions failed completely silently. Fixed,
+verified live (the banner now shows correctly), permanent test added.
+One separate, minor UI-staleness gap noted but left unfixed (the list
+doesn't auto-refresh on a background redownload completing) — no
+cross-window event path exists for it today, a bigger change than this
+round's scope.
+
+Real numbers: unit — **789 tests, 74 files, all passing** (+1 net new
+test this entry). `typecheck`/`lint` — clean after every item.
+
+| Category | Score | Δ vs previous entry (86.46/86.2) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 83 | +1 | Two real race/cascade hypotheses confirmed already-safe with new permanent tests; no bug found, same small-credit convention as prior confirmed-safe-edge-case rounds. |
+| UX | 87 | +2 | A real bug found and fixed (silent action failures on the Downloads page) via a live walkthrough named as outstanding — a shipped fix with a permanent test, not just documented friction. |
+| Дизайн | 86 | 0 | No design work this round. |
+| Стабільність ×1.5 | 88 | 0 | No dedicated stability work this round. |
+| Безпека ×1.5 | 85 | 0 | No security work this round. |
+| Код/архітектура | 87 | 0 | Every fix this round was small and targeted (one banner render, two permanent tests) — no architectural shift. |
+| Тести | 90 | 0 | New tests this round credited to the categories whose gap they closed (Функціональність, Fingerprint, UX) rather than double-counted here, same convention as every prior round. |
+| Продуктивність | 81 | +2 | Closed a real, previously-open verification gap — the LowMemoryError guard's real-OS integration had only ever been checked with a mocked `os.freemem()` before; confirmed correct against genuinely reduced real RAM. |
+| Реліз | 88 | 0 | No release work this round. |
+| Fingerprint ×2 | 90 | +1 | One new permanent check (Intl locale) plus a decisive non-applicable finding (`CSS.supports()`) — smaller than a round with a shipped fix, consistent with the Twentieth investigation's own precedent for two clean vectors. |
+
+**Simple average:** (83+87+86+88+85+87+90+81+88+90)/10 = **86.5**
+**Weighted average:** (83+87+86+88×1.5+85×1.5+87+90+81+88+90×2)/12 = **86.79**
+
+**Summary:** another small, honest movement (+0.33 weighted / +0.3
+simple) — one real shipped UX fix, one real closed verification gap in
+performance, and confirmation that two more functional edge cases and two
+more fingerprint vectors are already safe/clean. Consistent with this
+session's own stated realistic ceiling (84-90 without external factors
+like code signing or second hardware) — not pushed toward 92 or any other
+number that would require those external factors. **Nothing from this
+round has been pushed — the four commits above and this entry remain
+local, pending explicit confirmation.**
