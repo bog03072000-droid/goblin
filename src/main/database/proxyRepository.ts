@@ -142,11 +142,29 @@ export class ProxyRepository {
    * single "most recent result" columns on the proxy row itself (what the
    * status pill in ProxiesPage.tsx reads) and an append-only history row
    * (what the history panel reads) — same write, two read shapes, so
-   * neither one can drift out of sync with the other. */
+   * neither one can drift out of sync with the other.
+   *
+   * A real race this app has no single-instance lock to rule out: the
+   * caller (ProxyHealthScheduler.runOnce(), or the manual "Test" button's
+   * `proxy:test` IPC handler) reads the proxy, then awaits a real network
+   * probe that can take several seconds — plenty of time for a delete
+   * (this window, another window, or the scheduler and a manual click
+   * landing on the same proxy) to remove the row first. `proxy_check_history
+   * .proxy_id` has `REFERENCES proxies(id) ON DELETE CASCADE`
+   * (foreign_keys = ON, db.ts), so the INSERT below would throw a genuine
+   * FK-constraint error for a since-deleted id. The scheduler already
+   * tolerates that per-proxy (see its own try/catch), but `proxy:test` has
+   * no such guard and would surface the raw SQLite error to the renderer
+   * instead of a graceful no-op — fixed here, once, for every caller: if
+   * the proxy is already gone by the time this runs, there is nothing
+   * meaningful to record, so it silently does nothing rather than let the
+   * INSERT hit the constraint. */
   recordCheckResult(id: string, result: { success: boolean; latencyMs: number | null }): void {
     const status = result.success ? 'OK' : 'FAIL';
     const checkedAt = new Date().toISOString();
     const run = this.db.transaction(() => {
+      const stillExists = this.db.prepare('SELECT 1 FROM proxies WHERE id = ?').get(id);
+      if (!stillExists) return;
       this.db
         .prepare(`UPDATE proxies SET last_check_status = ?, last_checked_at = ?, last_check_latency_ms = ? WHERE id = ?`)
         .run(status, checkedAt, result.latencyMs, id);

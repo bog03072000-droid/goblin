@@ -57,6 +57,41 @@ export class ProfileRepository {
     }
   }
 
+  /** Same TOCTOU class this round's `update()` fix addressed, but for the
+   * `profile_tags` join table specifically: `update()`'s dynamic SET clause
+   * only protects columns on the `profiles` row itself — `setTags()` above
+   * still does a full DELETE-then-reinsert of the *entire* tag list, so a
+   * caller that reads the current tags, adds/removes one in JS, and calls
+   * `update({ tags: merged })` (exactly what `bulkAddTags`/`bulkRemoveTags`
+   * in profileManager.ts used to do) can silently revert a concurrent
+   * writer's own tag change from the same read-modify-write gap. These two
+   * methods do the add/remove directly in SQL instead, with no read of the
+   * current tag list at all — nothing to go stale, so nothing to revert. */
+  addTags(profileId: string, tags: string[]): void {
+    const insertTag = this.db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
+    const getTagId = this.db.prepare('SELECT id FROM tags WHERE name = ?');
+    const link = this.db.prepare('INSERT OR IGNORE INTO profile_tags (profile_id, tag_id) VALUES (?, ?)');
+    const run = this.db.transaction((names: string[]) => {
+      for (const tag of names) {
+        insertTag.run(tag);
+        const row = getTagId.get(tag) as { id: number };
+        link.run(profileId, row.id);
+      }
+    });
+    run(tags);
+  }
+
+  removeTags(profileId: string, tags: string[]): void {
+    if (tags.length === 0) return;
+    const placeholders = tags.map(() => '?').join(', ');
+    this.db
+      .prepare(
+        `DELETE FROM profile_tags WHERE profile_id = ? AND tag_id IN
+         (SELECT id FROM tags WHERE name IN (${placeholders}))`,
+      )
+      .run(profileId, ...tags);
+  }
+
   private rowToProfile(row: ProfileRow): Profile {
     return {
       id: row.id,

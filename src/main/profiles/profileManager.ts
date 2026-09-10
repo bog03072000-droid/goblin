@@ -570,22 +570,27 @@ export class ProfileManager {
     });
   }
 
-  /** Adds tags without clobbering each profile's existing ones. */
+  /** Adds tags without clobbering each profile's existing ones. Calls
+   * `profiles.addTags()` directly rather than reading the current tag list
+   * and writing the merged result back — the read-merge-write shape used to
+   * live here, and is exactly the TOCTOU class this app has no
+   * single-instance lock to rule out (see profileRepository.ts's own
+   * comment on `addTags`/`removeTags`): a concurrent writer's own tag
+   * change landing in the gap between this read and this write would get
+   * silently reverted. */
   bulkAddTags(ids: string[], tags: string[]): Promise<BulkResult> {
     return this.bulkRun(ids, (id) => {
-      const profile = this.mustGet(id);
-      const merged = Array.from(new Set([...profile.tags, ...tags]));
-      this.profiles.update(id, { tags: merged });
+      this.mustGet(id);
+      this.profiles.addTags(id, tags);
     });
   }
 
-  /** Removes tags without touching a profile's other, unrelated tags. */
+  /** Removes tags without touching a profile's other, unrelated tags —
+   * same reasoning as bulkAddTags above. */
   bulkRemoveTags(ids: string[], tags: string[]): Promise<BulkResult> {
-    const toRemove = new Set(tags);
     return this.bulkRun(ids, (id) => {
-      const profile = this.mustGet(id);
-      const remaining = profile.tags.filter((tg) => !toRemove.has(tg));
-      this.profiles.update(id, { tags: remaining });
+      this.mustGet(id);
+      this.profiles.removeTags(id, tags);
     });
   }
 

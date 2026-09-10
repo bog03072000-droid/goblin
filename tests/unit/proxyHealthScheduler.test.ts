@@ -49,6 +49,28 @@ describe('ProxyRepository.recordCheckResult', () => {
     const updated = repo.getById(created.id)!;
     expect(updated.updatedAt).toBe(created.updatedAt);
   });
+
+  it('recordCheckResult for an already-deleted proxy id is a silent no-op, not a thrown FK-constraint error', () => {
+    // The exact shape of the manual "Test" button's own race: registerIpc's
+    // `proxy:test` handler has no try/catch around recordCheckResult() the
+    // way ProxyHealthScheduler.runOnce() does (see that describe block
+    // below) — if the proxy is deleted while the real network probe was in
+    // flight, this call is the only thing standing between that race and a
+    // raw SQLite FK error reaching the renderer as the "Test" button's
+    // result. Deleting BEFORE calling here stands in for a delete that
+    // genuinely lands during the awaited probe — same reasoning
+    // profileRepositoryUpdateRace.test.ts's own doc comment gives for why a
+    // real gap, not a mock, is required to prove a race exists.
+    const created = repo.create({ name: 'p', protocol: 'http', host: '127.0.0.1', port: 8080 });
+    repo.delete(created.id);
+
+    expect(() => repo.recordCheckResult(created.id, { success: true, latencyMs: 5 })).not.toThrow();
+
+    const orphaned = db.prepare('SELECT COUNT(*) as n FROM proxy_check_history WHERE proxy_id = ?').get(created.id) as {
+      n: number;
+    };
+    expect(orphaned.n).toBe(0);
+  });
 });
 
 describe('ProxyRepository check history', () => {
