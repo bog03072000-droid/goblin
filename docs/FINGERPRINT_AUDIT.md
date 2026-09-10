@@ -2869,3 +2869,67 @@ existing timezone/locale enforcement grading, now with its own permanent
 check. `CSS.supports()` — not applicable to this app's fingerprint
 surface, noted for completeness rather than graded, same as
 `jsHeapSizeLimit` last investigation.
+
+## Twenty-second investigation — `enumerateDevices()` label correlation across profiles, and `Notification.permission`
+
+**Method:** two real, separately-created profiles ("Media Profile A",
+macOS UA; "Media Profile B", Android UA), both left at every default
+(`mediaDevicesMode: 'real'`, `permissionsMode: 'real'`) — deliberately
+*not* opted into `hidden` mode, since the question was what the default
+actually exposes. Both started; `navigator.mediaDevices.enumerateDevices()`
+run in each profile's own live DevTools console (not the diagnostics page,
+which only exercises the `hidden`-mode override path — see
+`mediaDevicesLookFake()`, §Canvas/Audio/Fonts/Media Devices), and compared
+by hand.
+
+**Result — real, previously undocumented finding:** `deviceId`/`groupId`
+differ correctly between the two profiles (Chromium's own per-origin salt,
+not something this app implements) — e.g. Profile A's "Odyssey G5" audio
+output has `deviceId` `2d62c775…e73`, Profile B's has `deviceId`
+`5d1d8681…f4e`. But every device's `label` is byte-for-byte identical
+between the two profiles: `"Odyssey G5 (NVIDIA High Definition Audio)"`,
+`"Speakers (JBL Quantum610 Wireless Game)"`,
+`"Headset Earphone (JBL Quantum610 Wireless Chat)"`,
+`"OBS Virtual Camera"` — real hardware/software names (exact monitor
+model, headset model, and the fact OBS is installed) that any site can
+read and string-match to conclude two "isolated" profiles share one
+physical machine, regardless of every other fingerprint field being
+correctly randomized per profile.
+
+This isn't gated behind a permission prompt either: a second check this
+round, `navigator.permissions.query({name:'camera'|'microphone'})`,
+returned `"granted"` in both profiles with **no prior `getUserMedia()`
+call and no prompt ever shown** — confirmed in code
+(`fingerprintEnforcement.ts`'s `applyPermissionPolicy()`): the default
+`permissionsMode: 'real'` auto-grants every permission type, preserving
+Electron's own implicit no-handler-installed default. So the label leak
+isn't a hypothetical requiring user interaction — it's available to any
+page's JS on load, silently.
+
+**Not a new bug — an existing, correctly-working opt-out that the UI
+undersold:** `mediaDevicesMode: 'hidden'` already replaces
+`enumerateDevices()` with a fully synthetic, per-profile-seeded list
+(`buildFakeMediaDevices()`, `spoofingScript.ts`) — re-verified this round
+that it defeats the correlation (different seed ⇒ different fake labels
+per profile). `permissionsMode: 'deny-all'` independently denies the
+camera/microphone grant outright. Both already exist as one-click
+settings; nothing here required a code change to the enforcement itself.
+What *was* missing: the tooltip for `mediaDevicesMode` (
+`editor.fingerprint.spoofing.mediaTooltip`) explained *what* `'real'`
+mode reports but not *why it matters across profiles* — a user comparing
+"Real" vs "Hidden" had no way to know the real option's cost is
+specifically a same-machine correlation signal, not just "less
+anti-detect." Fixed by expanding the tooltip copy (`en.ts`/`uk.ts`) to
+name the mechanism explicitly: real labels are identical across every
+profile on the machine even though deviceId/groupId are salted.
+
+`Notification.permission` — also `"granted"` by default in both profiles,
+confirmed to be the exact same `applyPermissionPolicy()` code path as
+camera/mic (not an independent mechanism), so no separate finding beyond
+what's already covered above.
+
+**Grading:** Reaffirms the existing **C** (→ **B** when `hidden`) grade
+in the summary table — this investigation found the *specific mechanism*
+behind that grade (plaintext label correlation, silently auto-granted
+permission) rather than a new gap, and closed a documentation/UI-copy gap
+rather than an enforcement one.
