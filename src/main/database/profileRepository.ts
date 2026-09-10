@@ -161,6 +161,30 @@ export class ProfileRepository {
     return rows.map((r) => ({ ...this.rowToProfile(r), os: r.os, browserVersion: r.browser_version }));
   }
 
+  /** A real cross-connection race this round found: nothing (there's no
+   * `requestSingleInstanceLock()` anywhere in this app) stops a user from
+   * running two instances against the same --user-data-dir, each with its
+   * own SQLite connection to the same on-disk file (db.ts turns on WAL mode
+   * specifically because it supports this). The previous implementation
+   * read the FULL current row once (`existing`), merged the caller's patch
+   * over it in plain JS, and wrote the WHOLE merged row back — so if a
+   * second connection's own read-modify-write cycle landed in the gap
+   * between this read and this write's commit, the second write would
+   * silently revert whatever the first one just committed, even for a
+   * column the second caller never intended to touch (e.g. the Proxy tab
+   * saving in one window while the General tab saves in another — a
+   * classic TOCTOU lost-update). Reproduced deterministically in
+   * tests/unit/profileRepositoryUpdateRace.test.ts against two real
+   * on-disk connections before this fix.
+   *
+   * Fixed structurally, not just by serializing the race: the UPDATE's own
+   * SET clause is built dynamically from only the columns actually present
+   * in `patch`, so a column this call didn't intend to change is never
+   * part of the SQL statement at all — no "existing" read/merge is needed
+   * for it, and it genuinely cannot be reverted by this call regardless of
+   * timing. (Two callers changing the SAME column concurrently still
+   * resolve last-write-wins, which is expected and unavoidable for a
+   * plain form editor — that is not what this fix addresses.) */
   update(
     id: string,
     patch: Partial<{
@@ -176,30 +200,24 @@ export class ProfileRepository {
       scheduleDays: number[] | null;
     }>,
   ): Profile {
-    const existing = this.getById(id);
-    if (!existing) throw new Error(`Profile not found: ${id}`);
+    const columns: Record<string, unknown> = {};
+    if (patch.name !== undefined) columns['name'] = patch.name;
+    if (patch.description !== undefined) columns['description'] = patch.description;
+    if (patch.proxyId !== undefined) columns['proxy_id'] = patch.proxyId;
+    if (patch.groupId !== undefined) columns['group_id'] = patch.groupId;
+    if (patch.automationEnabled !== undefined) columns['automation_enabled'] = patch.automationEnabled ? 1 : 0;
+    if (patch.automationPort !== undefined) columns['automation_port'] = patch.automationPort;
+    if (patch.scheduleEnabled !== undefined) columns['schedule_enabled'] = patch.scheduleEnabled ? 1 : 0;
+    if (patch.scheduleTime !== undefined) columns['schedule_time'] = patch.scheduleTime;
+    if (patch.scheduleDays !== undefined) columns['schedule_days'] = JSON.stringify(patch.scheduleDays);
+    columns['updated_at'] = new Date().toISOString();
+
     const update = this.db.transaction(() => {
-      this.db
-        .prepare(
-          `UPDATE profiles SET name=@name, description=@description, proxy_id=@proxyId, group_id=@groupId,
-           automation_enabled=@automationEnabled, automation_port=@automationPort,
-           schedule_enabled=@scheduleEnabled, schedule_time=@scheduleTime, schedule_days=@scheduleDays,
-           updated_at=@updatedAt WHERE id=@id`,
-        )
-        .run({
-          id,
-          name: patch.name ?? existing.name,
-          description: patch.description ?? existing.description,
-          proxyId: patch.proxyId !== undefined ? patch.proxyId : existing.proxyId,
-          groupId: patch.groupId !== undefined ? patch.groupId : existing.groupId,
-          automationEnabled: (patch.automationEnabled ?? existing.automationEnabled) ? 1 : 0,
-          automationPort: patch.automationPort !== undefined ? patch.automationPort : existing.automationPort,
-          scheduleEnabled: (patch.scheduleEnabled ?? existing.scheduleEnabled) ? 1 : 0,
-          scheduleTime: patch.scheduleTime !== undefined ? patch.scheduleTime : existing.scheduleTime,
-          scheduleDays:
-            patch.scheduleDays !== undefined ? JSON.stringify(patch.scheduleDays) : JSON.stringify(existing.scheduleDays),
-          updatedAt: new Date().toISOString(),
-        });
+      if (!this.getById(id)) throw new Error(`Profile not found: ${id}`);
+      const setClause = Object.keys(columns)
+        .map((col) => `${col}=@${col}`)
+        .join(', ');
+      this.db.prepare(`UPDATE profiles SET ${setClause} WHERE id=@id`).run({ ...columns, id });
       if (patch.tags) this.setTags(id, patch.tags);
     });
     update();
