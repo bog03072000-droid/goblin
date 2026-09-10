@@ -455,3 +455,92 @@ edge case and one real, fixed, tested UX bug — deliberately not padded
 toward any particular target number. **Nothing has been pushed — the
 `v0.5.0` tag and every commit (through `8dc6dcc`) remain local, pending
 explicit confirmation.**
+
+## 2026-09-10 — 86.46 weighted / 86.2 simple
+
+Per explicit instruction: (1) push every commit and the `v0.5.0` tag from
+the previous two rounds (now done — confirmed via `git status` showing
+`main` in sync with `origin/main`, and `git ls-remote --tags origin`
+showing `v0.5.0` present, pointing at `cb0219f`); (2) two of this file's
+own bottom-3 categories (Продуктивність 79, Функціональність 82 — UX 85
+was tied with Безпека and no longer clearly bottom-2, so not picked this
+round) plus the always-continued Fingerprint investigation. Compared only
+against this file's own previous entry (86.04/85.8).
+
+**Performance** (`bc70237`): a third careful 20→50→100 `maxConcurrentLaunches`
+2/4/8 escalation, same continuous-detached-poll method as the prior two,
+this time on a machine with substantially more total RAM (~31GB vs.
+~13-16GB previously). **0 failures, 0 orphans at every tier and
+concurrency — and, genuinely different from both prior rounds, 0 real-risk
+signal at any concurrency, including 2.** The continuous poll's true
+minimum (4.65GB free) is still deeper than any single tier's own discrete
+sample, the familiar pattern, but nowhere near the 90MB near-exhaustion the
+same 100-profile tier produced on a ~13GB-total machine two rounds ago.
+Real, load-bearing conclusion: **safe-concurrency headroom scales with the
+machine's own total RAM, not a fixed profile count** — the "concurrency 8
+is safer at 100+ profiles" finding is real but specific to low-headroom
+machines, not universal. Updated `docs/LOAD_TEST.md` and `README.md`'s
+concurrency note accordingly.
+
+**Functionality** (`18f54d4`): three edge-case hypotheses checked (per the
+three explicitly suggested options) — schedule-trigger-vs-soft-delete and
+restore-after-hard-delete-timeout both turned out to already be correctly
+handled **and already covered by existing tests**
+(`profileScheduler.test.ts`'s "listScheduled() excludes soft-deleted
+profiles", `profileSoftDelete.test.ts`'s "restoreDeleted() after the undo
+window already elapsed throws") — Node's single-threaded, run-to-completion
+execution model rules out the classic race conditions both hypotheses were
+checking for. Not rediscovered as new findings, not force-fixed. The third
+— automation API with simultaneous clients — was genuinely untested: added
+a real E2E test opening two independent CDP clients concurrently through
+the same automation-proxy port, confirming no cross-wiring between the
+proxy's per-connection byte pipes (each gets its own fresh socket and its
+own `Target.attachToTarget` session). Hypothesis disproven — already safe
+by design.
+
+**Fingerprint ×2** (`ff0e1d8`): Twentieth investigation, same live-profile
+method. `screen.availWidth`/`availHeight` — a candidate leak of the real
+host's own taskbar-adjusted screen area — checked on both a mobile and a
+desktop profile, confirmed already correct (exactly matches
+`screenWidth`/`screenHeight`, no host leak); given a permanent regression
+check anyway, matching the Nineteenth investigation's posture, to guard
+against a future regression rather than because a gap exists today.
+`performance.memory.jsHeapSizeLimit` — checked decisively by comparing two
+live profiles with `deviceMemory` 4 and 16 on the same real 32GB machine:
+the reported heap limit was byte-for-byte identical in both cases,
+confirming it's a fixed V8/Chromium architecture constant, not tied to
+this app's spoofing and not a real host-RAM leak either — genuinely
+nothing to fix, no lever exists for it in Electron's own API surface.
+
+Real numbers: unit — **786 tests, 74 files, all passing** (+1 net new
+test since the last entry; the two E2E additions this round live in
+`tests/e2e/`, outside this count). `fingerprintEnforcement.spec.ts` — 6/6
+passed, including the new `screenAvailArea` assertion. `typecheck`/`lint`
+— clean after every item.
+
+| Category | Score | Δ vs previous entry (86.04/85.8) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 83 | +1 | `18f54d4` — one genuinely new, real E2E test closing an untested concurrency gap; the other two hypotheses checked were already both correctly handled and already tested, so they add confidence but not new coverage. |
+| UX | 85 | 0 | Not picked this round — no longer clearly bottom-2 once Функціональність (82) and Продуктивність (79) were both lower. |
+| Дизайн | 86 | 0 | No design work this round. |
+| Стабільність ×1.5 | 88 | 0 | No dedicated stability work this round. |
+| Безпека ×1.5 | 85 | 0 | No security work this round. |
+| Код/архітектура | 87 | 0 | No architectural work this round. |
+| Тести | 90 | 0 | 2 new E2E tests added this round, both credited to the categories whose gap they closed (Функціональність, Fingerprint's permanent check) rather than double-counted here, same convention as every prior round. |
+| Продуктивність | 81 | +2 | `bc70237` — a real, informative escalation that revised the standing recommendation (hardware-dependent, not universal) rather than just re-confirming the app doesn't break; a genuinely new, useful conclusion, not a repeat measurement. |
+| Реліз | 88 | 0 | No release work this round (the push itself is process, not a code/release-readiness change). |
+| Fingerprint ×2 | 89 | +1 | `ff0e1d8` — one new permanent regression check added (availWidth/availHeight) plus a decisive, non-trivial finding (jsHeapSizeLimit is a V8 constant, closing off a real hypothesis) — smaller than the Nineteenth investigation's credit since no fix shipped this round, both vectors came back clean. |
+
+**Simple average:** (83+85+86+88+85+87+90+81+88+89)/10 = **86.2**
+**Weighted average:** (83+85+86+88×1.5+85×1.5+87+90+81+88+89×2)/12 = **86.46**
+
+**Summary:** a small, honest movement (+0.42 weighted / +0.4 simple),
+not forced toward 87/88/90 or any other round number. The most valuable
+single result this round is arguably the performance one — not because a
+bug was fixed, but because it correctly revised a standing recommendation
+from "universal rule" to "hardware-dependent", which is more useful to a
+future reader than either extreme (blindly trusting the old rule, or
+re-running it without drawing the comparison). **This round's own commits
+(`bc70237`, `18f54d4`, `ff0e1d8`, and this entry) have NOT been pushed —
+only the prior two rounds' work (through `8dc6dcc`) was pushed, per this
+round's explicit, separate authorization.**
