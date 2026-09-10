@@ -192,6 +192,28 @@ describe('DownloadsPage', () => {
     );
   });
 
+  it('a failed action (e.g. Re-download on an already-running profile) shows an error banner, not silence', async () => {
+    // Found via a live UX walkthrough: actionRunner's own `error` (driving
+    // Open/Show-in-folder/Delete/Re-download) was captured but never
+    // rendered anywhere in this page — only the separate `error` from the
+    // list-loading useAsyncAction() instance was. A real failure (e.g.
+    // clicking Re-download while the profile is still running, which
+    // throws "Profile is already running") had no visible feedback at all,
+    // only a console.error a real user would never see.
+    const invoke = mockInvoke({
+      'downloads:list': () => [makeDownload()],
+      'profiles:list': () => [],
+      'downloads:redownload': () => {
+        throw new Error('Profile is already running');
+      },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Re-download/ }));
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('downloads:redownload', { id: 'd1' }));
+    expect(await screen.findByText('This profile is already running.')).toBeInTheDocument();
+  });
+
   it('applies the correct status pill variant for missing, completed, cancelled and failed', async () => {
     mockInvoke({
       'downloads:list': () => [

@@ -82,6 +82,14 @@ export function DownloadsPage(): JSX.Element {
   return (
     <div className="content">
       {error && <div className="banner banner-error">{error}</div>}
+      {/* actionRunner drives Open/Show-in-folder/Delete/Redownload — found via
+          a live walkthrough that a failure from any of them (e.g. Redownload
+          on a profile that's already running) was captured in
+          actionRunner.error but never actually rendered anywhere, so it
+          failed completely silently to a real user (only visible via
+          describeError's own console.error, which nobody but a developer
+          would ever open). */}
+      {actionRunner.error && <div className="banner banner-error">{actionRunner.error}</div>}
       <div className="toolbar toolbar-inline">
         <input
           placeholder={t('downloads.searchPlaceholder')}
