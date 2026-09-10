@@ -124,6 +124,36 @@ describe('GroupRepository proxy pool / rotation', () => {
     groups.setProxyPool(group.id, [a.id, b.id, c.id]);
     expect([a.id, b.id, c.id]).toContain(groups.pickNextPoolProxy(group.id));
   });
+
+  it('deleting a proxy that is actively in a rotation pool (a real FK CASCADE, not setProxyPool) shrinks the pool the same way, with no orphaned pool row', () => {
+    // The tests above all shrink/empty the pool via setProxyPool() — a
+    // different code path than what actually happens when a user deletes a
+    // proxy that happens to be sitting in a group's pool: `group_proxy_pool
+    // .proxy_id` has `ON DELETE CASCADE` (see migrations/007), so
+    // proxies.delete() should remove the pool row as a DB-level side
+    // effect, without groupRepository.ts ever being told about it directly.
+    // Genuinely untested until now: does pickNextPoolProxy() still behave
+    // correctly (valid remaining proxy, no crash, no stale reference to the
+    // deleted id) via THIS real cascade path, not just the manual one?
+    const group = groups.create('G');
+    const a = makeProxy('a');
+    const b = makeProxy('b');
+    const c = makeProxy('c');
+    groups.setProxyPool(group.id, [a.id, b.id, c.id]);
+    groups.pickNextPoolProxy(group.id); // -> a, cursor becomes 1
+
+    proxies.delete(b.id);
+
+    const remainingPool = groups.getProxyPool(group.id);
+    expect(remainingPool).toEqual([a.id, c.id]);
+    expect(remainingPool).not.toContain(b.id);
+
+    for (let i = 0; i < 5; i++) {
+      const result = groups.pickNextPoolProxy(group.id);
+      expect(result).not.toBe(b.id);
+      expect([a.id, c.id]).toContain(result);
+    }
+  });
 });
 
 describe('ProfileManager.start() proxy rotation integration', () => {

@@ -166,4 +166,43 @@ describe('ProxyHealthScheduler.runOnce', () => {
     expect(repo.getById(a.id)!.lastCheckStatus).toBeNull(); // never recorded — threw before recordCheckResult
     expect(repo.getById(b.id)!.lastCheckStatus).toBe('OK');
   });
+
+  it('a proxy deleted while its own health check is in flight does not crash the batch or leave an orphaned history row', async () => {
+    // Real race: runOnce() snapshots the full proxy list up front via
+    // list(), then awaits testProxyConnection() per proxy — a real network
+    // probe that can take up to 5s. If something (a user click, a bulk
+    // delete) removes that exact proxy from the DB while its own check is
+    // still in flight, recordCheckResult()'s INSERT into
+    // proxy_check_history hits a real `proxy_id ... REFERENCES proxies(id)
+    // ON DELETE CASCADE` foreign-key constraint (foreign_keys = ON, see
+    // db.ts) for a row that no longer exists — a genuine FK violation, not
+    // a hypothetical one. Simulated here by having testProxyConnection's
+    // own mock delete the proxy mid-flight, exactly mimicking what a
+    // concurrent delete during the real 5-second network probe would do.
+    const a = repo.create({ name: 'a', protocol: 'http', host: '127.0.0.1', port: 8080 });
+    const b = repo.create({ name: 'b', protocol: 'http', host: '127.0.0.1', port: 8081 });
+
+    vi.mocked(testProxyConnection).mockImplementation(async (proxy) => {
+      if (proxy.id === a.id) {
+        repo.delete(a.id);
+      }
+      return { success: true, latencyMs: 3, error: null };
+    });
+
+    const scheduler = new ProxyHealthScheduler(repo, 60_000);
+    await expect(scheduler.runOnce()).resolves.not.toThrow();
+
+    // The rest of the batch still gets checked — one proxy's FK failure
+    // doesn't take down the loop, same "one bad item doesn't halt the
+    // batch" guarantee the throwing-check test above already covers for a
+    // different failure mode.
+    expect(repo.getById(b.id)!.lastCheckStatus).toBe('OK');
+    // No orphaned history row for the now-deleted proxy — the FK violation
+    // means recordCheckResult's whole transaction (including its own
+    // UPDATE) rolled back cleanly rather than partially applying.
+    const orphaned = db.prepare('SELECT COUNT(*) as n FROM proxy_check_history WHERE proxy_id = ?').get(a.id) as {
+      n: number;
+    };
+    expect(orphaned.n).toBe(0);
+  });
 });
