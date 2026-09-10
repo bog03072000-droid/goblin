@@ -2739,3 +2739,69 @@ inconsistency), now fixed and verified, both on the failing case and
 regression-checked on the passing case: **A**. `document.fonts.ready`/
 enumeration — no gap existed to begin with; stays covered under the
 existing fonts grading from the Twelfth investigation, unchanged.
+
+## Twentieth investigation — `screen.availWidth`/`availHeight` and `performance.memory.jsHeapSizeLimit`: both checked, both clean, no gap
+
+**Two new candidate vectors, same live-profile method as every prior
+stage.** Neither had been mentioned anywhere in this document before.
+
+**`screen.availWidth`/`availHeight` — checked, no gap found.** Hypothesis:
+these are a genuinely separate pair of properties from `screen.width`/
+`height` — on a real device, `availWidth`/`availHeight` report the area
+left over after OS chrome (a taskbar, a phone's status bar) is subtracted,
+so in principle `Emulation.setDeviceMetricsOverride` could set `screenWidth`/
+`screenHeight` correctly while leaving `availWidth`/`availHeight` derived
+from the real host's own taskbar-adjusted desktop area — the same class of
+CDP-vs-claim mismatch as the Nineteenth investigation's `screen.orientation`
+finding, just for a different pair of fields.
+
+Verified empirically on two live profiles:
+- A mobile-configured (iPhone, `390x844`) profile: `{"w":390,"h":844,
+  "availW":390,"availH":844,...}` — exact match, no host leak.
+- A desktop-configured (Windows, different resolution) profile: same
+  exact-match result.
+
+**No gap; already correct** — `setDeviceMetricsOverride` makes
+`availWidth`/`availHeight` track `screenWidth`/`screenHeight` exactly, the
+same as a real device rendering with no simulated OS chrome overlaying the
+page. Added a permanent `diagnostics.html` + `fingerprintEnforcement.spec.ts`
+check anyway (same posture as the Nineteenth investigation's fix) — not
+because a gap exists today, but so a future change to how screen metrics
+are applied can't silently regress this back to leaking the real host.
+
+**`performance.memory.jsHeapSizeLimit` — checked, decisively not tied to
+this app's `deviceMemory` spoofing, and not a real host-identifying leak
+either.** Hypothesis: this Chrome-only heap-size API might report a value
+that scales with the *real* host's physical RAM even when
+`navigator.deviceMemory` is correctly spoofed — a well-known class of
+signal fingerprinting scripts check for exactly this kind of cross-API
+inconsistency.
+
+Verified empirically, decisively, by comparing two live profiles with
+deliberately very different configured `deviceMemory` values on the same
+real machine:
+- `deviceMemory: 4` (the iPhone profile above): `jsHeapSizeLimit:
+  4294705152`.
+- `deviceMemory: 16` (a Windows Desktop profile): `jsHeapSizeLimit:
+  4294705152` — byte-for-byte **identical**.
+
+**Conclusion: `jsHeapSizeLimit` is a fixed V8/Chromium architecture
+constant (~4GB, the standard 64-bit renderer old-space ceiling), completely
+decoupled from both this app's `deviceMemory` override and the real host's
+actual physical RAM** (this machine has 32GB; the reported limit still sits
+at the same ~4GB every modern 64-bit Chrome build reports regardless of
+host or claimed device). This is neither a leak this app could plausibly
+fix (there is no CDP/Electron lever over V8's own heap-sizing logic) nor a
+real distinguishing signal in practice (virtually every real-world 64-bit
+Chrome install reports the same value) — genuinely nothing to do here, not
+a gap glossed over. No permanent test added for it, matching this
+document's own convention (Sixth/Twelfth investigations) of not adding
+regression coverage for a mechanism outside the app's control to begin
+with.
+
+**Grading:** `screen.availWidth`/`availHeight` — no gap existed; folded
+into the same **A** grade as the Nineteenth investigation's screen-metrics
+fix, now with its own permanent check. `performance.memory.jsHeapSizeLimit`
+— not applicable to this app's own fingerprint-enforcement grading at all
+(a V8 architecture constant, not a spoofable or leakable field this app's
+mechanisms touch), noted here for completeness rather than graded.

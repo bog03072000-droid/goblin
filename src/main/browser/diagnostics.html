@@ -167,6 +167,8 @@
         webglOverridden: isOverridden(window.WebGLRenderingContext && WebGLRenderingContext.prototype.getParameter),
         fontsOverridden: isOverridden(document.fonts && document.fonts.check),
         orientationType: screen.orientation ? screen.orientation.type : 'not exposed',
+        availWidth: screen.availWidth,
+        availHeight: screen.availHeight,
         mediaDevices: await getMediaDevices(),
         webrtc: await probeWebrtc(),
       };
@@ -264,6 +266,25 @@
           () => {
             const expected = configured.screenWidth < configured.screenHeight ? 'portrait-primary' : 'landscape-primary';
             return [observed.orientationType === expected ? 'PASS' : 'MISMATCH', observed.orientationType];
+          },
+        ],
+        [
+          // Twentieth investigation, docs/FINGERPRINT_AUDIT.md: checked whether
+          // screen.availWidth/availHeight (a separate pair of properties from
+          // screen.width/height, in principle reducible by simulated OS chrome
+          // like a taskbar) leak the real host's own available area instead of
+          // the claimed screen's. Confirmed clean on both a mobile and a desktop
+          // profile — setDeviceMetricsOverride already makes them match
+          // screenWidth/screenHeight exactly, same as a real device with no OS
+          // chrome overlaying the page. Kept as a permanent check so a future
+          // change (e.g. someone starts passing a real width/height override)
+          // can't silently regress this back to leaking the real host.
+          'Screen available area', 'screenAvailArea',
+          () => `${configured.screenWidth}x${configured.screenHeight}`,
+          () => {
+            const expected = `${configured.screenWidth}x${configured.screenHeight}`;
+            const actual = `${observed.availWidth}x${observed.availHeight}`;
+            return [actual === expected ? 'PASS' : 'MISMATCH', actual];
           },
         ],
       ];

@@ -124,6 +124,12 @@ test('starting a profile with auto-diagnostics writes a real observed-vs-configu
   // must report 'portrait-primary', not the desktop host's landscape.
   expect(snapshot.statusByField['screenOrientation']).toBe('PASS');
 
+  // screen.availWidth/availHeight (Twentieth investigation) checked as a
+  // candidate leak of the real host's own available screen area (e.g. minus
+  // a taskbar) instead of the claimed device's — confirmed already correct,
+  // kept as a permanent guard against a future regression.
+  expect(snapshot.statusByField['screenAvailArea']).toBe('PASS');
+
   // WebRTC leak probe (diagnostics.html's own probeWebrtc(), a real
   // RTCPeerConnection against a public STUN server) has existed since the
   // fingerprint reality audit stage and runs automatically as part of this
