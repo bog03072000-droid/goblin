@@ -256,6 +256,47 @@
   --shadow-accent: 0 1px 1px rgba(0, 0, 0, 0.3), 0 6px 14px -6px rgba(124, 179, 66, 0.34), 0 14px 28px -18px rgba(124, 179, 66, 0.3);
   --ring: 0 0 0 2px rgba(124, 179, 66, 0.34);
   --ring-danger: 0 0 0 2px rgba(229, 72, 77, 0.34);
+
+  /* Typography scale, ported from the design system's tokens/typography.css
+     verbatim (same px/em/weight numbers). Wired up below wherever an
+     existing rule's literal value already matches one of these steps
+     (body 13px = --fs-body, table headers 11px/700 -> the readme's own
+     explicit table-header spec of 10px/600/.08em tracking, etc.) — NOT a
+     blanket line-height migration: --lh-body (1.55) is deliberately never
+     applied to body/table text, since this app's own stated density
+     priority ("information density is a feature" — README) would regress
+     visibly at that line-height on 44px table rows. --lh-* still declared
+     here for any future prose-heavy surface that does want it. */
+  --font-display: 'Poppins', 'Inter', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Space Mono', 'SFMono-Regular', ui-monospace, Menlo, monospace;
+
+  --fs-micro: 10px;
+  --fs-caption: 11px;
+  --fs-sm: 12px;
+  --fs-body: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-title: 20px;
+  --fs-display: 28px;
+  --fs-hero: 40px;
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  --tracking-hero: -0.03em;
+  --tracking-display: -0.025em;
+  --tracking-title: -0.02em;
+  --tracking-tight: -0.01em;
+  --tracking-normal: 0;
+  --tracking-caps: 0.08em;
 }
 
 /* Light palette — sage-tinted neutrals (not neutral gray) so it still reads
@@ -377,22 +418,26 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--paper);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Poppins', 'Inter', system-ui, sans-serif;
+  font-family: var(--font-display);
+  /* 800 sits deliberately between --fw-bold(700, the reference's own
+     --type-title role) and --fw-black(900, hero-only) — kept as its own
+     literal rather than snapped to either named weight, matching this
+     app's existing heading weight exactly (no visual change here). */
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-title);
   margin: 0 0 4px;
   color: var(--paper);
 }
 
 .mono {
-  font-family: 'Space Mono', 'Consolas', monospace;
+  font-family: var(--font-mono), 'Consolas', monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -431,10 +476,10 @@ h1, h2, h3, h4 {
 }
 
 .sidebar-brand-name {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 900;
+  font-family: var(--font-display);
+  font-weight: var(--fw-black);
   font-size: 15px;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-title);
   color: var(--paper);
 }
 
@@ -447,8 +492,8 @@ h1, h2, h3, h4 {
   border-radius: var(--radius-chip);
   cursor: pointer;
   color: var(--ash);
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-body);
   transition: background var(--ease), color var(--ease), box-shadow var(--ease), transform var(--ease);
   border-left: 2px solid transparent;
 }
@@ -504,7 +549,7 @@ input, select, textarea {
   color: var(--paper);
   border-radius: var(--radius-input);
   padding: 7px 12px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-family: inherit;
   transition: border-color var(--ease), box-shadow var(--ease);
 }
@@ -569,9 +614,9 @@ input[type="checkbox"].toggle:hover { transform: none; }
   cursor: pointer;
   border-radius: var(--radius-chip);
   padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  font-family: var(--font-ui);
   border: 1px solid transparent;
   transition: transform var(--ease), box-shadow var(--ease), background var(--ease), border-color var(--ease), color var(--ease), opacity var(--ease);
 }
@@ -639,7 +684,7 @@ input[type="checkbox"].toggle:hover { transform: none; }
   transform: none;
 }
 
-.btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
+.btn-sm { padding: 5px 10px; font-size: var(--fs-sm); border-radius: 8px; }
 
 /* ---------- Spinner ---------- */
 .spinner {
@@ -673,8 +718,8 @@ input[type="checkbox"].toggle:hover { transform: none; }
   padding: 8px 14px;
   cursor: pointer;
   color: var(--ash);
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-bottom: 2px solid transparent;
@@ -705,12 +750,18 @@ input[type="checkbox"].toggle:hover { transform: none; }
 /* ---------- Table ---------- */
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--stroke); }
+/* The design system's readme is explicit about this exact recipe:
+   "Table headers are 10px uppercase at .08em tracking in muted ash —
+   deliberately quieter than the data below them" — its own --type-caps
+   composed role (--fw-semibold/--fs-micro/1.2/--font-ui). Previously
+   11px/700/.05em, a close-but-not-exact approximation from before this
+   scale existed; now the literal spec. */
 th {
   color: var(--ash-dim);
-  font-weight: 700;
-  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-micro);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-caps);
 }
 td { transition: background var(--ease), box-shadow var(--ease); }
 /* Row hover is a neutral surface step (README's own rule: accent is
@@ -814,9 +865,9 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
   gap: 5px;
   padding: 3px 10px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 700;
-  font-family: 'Space Mono', monospace;
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  font-family: var(--font-mono), monospace;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border: 1px solid transparent;
@@ -854,7 +905,7 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
   background: var(--neutral-wash);
   border: 1px solid var(--stroke);
   color: var(--ash-dim);
-  font-size: 11px;
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
 }
@@ -864,7 +915,7 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
   padding: 9px 14px;
   border-radius: var(--radius-input);
   margin-bottom: 12px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   border: 1px solid transparent;
 }
 .banner-error { background: var(--danger-wash); border-color: var(--danger-line); color: color-mix(in srgb, var(--danger) 70%, white); }
@@ -894,7 +945,7 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
   box-shadow: var(--shadow-overlay), var(--hairline-top);
   min-width: 320px;
 }
-.undo-toast-message { font-size: 13px; color: var(--paper); flex: 1; }
+.undo-toast-message { font-size: var(--fs-body); color: var(--paper); flex: 1; }
 .undo-toast-actions { display: flex; align-items: center; gap: 6px; }
 .undo-toast-close {
   background: none;
@@ -953,7 +1004,7 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .context-menu-item {
   padding: 7px 10px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   color: var(--paper);
   transition: background var(--ease), color var(--ease);
@@ -1016,8 +1067,8 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .flex-col-gap { display: flex; flex-direction: column; gap: 8px; }
 
 .text-dim { color: var(--ash-dim); }
-.text-sm { font-size: 12px; }
-.text-xs { font-size: 11px; }
+.text-sm { font-size: var(--fs-sm); }
+.text-xs { font-size: var(--fs-caption); }
 .mb-0 { margin-bottom: 0 !important; }
 .mb-4 { margin-bottom: 4px; }
 .mb-8 { margin-bottom: 8px; }
@@ -1113,13 +1164,14 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
    a hairline rule between groups, no rule before the first. */
 .fp-picker-group { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
 .fp-picker-group:first-of-type { margin-top: 4px; padding-top: 0; border-top: none; }
+/* Same quiet-uppercase-caption role as th above, now the same recipe. */
 .fp-picker-group-title {
   margin: 0 0 8px;
   color: var(--ash-dim);
-  font-weight: 700;
-  font-size: 11px;
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-micro);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-caps);
 }
 
 /* Read-only Auto-mode fingerprint view: one card per field category
