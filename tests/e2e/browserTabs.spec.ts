@@ -72,6 +72,22 @@ test('real multi-tab browser window: new/close/switch/duplicate tabs, navigation
 
   const shell = await connectToShell();
 
+  // Real regression check for the CSP finding this round fixed: the shell's
+  // CSS used to live in an inline <style> block, which this window's own
+  // `style-src 'self'` (no 'unsafe-inline') silently dropped in full,
+  // leaving the window completely unstyled — confirmed live via this exact
+  // window's own DevTools console before the fix ("Refused to apply inline
+  // style because it violates ... style-src 'self'"). CSS now loads from
+  // an external, same-origin browser-shell.css via <link>, which style-src
+  // 'self' allows. Asserting real computed values (not just "no console
+  // error") is the direct proof the stylesheet actually applied — a CDP
+  // reload here was tried first but detaches connectOverCDP's target, so
+  // this checks the page as it already stands post-navigation instead.
+  const toolbarBg = await shell.locator('#toolbar').evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(toolbarBg).toBe('rgb(22, 26, 23)'); // --char, browser-shell.css
+  const addressFont = await shell.locator('#address').evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(addressFont).toContain('Space Mono');
+
   // Starts with exactly one tab, auto-navigated by the main process.
   await expect(shell.locator('.tab')).toHaveCount(1, { timeout: 15_000 });
   const firstTabId = await shell.locator('.tab').first().getAttribute('data-tab-id');

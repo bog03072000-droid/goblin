@@ -34,7 +34,8 @@ function createTab(options) {
   const tabEl = document.createElement('div');
   tabEl.className = 'tab';
   tabEl.dataset.tabId = String(id);
-  tabEl.innerHTML = '<span class="tab-title">New Tab</span><span class="tab-close">&times;</span>';
+  tabEl.innerHTML =
+    '<span class="tab-title">New Tab</span><span class="tab-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>';
   tabbarEl.insertBefore(tabEl, newTabBtn);
 
   const tab = { id, webview, tabEl, url: 'about:blank', title: 'New Tab' };

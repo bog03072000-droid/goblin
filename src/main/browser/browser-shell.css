@@ -1,0 +1,355 @@
+/* Externalized specifically so this file can be loaded via <link
+   rel="stylesheet"> — an inline <style> block in browser-shell.html was
+   silently dropped in full by this window's own CSP (style-src 'self',
+   no 'unsafe-inline'/hash/nonce), which is exactly why the window
+   rendered as unstyled system-default HTML. A same-origin external
+   stylesheet is allowed by 'self' with no CSP change needed; verified
+   live (zero console CSP errors after this split, confirmed via the
+   window's own DevTools). */
+
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
+/* Address bar only — matches the rest of the app's `.mono` convention for
+   URLs/technical text (proxy host, cookie domain, etc.), latin-only is
+   enough since URLs are effectively always latin-range. */
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/SpaceMono-400-normal-latin.woff2') format('woff2'); }
+
+/* Same token set/values as src/renderer/styles/global.css's :root block —
+   this static page has no build-time CSS import, so it keeps its own
+   copy (see this repo's existing self-hosted-fonts precedent in
+   copy-assets.js) rather than sharing Vite's bundled/hashed output.
+   Kept in sync manually; only the subset this file actually uses. */
+:root {
+  --ink: #0d0f0e;
+  --char: #161a17;
+  --char-raised: #1d221c;
+  --char-hi: #252b23;
+  --char-max: #2d3429;
+  --stroke: #232823;
+  --stroke-strong: #2e352c;
+  --surface-input: #101312;
+
+  --lime: #7cb342;
+  --lime-bright: #8fc954;
+  --lime-deep: #4c7a1f;
+  --lime-ink: #0c1206;
+  --lime-glow: rgba(124, 179, 66, 0.45);
+  --lime-wash: rgba(124, 179, 66, 0.11);
+
+  --paper: #f2f5ee;
+  --ash: #9ba396;
+  --ash-dim: #727b6d;
+  --danger: #e5484d;
+  --danger-wash: rgba(229, 72, 77, 0.11);
+  --danger-line: rgba(229, 72, 77, 0.32);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-chip: 8px;
+  --radius-card: 18px;
+  --radius-input: 12px;
+  --radius-pill: 999px;
+
+  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --shadow-flat: 0 1px 0 rgba(0, 0, 0, 0.28);
+  --shadow-lift: 0 1px 1px rgba(0, 0, 0, 0.32), 0 8px 18px -8px rgba(0, 0, 0, 0.44), 0 24px 48px -28px rgba(0, 0, 0, 0.6);
+  --shadow-overlay: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -10px rgba(0, 0, 0, 0.52), 0 40px 72px -40px rgba(0, 0, 0, 0.7);
+  --shadow-accent: 0 1px 1px rgba(0, 0, 0, 0.3), 0 6px 14px -6px rgba(124, 179, 66, 0.34), 0 14px 28px -18px rgba(124, 179, 66, 0.3);
+  --ring: 0 0 0 2px rgba(124, 179, 66, 0.34);
+
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Space Mono', 'SFMono-Regular', ui-monospace, Menlo, monospace;
+  --fs-micro: 10px;
+  --fs-caption: 11px;
+  --fs-sm: 12px;
+  --fs-body: 13px;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --tracking-caps: 0.08em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+
+  --curve-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --ease: var(--dur) var(--curve-standard);
+  --transition-control: background var(--ease), color var(--ease), border-color var(--ease), box-shadow var(--ease), transform var(--ease);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  overflow: hidden;
+}
+body { display: flex; flex-direction: column; }
+
+/* ---------- Tab bar ---------- */
+#tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) 0;
+  background: var(--ink);
+  -webkit-app-region: drag;
+  flex: 0 0 auto;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 220px;
+  min-width: 120px;
+  background: var(--char);
+  color: var(--ash);
+  border: 1px solid var(--stroke);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  -webkit-app-region: no-drag;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  transition: var(--transition-control);
+}
+.tab:hover { background: var(--char-raised); color: var(--paper); }
+/* Active tab: the same "flat accent, not a glow" language as
+   .sidebar-item.active/.tab-item.active in the main app — a lime top
+   rule is this toolbar's one sanctioned per-view accent moment; hover
+   states elsewhere in this file step the surface instead of turning
+   lime, so a busy tab strip never dilutes what "active" means. */
+.tab.active {
+  background: var(--char-raised);
+  color: var(--paper);
+}
+.tab.active::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--lime);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.tab .tab-title { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.tab .tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--ash-dim);
+  border-radius: var(--radius-xs);
+  transition: var(--transition-control);
+}
+.tab .tab-close:hover { background: var(--stroke-strong); color: var(--paper); }
+.tab .tab-close svg { width: 11px; height: 11px; }
+#new-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  width: 28px;
+  height: 28px;
+  color: var(--ash-dim);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+#new-tab:hover { color: var(--paper); background: var(--char); }
+#new-tab svg { width: 15px; height: 15px; }
+
+/* ---------- Toolbar ---------- */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--char);
+  border-bottom: 1px solid var(--stroke);
+  -webkit-app-region: drag;
+  flex: 0 0 auto;
+}
+#toolbar button, #toolbar input { -webkit-app-region: no-drag; }
+/* Font-family split out from the rule above and scoped to button only —
+   #toolbar input (higher specificity than a bare #address) would
+   otherwise beat #address's own font-family: var(--font-mono) below. */
+#toolbar button { font-family: var(--font-ui); }
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  color: var(--ash);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: var(--transition-control);
+}
+.icon-btn svg { width: 16px; height: 16px; }
+/* Surface-step hover, not a colour change — same accent-discipline reason
+   .btn-ghost's hover works this way in the main app: with 5 icon buttons
+   sitting side by side here, all turning lime on hover would dilute the
+   one thing lime is supposed to mean (this toolbar's Go button, and the
+   active-tab accent above). */
+.icon-btn:hover:not(:disabled) { background: var(--char-hi); color: var(--paper); }
+.icon-btn:active:not(:disabled) { transform: scale(0.94); }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-chip);
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  font-family: inherit;
+  background: var(--char-raised);
+  color: var(--ash);
+  box-shadow: var(--shadow-flat), var(--hairline-top);
+  transition: var(--transition-control);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.btn:hover:not(:disabled) {
+  background: var(--char-max);
+  color: var(--paper);
+  box-shadow: var(--shadow-lift), var(--hairline-top);
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.985); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--lime-bright), var(--lime));
+  border-color: var(--lime-deep);
+  color: var(--lime-ink);
+  box-shadow: var(--shadow-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--lime-bright), var(--lime));
+  color: var(--lime-ink);
+  filter: brightness(1.06);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-1px);
+}
+
+.btn-sm { padding: 5px 10px; font-size: var(--fs-caption); border-radius: var(--radius-sm); }
+
+#address {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--stroke);
+  background: var(--surface-input);
+  color: var(--paper);
+  padding: 7px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  outline: none;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+#address:focus { border-color: var(--lime); box-shadow: var(--ring); }
+
+#label {
+  color: var(--ash-dim);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  align-self: center;
+  padding-left: var(--space-2);
+  white-space: nowrap;
+}
+
+/* ---------- Downloads ---------- */
+.downloads-wrap { position: relative; flex: 0 0 auto; }
+.downloads-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: var(--lime);
+  color: var(--lime-ink);
+  font-size: 9px;
+  font-weight: var(--fw-bold);
+  border-radius: var(--radius-pill);
+  min-width: 14px;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  padding: 0 2px;
+}
+.downloads-panel {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 320px;
+  max-height: 380px;
+  overflow: auto;
+  background: var(--char-raised);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-overlay);
+  z-index: 50;
+  padding: var(--space-2);
+}
+.download-item {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-1);
+  background: var(--char);
+  border: 1px solid var(--stroke);
+}
+.download-item:last-child { margin-bottom: 0; }
+.download-name {
+  font-size: var(--fs-sm);
+  color: var(--paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: var(--space-1);
+}
+.download-progress { height: 4px; border-radius: var(--radius-pill); background: var(--stroke); overflow: hidden; margin-bottom: 6px; }
+.download-progress-fill { height: 100%; background: var(--lime); transition: width var(--ease); }
+.download-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.download-status { font-size: var(--fs-micro); color: var(--ash-dim); text-transform: uppercase; letter-spacing: var(--tracking-caps); }
+.download-actions { display: flex; gap: 6px; }
+.downloads-empty { font-size: var(--fs-sm); color: var(--ash-dim); padding: var(--space-3); text-align: center; }
+
+#webviews { position: relative; flex: 1 1 auto; min-height: 0; }
+/* Every tab's <webview> stays laid out at full size at all times — only
+   z-index/visibility switch between tabs. Toggling display:none/block
+   instead (the previous approach) is a known Electron <webview> trap: the
+   guest process can fail to pick up its real size the moment it goes from
+   hidden back to visible, leaving a small stale render surface with dead
+   space around it regardless of how correct the CSS box itself is. */
+#webviews webview { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }

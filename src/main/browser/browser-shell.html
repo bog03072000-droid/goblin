@@ -7,179 +7,34 @@
      interactions) that this file's `.style.visibility/.zIndex/.pointerEvents = ...`
      assignments in browser-shell.js keep working with zero console CSP
      errors, since CSSOM property assignment isn't governed by style-src the
-     way a style="" attribute string is. -->
+     way a style="" attribute string is. All real CSS lives in the external
+     browser-shell.css (same-origin, allowed by style-src 'self') rather than
+     an inline <style> block — an inline block was tried first and silently
+     dropped in full by this exact CSP, which is why this window used to
+     render with zero styling applied (a real bug, not a design gap, caught
+     via this window's own DevTools console: "Refused to apply inline style
+     because it violates ... style-src 'self'"). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'" />
 <title>GoblinAnty Browser</title>
-<style>
-  /* Self-hosted, same reasoning as global.css's own @font-face block — no
-     runtime network dependency, no CSP exception needed for this file's
-     own chrome (the guest page's CSP is separate and unaffected). Copied
-     alongside this compiled HTML by copy-assets.js. */
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Inter-400-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Inter-500-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('./fonts/Inter-600-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-cyrillic.woff2') format('woff2'); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-  @font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Inter-700-normal-cyrillic-ext.woff2') format('woff2'); unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
-  :root {
-    --ink: #121412;
-    --char: #1c1f1c;
-    --char-raised: #23271f;
-    --char-hi: #2b3126;
-    --stroke: #343b30;
-    --lime: #7cb342;
-    --lime-deep: #4c7a1f;
-    --lime-glow: rgba(124, 179, 66, 0.45);
-    --paper: #f2f5ee;
-    --ash: #aab3a2;
-    --ash-dim: #7c8577;
-    --radius-input: 12px;
-    --ease: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  * { box-sizing: border-box; }
-  html, body {
-    margin: 0;
-    height: 100%;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: 'Inter', system-ui, sans-serif;
-    overflow: hidden;
-  }
-  body { display: flex; flex-direction: column; }
-
-  #tabbar {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    padding: 8px 10px 0;
-    background: var(--char);
-    -webkit-app-region: drag;
-    flex: 0 0 auto;
-  }
-  .tab {
-    display: flex; align-items: center; gap: 8px; max-width: 200px; min-width: 110px;
-    background: var(--char-raised); color: var(--ash); border: 1px solid var(--stroke); border-bottom: none;
-    border-radius: 10px 10px 0 0; padding: 7px 10px;
-    cursor: pointer; font-size: 12px; font-weight: 500; -webkit-app-region: no-drag; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-    transition: background var(--ease), color var(--ease), box-shadow var(--ease);
-  }
-  .tab:hover { background: var(--char-hi); color: var(--paper); }
-  .tab.active {
-    background: var(--char-hi); color: var(--lime);
-    box-shadow: inset 0 2px 0 var(--lime), 0 0 12px -4px var(--lime-glow);
-    text-shadow: 0 0 8px var(--lime-glow);
-  }
-  .tab .tab-title { overflow: hidden; text-overflow: ellipsis; flex: 1; }
-  .tab .tab-close {
-    color: var(--ash-dim); padding: 0 4px; border-radius: 4px; line-height: 1.4;
-    transition: background var(--ease), color var(--ease);
-  }
-  .tab .tab-close:hover { background: var(--stroke); color: var(--paper); }
-  #new-tab {
-    -webkit-app-region: no-drag; color: var(--ash-dim); padding: 6px 12px; cursor: pointer;
-    font-size: 15px; border-radius: 8px 8px 0 0; transition: color var(--ease), background var(--ease);
-  }
-  #new-tab:hover { color: var(--lime); background: var(--char-raised); }
-
-  #toolbar {
-    display: flex; align-items: center; gap: 6px; padding: 8px 10px;
-    background: var(--char-raised); border-bottom: 1px solid var(--stroke);
-    -webkit-app-region: drag; flex: 0 0 auto;
-  }
-  #toolbar button, #toolbar input { -webkit-app-region: no-drag; font-family: inherit; }
-
-  .icon-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; background: transparent; color: var(--ash);
-    border: none; border-radius: 8px; cursor: pointer; font-size: 15px; flex: 0 0 auto;
-    transition: background var(--ease), color var(--ease);
-  }
-  .icon-btn:hover { background: var(--char-hi); color: var(--lime); }
-
-  .btn {
-    border: 1px solid var(--stroke); border-radius: 10px; padding: 6px 14px;
-    cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
-    background: var(--char-hi); color: var(--paper);
-    transition: background var(--ease), color var(--ease), border-color var(--ease), box-shadow var(--ease), transform var(--ease);
-    flex: 0 0 auto; white-space: nowrap;
-  }
-  .btn:hover { background: var(--stroke); border-color: var(--lime-deep); color: var(--lime); }
-  .btn:active { transform: translateY(1px); }
-  .btn-primary {
-    background: linear-gradient(180deg, var(--lime) 0%, var(--lime-deep) 100%);
-    border-color: transparent; color: var(--ink);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25);
-  }
-  .btn-primary:hover { color: var(--ink); filter: brightness(1.08); }
-
-  #address {
-    flex: 1; border-radius: var(--radius-input); border: 1px solid var(--stroke);
-    background: var(--char); color: var(--paper); padding: 7px 12px; font-size: 13px;
-    outline: none; transition: border-color var(--ease), box-shadow var(--ease);
-  }
-  #address:focus { border-color: var(--lime); box-shadow: 0 0 0 3px var(--lime-glow); }
-
-  #label { color: var(--ash-dim); font-size: 11px; align-self: center; padding-left: 8px; white-space: nowrap; }
-
-  .downloads-wrap { position: relative; flex: 0 0 auto; }
-  .downloads-badge {
-    position: absolute; top: 1px; right: 1px; background: var(--lime); color: var(--ink);
-    font-size: 9px; font-weight: 700; border-radius: 999px; min-width: 14px; height: 14px;
-    line-height: 14px; text-align: center; padding: 0 2px;
-  }
-  .downloads-panel {
-    position: absolute; top: 36px; right: 0; width: 320px; max-height: 380px; overflow: auto;
-    background: var(--char-raised); border: 1px solid var(--stroke); border-radius: 12px;
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6); z-index: 50; padding: 8px;
-  }
-  .download-item { padding: 8px; border-radius: 8px; margin-bottom: 6px; background: var(--char); }
-  .download-item:last-child { margin-bottom: 0; }
-  .download-name {
-    font-size: 12px; color: var(--paper); white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; margin-bottom: 4px;
-  }
-  .download-progress { height: 4px; border-radius: 999px; background: var(--stroke); overflow: hidden; margin-bottom: 6px; }
-  .download-progress-fill { height: 100%; background: var(--lime); transition: width var(--ease); }
-  .download-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-  .download-status { font-size: 10px; color: var(--ash-dim); text-transform: uppercase; letter-spacing: 0.04em; }
-  .download-actions { display: flex; gap: 6px; }
-  .downloads-empty { font-size: 12px; color: var(--ash-dim); padding: 12px; text-align: center; }
-
-  #webviews { position: relative; flex: 1 1 auto; min-height: 0; }
-  /* Every tab's <webview> stays laid out at full size at all times — only
-     z-index/visibility switch between tabs. Toggling display:none/block
-     instead (the previous approach) is a known Electron <webview> trap: the
-     guest process can fail to pick up its real size the moment it goes from
-     hidden back to visible, leaving a small stale render surface with dead
-     space around it regardless of how correct the CSS box itself is. */
-  #webviews webview { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
-</style>
+<link rel="stylesheet" href="./browser-shell.css" />
 </head>
 <body>
   <div id="tabbar">
-    <span id="new-tab" title="New Tab">+</span>
+    <span id="new-tab" title="New Tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span>
   </div>
   <div id="toolbar">
-    <button id="back" class="icon-btn" title="Back">&#8592;</button>
-    <button id="fwd" class="icon-btn" title="Forward">&#8594;</button>
-    <button id="reload" class="icon-btn" title="Reload">&#8635;</button>
-    <button id="home" class="icon-btn" title="Home">&#8962;</button>
+    <button id="back" class="icon-btn" title="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+    <button id="fwd" class="icon-btn" title="Forward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+    <button id="reload" class="icon-btn" title="Reload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button id="home" class="icon-btn" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
     <input id="address" type="text" value="about:blank" />
     <button id="go" class="btn btn-primary">Go</button>
-    <button id="duplicate" class="btn">Duplicate Tab</button>
-    <button id="devtools" class="btn">DevTools</button>
-    <button id="diagnostics" class="btn">Diagnostics</button>
-    <button id="test-human-input" class="btn" title="Runs a real human-like mouse move+click+scroll on the current page, visibly, so you can confirm the feature works without writing your own automation script">Test human input</button>
+    <button id="duplicate" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Duplicate Tab</button>
+    <button id="devtools" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>DevTools</button>
+    <button id="diagnostics" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg>Diagnostics</button>
+    <button id="test-human-input" class="btn" title="Runs a real human-like mouse move+click+scroll on the current page, visibly, so you can confirm the feature works without writing your own automation script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg>Test human input</button>
     <div class="downloads-wrap">
-      <button id="downloads-toggle" class="icon-btn" title="Downloads">&#8681;<span id="downloads-badge" class="downloads-badge" hidden>0</span></button>
+      <button id="downloads-toggle" class="icon-btn" title="Downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg><span id="downloads-badge" class="downloads-badge" hidden>0</span></button>
       <div id="downloads-panel" class="downloads-panel" hidden></div>
     </div>
     <span id="label"></span>
