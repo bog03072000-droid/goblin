@@ -237,7 +237,7 @@
   --radius-card: 18px;
   --radius-input: 12px;
   --radius-pill: 999px;
-  --ease: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --ease: 0.25s var(--curve-standard);
 
   /* Layered elevation — every shadow below is three parts (a hairline
      contact shadow, a soft mid diffusion, a wide ambient pool) instead of
@@ -334,6 +334,31 @@
   --gap-inline: var(--space-2);
   --gap-stack: var(--space-4);
   --gap-section: var(--space-6);
+
+  /* Named motion curves, ported verbatim from tokens/motion.css.
+     --ease (this app's own pre-existing shorthand) is redefined just below
+     in terms of --curve-standard so both names stay in sync rather than
+     drifting into two independent values. */
+  --dur-instant: 80ms;
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 260ms;
+  --dur-enter: 320ms;
+  --curve-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --curve-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --curve-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Composite transitions, also ported verbatim: colour-type properties
+     (background/border/text) get --curve-standard, but transform/
+     box-shadow — "anything that enters or lifts" — get the snappier
+     --curve-out, per the reference's own explicit split. Applied below to
+     rules that actually combine both kinds of property (.btn,
+     .sidebar-item); rules with only colour-type transitions (inputs,
+     table rows, pills) stay on the existing --ease, which already
+     resolves to --curve-standard, so nothing there needed to change. */
+  --transition-control: background var(--dur-fast) var(--curve-standard), border-color var(--dur-fast) var(--curve-standard),
+    color var(--dur-fast) var(--curve-standard), box-shadow var(--dur) var(--curve-out), transform var(--dur) var(--curve-out);
+  --transition-lift: transform var(--dur) var(--curve-out), box-shadow var(--dur) var(--curve-out);
 }
 
 /* Light palette — sage-tinted neutrals (not neutral gray) so it still reads
@@ -407,6 +432,21 @@
   --ash-faint: #4c5449;
   --modal-bg: rgba(9, 11, 9, 0.66);
   --glass: rgba(22, 26, 23, 0.84);
+}
+
+/* Named-duration counterpart to the existing --ease reduced-motion
+   handling above (motion.css's own pattern) — zeroes every duration
+   token so anything switched to reference --dur-*/--curve-* directly
+   (rather than through --ease, which was already covered) also respects
+   the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+    --dur-enter: 0ms;
+  }
 }
 
 /* Light-theme bevel overrides — the dark-mode layered shadows below read
@@ -531,7 +571,7 @@ h1, h2, h3, h4 {
   color: var(--ash);
   font-weight: var(--fw-semibold);
   font-size: var(--fs-body);
-  transition: background var(--ease), color var(--ease), box-shadow var(--ease), transform var(--ease);
+  transition: var(--transition-control);
   border-left: 2px solid transparent;
 }
 .sidebar-item svg { flex-shrink: 0; opacity: 0.85; transition: opacity var(--ease); }
@@ -659,7 +699,7 @@ input[type="checkbox"].toggle:hover { transform: none; }
   font-weight: var(--fw-semibold);
   font-family: var(--font-ui);
   border: 1px solid transparent;
-  transition: transform var(--ease), box-shadow var(--ease), background var(--ease), border-color var(--ease), color var(--ease), opacity var(--ease);
+  transition: var(--transition-control), opacity var(--dur-fast) var(--curve-standard);
 }
 .btn:active:not(:disabled) { transform: scale(0.985); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
@@ -746,7 +786,7 @@ input[type="checkbox"].toggle:hover { transform: none; }
    1.4s"). Applied to the CircleDot icon inside a .pill.warn that
    represents an in-flight/transitional state, not the pill itself. */
 @keyframes pill-icon-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.pill-icon-pulse { animation: pill-icon-pulse 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.pill-icon-pulse { animation: pill-icon-pulse 1.4s var(--curve-standard) infinite; }
 @media (prefers-reduced-motion: reduce) {
   .pill-icon-pulse { animation: none; }
 }
