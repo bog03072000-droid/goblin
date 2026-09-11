@@ -993,3 +993,113 @@ hidden. Still comfortably inside this session's stated realistic ceiling
 **Nothing from this round has been pushed — `7c6be89`, `91615ff`,
 `eb0c367`, and this entry all remain local, pending explicit
 confirmation.**
+
+## 2026-09-11 (third entry) — 88.96 weighted / 88.8 simple
+
+Pushed `0135124` (the previous entry) first, per explicit instruction —
+confirmed via `git log --oneline -3` and `git log origin/main -1`
+matching. Дизайн is now effectively at ceiling (94), so this round
+switched focus to categories that hadn't moved in several entries:
+Продуктивність (last touched two entries ago), Безпека (unchanged for
+three entries), and Функціональність (unchanged for four entries).
+
+**1. Продуктивність — re-verified two previously-flagged numbers
+(no code fix; a real "already correct" finding):** `docs/PROFILES_TABLE_VIRTUALIZATION.md`
+had an open item noting "sort direction toggle" and "bulk add-tag" at
+1000-row scale needed the same Playwright-artifact-vs-real-cost
+decomposition already done for "invert selection." Checked real free RAM
+(17.5GB/31.1GB) before temporarily scaling `SCALE` to 1000, then measuring
+each interaction with `page.evaluate()`-only timing (no Playwright
+locator/`toHaveCount` in the timed window) alongside the existing
+Playwright-measured number:
+- Sort toggle: 2585ms (Playwright-measured) vs **1388ms** (in-page only) —
+  a genuine partial artifact (~46% Playwright overhead), but ~1.4s of
+  real React re-render cost remains at 1000 rows — a real, moderate
+  scaling cost, not primarily a measurement artifact.
+- Bulk add-tag: 6460ms (Playwright-measured) vs **818ms** (raw IPC only) —
+  confirmed via source read that `ProfilesPage.tsx`'s handler calls
+  `await refresh()` after the mutation, re-fetching/re-rendering the full
+  list; the full 6460ms is genuine, real, user-experienced latency, not
+  an artifact.
+Both new in-page-only tests kept permanently in
+`tests/e2e/loadTestUIResponsiveness.spec.ts` (reverted back to the real
+`SCALE = 200` after the investigation; 10/10 pass at that scale).
+Conclusion: numbers now support the existing "don't implement
+virtualization" decision with more precision — decision unchanged, no
+code fix warranted. Committed as `81db4ac`.
+
+**2. Безпека — extended live IPC-validation E2E coverage from 1 to 4
+more channel/schema shapes:** confirmed via `grep`/`sed` diff that all 63
+channels in `src/shared/ipc/contracts.ts`'s `IpcRequestSchemas` are
+actually wired into `registerIpc.ts`'s `handle()` validation (empty
+diff — no silent gaps). The existing `tests/e2e/ipcValidation.spec.ts`
+had only ever exercised `groups:create` as its one example of the
+general mechanism; added 4 new tests against genuinely different schema
+shapes — a numeric range bound (`proxy:create` port outside 1-65535), an
+enum (`settings:update` theme outside its allowed values), a string
+`min(1)` (`profiles:create` empty name), and a numeric floor
+(`settings:update` cacheLimitMb below 50) — spanning proxy, settings and
+profiles channels. All 7 tests pass against a real, non-mocked IPC
+round-trip. Committed as `fcfe5ff`.
+
+**3. Функціональність — closed a real, previously-documented-but-unfixed
+gap:** `docs/STORAGE_TAB_LIVE_AUDIT.md` had flagged (2026-09-09, never
+fixed) that deleting a cookie or localStorage entry in the Storage tab
+was instant and irreversible, unlike profile deletion which gets an undo
+toast — "a real inconsistency with the app's own pattern elsewhere."
+Implemented a client-side capture-and-recreate undo (no server-side
+soft-delete exists for cookies/localStorage since they aren't
+DB-persisted): `useProfileStorageData.ts`'s `removeCookie`/
+`removeLocalStorageItem` now capture the full entry in a closure before
+deleting, and Undo calls the same `addCookie`/`addLocalStorageItem` the
+manual "Add" form already uses — genuinely re-creating the entry, not
+restoring a stale echo. Wired through `StorageTab.tsx` →
+`ProfileEditorModal.tsx` reusing the existing `UndoToast` component
+as-is; added i18n strings (en+uk). Verified live end-to-end in
+`tests/e2e/cookieEditor.spec.ts` against a real running profile session
+(delete → toast names the real cookie → Undo → exact name/value
+reappears, re-read from the real session) plus 3 new unit tests in
+`tests/unit/useProfileStorageData.test.tsx`. `docs/STORAGE_TAB_LIVE_AUDIT.md`
+updated to mark the gap fixed. Committed as `10e0179`.
+
+**Verification performed, as required:** `npx tsc --noEmit` clean after
+each item; `npx eslint` clean on every touched file; full unit suite run
+after each item (802/802 passing by the end, up from 799 — the 3 new
+Storage-undo tests); relevant E2E run live per item
+(`loadTestUIResponsiveness.spec.ts` 10/10, `ipcValidation.spec.ts` 7/7,
+`cookieEditor.spec.ts` 2/2) — each after the correct better-sqlite3
+ABI rebuild (`rebuild:node` for Vitest, `rebuild:electron` for
+Playwright) and, for the Storage-tab item, a fresh `npm run build`
+(the Electron E2E run loads the compiled `dist-renderer` bundle, not
+source directly — an actual miss caught live this round: the first
+`cookieEditor.spec.ts` undo-test run failed because the renderer hadn't
+been rebuilt after the source edit, confirmed by re-running green
+immediately after `npm run build`).
+
+| Category | Score | Δ vs previous entry (88.58/88.4) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 86 | +1 | Real, previously-documented gap closed (`10e0179`): cookie/localStorage deletion now has undo, matching the app's own pattern elsewhere. Not pushed higher: this is one specific fix, not a broader backlog sweep. |
+| UX | 91 | +1 | The undo toast removes a real inconsistency a user could feel (a stray click deleting a cookie/localStorage entry with no recovery) — same component, same pattern as the rest of the app, so no new UX language to learn. |
+| Дизайн | 94 | 0 | At effective ceiling per last entry; no design work this round. |
+| Стабільність ×1.5 | 91 | 0 | No stability-specific work this round. |
+| Безпека ×1.5 | 86 | +1 | IPC-validation mechanism now proven across 4 genuinely different schema shapes (numeric range, enum, string min-length, numeric floor) instead of 1, closing a real gap in how much of the 63-channel surface had ever been exercised end-to-end (`fcfe5ff`). |
+| Код/архітектура | 89 | 0 | No architectural change — the Storage-tab undo reuses existing patterns/components exactly, by design. |
+| Тести | 91 | +1 | 2 new permanent in-page-timing E2E tests, 4 new IPC-validation E2E tests, 2 new cookie-undo E2E tests, and 3 new unit tests added and passing this round — real growth, not just re-runs. |
+| Продуктивність | 81 | 0 | Honest non-fix: re-measurement confirmed the existing "don't implement virtualization" decision more precisely rather than changing it — no code change earns a score change. |
+| Реліз | 88 | 0 | Not in scope this round. |
+| Fingerprint ×2 | 91 | 0 | Not in scope this round. |
+
+**Simple average:** (86+91+94+91+86+89+91+81+88+91)/10 = **88.8**
+**Weighted average:** (86+91+94+91×1.5+86×1.5+89+91+81+88+91×2)/12 = **88.96**
+
+**Summary:** +0.38 weighted / +0.4 simple — squarely in the range this
+round's own instructions anticipated as honest ("+0.3-0.7, not a jump to
+90"). Продуктивність stayed flat on purpose: the honest finding was
+"the existing decision was already right," and forcing a number up for
+a non-fix would be exactly the kind of inflation this file exists to
+prevent. Функціональність and Безпека each moved +1 for one concrete,
+verified fix/coverage-extension apiece — not a sweep, matching the
+instruction to pick 2-3 specific items and do them deeply rather than
+touch everything shallowly. **Nothing from this round has been pushed —
+`81db4ac`, `fcfe5ff`, `10e0179`, and this entry all remain local, pending
+explicit confirmation.**
