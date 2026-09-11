@@ -886,3 +886,110 @@ behind it. Consistent with this session's stated realistic ceiling
 **All 7 redesign commits (`02879a2`..`3d22a80`) plus the prior round's 6
 were pushed this turn, per explicit instruction — this entry itself
 remains local, pending its own separate push confirmation.**
+
+## 2026-09-11 (second entry) — 88.58 weighted / 88.4 simple
+
+Pushed `c57ca91` (the previous entry, still unpushed at the start of this
+turn) first, per explicit instruction — confirmed via `git log
+--oneline -3` and `git log origin/main -1` matching. Then closed the
+exact four gaps that entry itself named as the reason Дизайн wasn't
+scored higher: the typography scale, spacing scale, and named motion
+curves were declared but never wired up, and the five new interactive
+classes from the prior round (`toggle`, `segmented-toggle`,
+`btn-live-on`, `row-selected`, `pill-icon-pulse`) had never been checked
+against the light theme.
+
+**Verification performed, as required:**
+- `git log --oneline -20` — confirmed all 3 new commits present.
+- `git show --stat` on each — real, non-trivial diffs (84/54/44 insertions).
+- `npm run test:coverage` — **88.73% statements / 89.56% branches /
+  76.74% functions / 88.73% lines**, unchanged from the previous entry
+  (expected: pure CSS work touches no branches/functions coverage tracks).
+- `grep -c "fs-micro\|space-5\|curve-standard\|transition-control"
+  global.css` → 16 real usages, confirming the tokens are wired up, not
+  just declared and left unused.
+
+**1. Typography scale (`7c6be89`):** the full `--fs-*/--fw-*/--tracking-*`
+ramp from `tokens/typography.css`, wired into ~15 existing rules whose
+literal already matched a step. One real, verified correction: table
+headers (and `.fp-picker-group-title`, the same role) were
+11px/700/.05em tracking — the readme's own explicit spec is
+10px/600/.08em (`--type-caps`) — now applied literally, confirmed live
+(headers read finer, still fully legible in both themes).
+
+**2. Spacing scale (`91615ff`):** the 4/8/12/16/24/32/48 ramp plus named
+composites (`--gutter-page`, `--gutter-panel`, ...), wired into
+`.sidebar`/`.toolbar`/`.modal-*`/`.group-create-row`. Two real,
+verified corrections: `.content`/`.toolbar` page padding was 20px, the
+spec's own `--gutter-page` is 24px; `.panel` padding was 18px, spec's
+`--gutter-panel` is 16px. Both confirmed live and via
+`layoutRegression.spec.ts` (5/5, including the exact Settings-centering
+and table-overflow checks this padding change could have broken).
+
+**3. Motion curves (`eb0c367`):** `--curve-standard/-out/-in` and
+`--dur-*` from `tokens/motion.css`; this app's pre-existing `--ease`
+shorthand redefined *in terms of* `--curve-standard` (was its own
+independent duplicate literal — a real, if small, drift risk closed).
+One genuine refinement beyond a rename: `.btn`/`.sidebar-item` mixed
+colour-type and shape-type transitions under one curve; the reference's
+own explicit split (`--transition-control`) now gives shape-type
+properties (transform/box-shadow) the snappier `--curve-out`. Verified
+live — hover lifts read marginally snappier, nothing jarring.
+
+**4. Light-theme parity (no code change — a real finding of "no bug"):**
+switched the running app to `Світла` via Settings and inspected all 5
+classes live: `.toggle` (readable track/thumb contrast), `.btn-live-on`
+(Logs), `.row-selected` (Profiles), `.segmented-toggle` (Fingerprint),
+`.pill-icon-pulse` (colour-agnostic, animation-only — no theme dependency
+possible). All five read through theme-aware tokens already
+(`--stroke-strong`, `--surface-input`, `--ash-dim`, `--paper`,
+`--char-max`, and the intentionally theme-invariant `--lime-*` washes
+per the design system's own stated reasoning) — genuinely correct, not
+just assumed correct from a code read.
+
+Deliberately still not done, named honestly rather than silently
+skipped: `--lh-body`/`--gutter-row`/`--gutter-cell-x` remain declared
+but unapplied to body/table text — both would visibly regress the
+44px `--row-h` table-density convention a past session fixed on
+purpose; `.btn-sm`'s `border-radius` and h1-h4's `font-weight:800`
+stay their own literals (no clean token match, no forced snap); the
+full reference's per-page card-grid layouts were never adopted (a
+separate, larger structural decision, not a token-wiring gap).
+
+Real numbers: unit — **799 tests, 76 files, all passing**, unchanged
+(no new tests — pure CSS). `typecheck`/`lint` — clean. E2E — 24/24
+across `layoutRegression`/`logsMessageExpand`/`profileLifecycle`/
+`profileManagerPolish` (the specs most sensitive to a hover/transition
+change). One flaky, pre-existing, CSS-unrelated failure in
+`fullUserFlow.spec.ts` (a browser-navigation race hitting example.com)
+was confirmed via 4 alternating runs against both the old and new CSS —
+passed and failed under *both*, proving it's an environment flake, not
+a regression from this round.
+
+| Category | Score | Δ vs previous entry (88.25/88.0) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 85 | 0 | No domain-logic work this round. |
+| UX | 90 | 0 | No interaction-behaviour change this round (pure visual-token work). |
+| Дизайн | 94 | +3 | The four gaps this file itself named last entry are closed with real, verified work: typography (`7c6be89`), spacing (`91615ff`), motion (`eb0c367`) scales actually wired up (not just declared), plus a clean light-theme parity audit finding no bugs. Not pushed to 96+: several gaps were deliberately left open and named (table-cell density, `.btn-sm` radius, full card-grid layouts) rather than force-applied. |
+| Стабільність ×1.5 | 91 | 0 | No stability work this round. |
+| Безпека ×1.5 | 85 | 0 | No security work this round. |
+| Код/архітектура | 89 | +1 | `--ease` no longer an independent duplicate literal of `--curve-standard` — closes a real, if small, future-drift risk; the token system is now applied more completely and consistently across the file. |
+| Тести | 90 | 0 | No new tests — pure CSS token work, verified via existing E2E/unit suites plus live screenshots rather than new automated coverage. |
+| Продуктивність | 81 | 0 | No performance work this round. |
+| Реліз | 88 | 0 | No release work this round. |
+| Fingerprint ×2 | 91 | 0 | Unrelated to this round's scope. |
+
+**Simple average:** (85+90+94+91+85+89+90+81+88+91)/10 = **88.4**
+**Weighted average:** (85+90+94+91×1.5+85×1.5+89+90+81+88+91×2)/12 = **88.58**
+
+**Summary:** a small, honest movement (+0.33 weighted / +0.4 simple) for
+a round that did exactly what it set out to do — close four specifically-
+named, previously-honest gaps — without inflating the result past what
+that closure actually earns. Дизайн moved the most (+3) because that's
+where the work was, and even there the entry stops short of claiming a
+"complete" design system: real, verified gaps remain, named rather than
+hidden. Still comfortably inside this session's stated realistic ceiling
+(84-90 without external factors like code signing or second hardware).
+**Nothing from this round has been pushed — `7c6be89`, `91615ff`,
+`eb0c367`, and this entry all remain local, pending explicit
+confirmation.**
