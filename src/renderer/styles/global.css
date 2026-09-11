@@ -660,6 +660,15 @@ tr:hover td { background: var(--char-raised); }
    button's own default outline. */
 tr:has(:focus-visible) td { background: var(--char-raised); }
 
+/* A selected row IS one of the accent's sanctioned per-view moments
+   (README's "Accent discipline": "selected rows (11% lime wash)") — the
+   ProfilesTable checkbox previously drove no row-level visual at all
+   beyond the checkbox itself, so a multi-row bulk selection had no way to
+   see which rows were actually selected without reading every checkbox.
+   Stacks with the neutral hover step above rather than replacing it. */
+.row-selected td { background: var(--lime-wash); }
+.row-selected:hover td { background: var(--lime-wash-hi); }
+
 /* ---------- Proxy check-history panel (ProxiesPage.tsx) ---------- */
 .proxy-history-row td { background: var(--char); padding: 10px 14px; }
 .proxy-history-row:hover td { background: var(--char); }

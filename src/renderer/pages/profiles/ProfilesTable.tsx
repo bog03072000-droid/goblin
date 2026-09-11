@@ -97,7 +97,12 @@ const ProfileRow = memo(
       ? computeNextScheduledRun(new Date(), profile.scheduleTime, profile.scheduleDays)
       : null;
     return (
-      <tr data-status={profile.status} data-profile-id={profile.id} onContextMenu={(e) => onContextMenu(e, profile)}>
+      <tr
+        className={isSelected ? 'row-selected' : undefined}
+        data-status={profile.status}
+        data-profile-id={profile.id}
+        onContextMenu={(e) => onContextMenu(e, profile)}
+      >
         <td>
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(profile.id)} />
         </td>
