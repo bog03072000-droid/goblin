@@ -156,3 +156,60 @@ test('sort toggle re-orders 200 rows', async () => {
   await expect(window.locator('tbody tr')).toHaveCount(SCALE, { timeout: 10_000 });
   timings['sort direction toggle (200 rows)'] = performance.now() - t0;
 });
+
+/**
+ * Re-verification, same in-page-only method PROFILES_TABLE_VIRTUALIZATION.md's
+ * "8x degradation" correction used for invert-selection: that number turned
+ * out to be ~2569ms of Playwright's own `getTextAlternativeInternal`
+ * accessibility-tree walk (from `getByRole`/`toHaveCount`), not app cost —
+ * the real, in-page-only number was 86ms. That doc explicitly flagged
+ * "sort direction toggle" and "bulk add-tag" as measured with the identical
+ * Playwright-locator methodology and "should be treated with the same
+ * skepticism until someone does" the same re-measurement. This does that,
+ * for sort toggle: `performance.now()` around a raw
+ * `element.click()`, with the window entirely inside `page.evaluate()` —
+ * no `getByRole`/`toHaveCount` walk anywhere in the timed span. Two
+ * animation frames after the click is used as "settled" (a synchronous
+ * React state update flushes well within one frame at this profile count;
+ * two is margin, not a guess this test depends on being tight).
+ */
+test('sort direction toggle — real in-page-only timing (no Playwright accessibility-tree walk in the timed window)', async () => {
+  const ms = await window.evaluate(async () => {
+    const toolbar = document.querySelector('.toolbar-group');
+    const btn = Array.from(toolbar!.querySelectorAll<HTMLElement>('[title]')).find((el) =>
+      /ascending|descending/i.test(el.title),
+    )!;
+    const t0 = performance.now();
+    btn.click();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    return performance.now() - t0;
+  });
+  timings[`sort direction toggle (${SCALE} rows, in-page only)`] = ms;
+  // Confirm the click actually did something (rows still present, sorted
+  // state changed) rather than timing a no-op — cheap, not part of the
+  // timed window above.
+  await expect(window.locator('tbody tr')).toHaveCount(SCALE, { timeout: 10_000 });
+});
+
+/**
+ * Same in-page-only re-verification for bulk add-tag — but this one is
+ * expected to stay genuinely slow: PROFILES_TABLE_VIRTUALIZATION.md's own
+ * conclusion already reasoned it's IPC/DB-round-trip bound (N real
+ * sequential `profiles:update` writes via ProfileManager.bulkRun, which
+ * yields to the event loop every 20 items but does not parallelize), not a
+ * rendering cost — confirmed again here by timing only the real
+ * `profiles:update` IPC calls via `window.profileforge.invoke` directly,
+ * with no DOM/table involvement, no banner, no Playwright locator at all.
+ */
+test('bulk add-tag — real in-page-only timing of the actual IPC round-trip, no rendering involved', async () => {
+  const ms = await window.evaluate(async () => {
+    const bridge = (window as unknown as { profileforge: { invoke: (c: string, p: unknown) => Promise<unknown> } })
+      .profileforge;
+    const list = (await bridge.invoke('profiles:list', {})) as Array<{ id: string }>;
+    const ids = list.map((p) => p.id);
+    const t0 = performance.now();
+    await bridge.invoke('profiles:bulkAddTags', { ids, tags: ['load-ui-bulk-tag-inpage'] });
+    return performance.now() - t0;
+  });
+  timings[`bulk add-tag (${SCALE} profiles, in-page IPC only)`] = ms;
+});

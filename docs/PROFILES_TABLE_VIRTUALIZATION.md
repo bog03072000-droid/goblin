@@ -152,3 +152,41 @@ is already visually uniform in the current table), but selection state
 and the context menu would need to move from row-scoped React state/DOM
 handlers to something that works with windowed, unmounted-when-offscreen
 rows.
+
+## Second correction, 2026-09-11 — re-verifying "sort direction toggle" and "bulk add-tag" the same way, per this doc's own open item
+
+The "8x degradation" correction above explicitly flagged these two as
+measured with the identical `getByRole`/`toHaveCount` Playwright
+methodology that inflated invert-selection's number by ~29× (2569ms of
+pure accessibility-tree-walk vs. 86ms of real app cost), and said they
+"should be treated with the same skepticism until someone does" the same
+in-page re-measurement. This does that — two new permanent tests added to
+`loadTestUIResponsiveness.spec.ts`, both timing entirely inside
+`page.evaluate()` with no Playwright locator in the timed window,
+alongside (not replacing) the existing UI-driven measurements. RAM
+checked before escalating (`Get-CimInstance Win32_OperatingSystem`:
+17.5GB free of 31.1GB — plenty of headroom for a 1000-row SQLite seed and
+one manager window, no real per-profile Chromium processes involved).
+Same temporary-`SCALE=1000`-then-revert method as before (not committed
+mid-investigation); the two new tests themselves are kept permanently at
+the real `SCALE=200`.
+
+**Unlike invert-selection, the honest result here is split — one real
+partial artifact, one confirmed-genuine cost, not two more measurement
+illusions:**
+
+| Interaction | Playwright-measured @ 1000 rows | In-page-only @ 1000 rows | Verdict |
+|---|---|---|---|
+| sort direction toggle | 2585ms | **1388ms** | ~46% was real Playwright/`toHaveCount` overhead, but ~1.4s of genuine React re-render cost remains — a real, moderate scaling cost (200 rows: 498ms full / ~300ms in-page-only), not primarily an artifact like invert-selection was. |
+| bulk add-tag | 6460ms | **818ms** (raw `profiles:bulkAddTags` IPC call only, no UI) | The gap here isn't a measurement artifact at all — `ProfilesPage.tsx`'s bulk-tag handler calls `await refresh()` after the mutation resolves (confirmed in source), which re-fetches the full profile list and re-renders all 1000 rows *again*, on top of the 1000 real sequential `profiles:update` writes `bulkAddTags`'s own `bulkRun` performs. The full 6460ms is genuine, real, user-experienced latency, now decomposed rather than just re-confirmed: ~818ms backend writes + the remainder is the subsequent full-list refetch/re-render + Playwright's own (much smaller than `getByRole`'s) visibility-check overhead. |
+
+**Conclusion: no code fix from this pass.** Sort-toggle's real ~1.4s cost
+at 1000 rows and bulk-add-tag's real ~818ms-plus-refresh cost are both
+consistent with — and now more precisely support — the existing
+recommendation above: real, moderate, worse-than-200-row costs exist at
+1000 rows, but 200 (this app's own "at scale" ceiling) stays comfortably
+fast on every number including the new in-page-only ones, so
+virtualization still isn't justified by current real usage. What changed
+is confidence, not the decision: this doc no longer has an open
+"treat with skepticism, unverified" caveat hanging over two of its own
+headline numbers.
