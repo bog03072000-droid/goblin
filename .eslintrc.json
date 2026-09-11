@@ -20,5 +20,5 @@
     "react/react-in-jsx-scope": "off",
     "react/prop-types": "off"
   },
-  "ignorePatterns": ["dist-electron", "dist-renderer", "release", "node_modules"]
+  "ignorePatterns": ["dist-electron", "dist-renderer", "release", "node_modules", "GoblinAnty Design System-handoff"]
 }

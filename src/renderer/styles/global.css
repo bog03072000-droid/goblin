@@ -173,31 +173,89 @@
    * --ink stays a fixed dark literal in EVERY theme (see .btn-primary
    * below, which uses it as dark text on the bright lime button — that
    * needs to stay dark regardless of the surrounding theme) — --bg is the
-   * separate, theme-varying page-background token body{} actually uses. */
-  --bg: #121412;
-  --ink: #121412;
-  --char: #1c1f1c;
-  --char-raised: #23271f;
-  --char-hi: #2b3126;
-  --stroke: #343b30;
+   * separate, theme-varying page-background token body{} actually uses.
+   *
+   * 2026-09: redesign pass (see the GoblinAnty Design System handoff) —
+   * the base ramp goes one step deeper so panels read as floating rather
+   * than flush with the page, a dedicated --rail step separates the nav
+   * rail from page panels, and the accent/status/ink scales gain the
+   * wash/line pairs the new pill and banner treatments below use. Every
+   * OLD variable name is kept (nothing renamed) — components that read
+   * --char/--char-hi/--stroke directly go on working unchanged, they just
+   * resolve to the new, deeper values. */
+  --bg: #0d0f0e;
+  --ink: #0d0f0e;
+  --rail: #111413;
+  --char: #161a17;
+  --char-raised: #1d221c;
+  --char-hi: #252b23;
+  --char-max: #2d3429;
+  --stroke: #232823;
+  --stroke-strong: #2e352c;
+  --surface-input: #101312;
+
   --lime: #7cb342;
+  --lime-bright: #8fc954;
   --lime-deep: #4c7a1f;
+  --lime-ink: #0c1206;
   --lime-glow: rgba(124, 179, 66, 0.45);
+  --lime-wash: rgba(124, 179, 66, 0.11);
+  --lime-wash-hi: rgba(124, 179, 66, 0.18);
+  --lime-line: rgba(124, 179, 66, 0.3);
+
   --paper: #f2f5ee;
-  --ash: #aab3a2;
-  --ash-dim: #7c8577;
+  --ash: #9ba396;
+  --ash-dim: #727b6d;
+  --ash-faint: #4c5449;
+
   --danger: #e5484d;
+  --danger-wash: rgba(229, 72, 77, 0.11);
+  --danger-line: rgba(229, 72, 77, 0.32);
   --warn: #d29922;
+  --warn-wash: rgba(210, 153, 34, 0.11);
+  --warn-line: rgba(210, 153, 34, 0.32);
+  /* New this pass: a dedicated info blue for the Locked status pill, which
+     used to share --warn/amber with Starting/Stopping — the design
+     system's "status is icon + colour, never colour alone" rule reads
+     weaker when two genuinely different states share both. */
+  --info: #5b93d3;
+  --info-wash: rgba(91, 147, 211, 0.11);
+  --info-line: rgba(91, 147, 211, 0.32);
+  --neutral-wash: rgba(155, 163, 150, 0.08);
+  --neutral-line: rgba(155, 163, 150, 0.18);
+
   /* Modal glass background — was a hardcoded dark rgba() literal (found
      during a design review to stay dark even under the light theme, the
      one surface that hadn't been made theme-aware); now a token like every
      other surface color, re-defined per theme below. */
-  --modal-bg: rgba(35, 39, 31, 0.72);
+  --modal-bg: rgba(9, 11, 9, 0.66);
+  --glass: rgba(22, 26, 23, 0.84);
 
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-chip: 8px;
   --radius-card: 18px;
   --radius-input: 12px;
   --radius-pill: 999px;
   --ease: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Layered elevation — every shadow below is three parts (a hairline
+     contact shadow, a soft mid diffusion, a wide ambient pool) instead of
+     the single blur this app used before, plus a 1px inset top highlight
+     so a panel's top edge catches light. --shadow-panel is the default for
+     page sections; --shadow-lift is the hover state; --shadow-overlay is
+     for menus/toasts; --shadow-modal for the editor modal; --shadow-accent
+     is reserved for the one primary button per view. */
+  --hairline-top: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --hairline-top-strong: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --shadow-flat: 0 1px 0 rgba(0, 0, 0, 0.28);
+  --shadow-panel: 0 1px 1px rgba(0, 0, 0, 0.3), 0 4px 10px -4px rgba(0, 0, 0, 0.34), 0 16px 32px -20px rgba(0, 0, 0, 0.52);
+  --shadow-lift: 0 1px 1px rgba(0, 0, 0, 0.32), 0 8px 18px -8px rgba(0, 0, 0, 0.44), 0 24px 48px -28px rgba(0, 0, 0, 0.6);
+  --shadow-overlay: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -10px rgba(0, 0, 0, 0.52), 0 40px 72px -40px rgba(0, 0, 0, 0.7);
+  --shadow-modal: 0 2px 4px rgba(0, 0, 0, 0.44), 0 20px 44px -14px rgba(0, 0, 0, 0.58), 0 64px 120px -60px rgba(0, 0, 0, 0.78);
+  --shadow-accent: 0 1px 1px rgba(0, 0, 0, 0.3), 0 6px 14px -6px rgba(124, 179, 66, 0.34), 0 14px 28px -18px rgba(124, 179, 66, 0.3);
+  --ring: 0 0 0 2px rgba(124, 179, 66, 0.34);
+  --ring-danger: 0 0 0 2px rgba(229, 72, 77, 0.34);
 }
 
 /* Light palette — sage-tinted neutrals (not neutral gray) so it still reads
@@ -211,62 +269,87 @@
   :root:not([data-theme="dark"]) {
     color-scheme: light;
     --bg: #f6f8f3;
+    --rail: #f0f3ec;
     --char: #ffffff;
     --char-raised: #f0f3ec;
     --char-hi: #e3ead9;
+    --char-max: #d7e0c9;
     --stroke: #d3dbc8;
+    --stroke-strong: #bcc7ad;
+    --surface-input: #ffffff;
+    --lime-bright: #6fa23a;
+    --lime-ink: #0c1206;
     --paper: #1c1f1a;
     --ash: #5b6355;
     --ash-dim: #8a9280;
+    --ash-faint: #a8b09c;
     --modal-bg: rgba(240, 243, 236, 0.85);
+    --glass: rgba(255, 255, 255, 0.86);
   }
 }
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f6f8f3;
+  --rail: #f0f3ec;
   --char: #ffffff;
   --char-raised: #f0f3ec;
   --char-hi: #e3ead9;
+  --char-max: #d7e0c9;
   --stroke: #d3dbc8;
+  --stroke-strong: #bcc7ad;
+  --surface-input: #ffffff;
+  --lime-bright: #6fa23a;
+  --lime-ink: #0c1206;
   --paper: #1c1f1a;
   --ash: #5b6355;
   --ash-dim: #8a9280;
+  --ash-faint: #a8b09c;
   --modal-bg: rgba(240, 243, 236, 0.85);
+  --glass: rgba(255, 255, 255, 0.86);
 }
 /* Explicit dark selection always wins, even on a light-OS system — the bare
  * :root above already provides these values, this exists so the override
  * is complete/symmetric rather than relying on the media query's absence. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #121412;
-  --char: #1c1f1c;
-  --char-raised: #23271f;
-  --char-hi: #2b3126;
-  --stroke: #343b30;
+  --bg: #0d0f0e;
+  --rail: #111413;
+  --char: #161a17;
+  --char-raised: #1d221c;
+  --char-hi: #252b23;
+  --char-max: #2d3429;
+  --stroke: #232823;
+  --stroke-strong: #2e352c;
+  --surface-input: #101312;
+  --lime-bright: #8fc954;
+  --lime-ink: #0c1206;
   --paper: #f2f5ee;
-  --ash: #aab3a2;
-  --ash-dim: #7c8577;
-  --modal-bg: rgba(35, 39, 31, 0.72);
+  --ash: #9ba396;
+  --ash-dim: #727b6d;
+  --ash-faint: #4c5449;
+  --modal-bg: rgba(9, 11, 9, 0.66);
+  --glass: rgba(22, 26, 23, 0.84);
 }
 
-/* Light-theme bevel/glow overrides — the dark-mode box-shadows above read
+/* Light-theme bevel overrides — the dark-mode layered shadows below read
  * fine against a near-black background, but go nearly invisible once the
  * surface (or the page behind it) turns light: .panel's inset highlight is
- * white-on-white against its own near-white background, .btn-primary's and
- * .sidebar-item.active's diffuse --lime-glow drop-shadow/text-shadow blend
- * into the pale sage page background instead of standing out. All three get
- * a crisper, higher-contrast treatment here instead of reusing the dark
- * values as-is.
+ * white-on-white against its own near-white background, and
+ * .btn-primary's --shadow-accent pool (rgba(124,179,66,...) over near-black)
+ * needs more contrast to stand out over a pale sage page. Both get a
+ * crisper, higher-contrast treatment here instead of reusing the dark
+ * values as-is. (.sidebar-item.active no longer needs an override — it's a
+ * flat lime wash + border now, not a shadow/glow, so it already reads
+ * correctly on both themes without one.)
  *
  * .btn-ghost and .btn-danger were checked too (same audit that flagged
- * these three) and turned out NOT to need this: .btn-ghost has no
+ * these two) and turned out NOT to need this: .btn-ghost has no
  * box-shadow at all — its background/border/text colors already come
  * straight from theme tokens, so it was never dark-only to begin with.
  * .btn-danger's box-shadow is two `inset` shadows on its own fixed-red
- * surface (never `--lime-glow` or anything page-background-dependent) — an
- * inset highlight/shadow pair is self-contained to the button's own
- * surface and doesn't extend onto (or blend with) the page behind it,
- * unlike an outer glow, so it reads identically on both themes already. */
+ * surface (never anything page-background-dependent) — self-contained to
+ * the button's own surface, unlike an outer glow, so it reads identically
+ * on both themes already. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .panel {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 24px -18px rgba(60, 66, 54, 0.35);
@@ -276,10 +359,6 @@
   }
   :root:not([data-theme="dark"]) .btn-primary:hover:not(:disabled) {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 4px rgba(30, 46, 10, 0.3), 0 6px 16px -4px rgba(76, 122, 31, 0.6);
-  }
-  :root:not([data-theme="dark"]) .sidebar-item.active {
-    box-shadow: inset 0 0 0 1px rgba(76, 122, 31, 0.35), 0 1px 3px -1px rgba(60, 66, 54, 0.3);
-    text-shadow: none;
   }
 }
 :root[data-theme="light"] .panel {
@@ -291,10 +370,6 @@
 :root[data-theme="light"] .btn-primary:hover:not(:disabled) {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 4px rgba(30, 46, 10, 0.3), 0 6px 16px -4px rgba(76, 122, 31, 0.6);
 }
-:root[data-theme="light"] .sidebar-item.active {
-  box-shadow: inset 0 0 0 1px rgba(76, 122, 31, 0.35), 0 1px 3px -1px rgba(60, 66, 54, 0.3);
-  text-shadow: none;
-}
 
 * { box-sizing: border-box; }
 
@@ -304,6 +379,8 @@ body {
   color: var(--paper);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4 {
@@ -319,13 +396,25 @@ h1, h2, h3, h4 {
   font-variant-numeric: tabular-nums;
 }
 
+::selection { background: var(--lime-wash-hi); color: var(--paper); }
+
+/* Thin, rounded, track-less scrollbars — chrome, not content. A 2px
+   transparent border + background-clip:content-box makes the visible
+   thumb read as ~4px of ink inside an 8px track. */
+* { scrollbar-width: thin; scrollbar-color: var(--stroke-strong) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--stroke-strong); border-radius: var(--radius-pill); border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--char-max); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 #root { display: flex; height: 100vh; }
 
 /* ---------- Nav rail ---------- */
 .sidebar {
   width: 208px;
-  background: var(--char);
-  border-right: 1px solid var(--stroke);
+  background: var(--rail);
+  box-shadow: inset -1px 0 0 var(--stroke);
   padding: 16px 0;
   display: flex;
   flex-direction: column;
@@ -355,7 +444,7 @@ h1, h2, h3, h4 {
   gap: 10px;
   padding: 10px 16px;
   margin: 0 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-chip);
   cursor: pointer;
   color: var(--ash);
   font-weight: 600;
@@ -364,14 +453,16 @@ h1, h2, h3, h4 {
   border-left: 2px solid transparent;
 }
 .sidebar-item svg { flex-shrink: 0; opacity: 0.85; transition: opacity var(--ease); }
-.sidebar-item:hover { background: var(--char-hi); color: var(--paper); transform: translateX(1px); }
+.sidebar-item:hover { background: var(--char-raised); color: var(--paper); transform: translateX(1px); }
 .sidebar-item:hover svg { opacity: 1; }
+/* The active nav item is one of the accent's sanctioned moments (README's
+   "Accent discipline"): a flat lime wash, not a gradient/glow — the glow
+   moved to .btn-primary alone, so it stays a once-per-view signal instead
+   of appearing on every accented surface. */
 .sidebar-item.active {
-  background: linear-gradient(180deg, rgba(124, 179, 66, 0.18), rgba(124, 179, 66, 0.06));
-  color: var(--lime);
+  background: var(--lime-wash);
+  color: var(--lime-bright);
   border-left: 2px solid var(--lime);
-  box-shadow: inset 0 0 0 1px rgba(124, 179, 66, 0.25), 0 0 16px -4px var(--lime-glow);
-  text-shadow: 0 0 12px var(--lime-glow);
 }
 .sidebar-item.active svg { opacity: 1; }
 
@@ -389,13 +480,13 @@ h1, h2, h3, h4 {
 
 /* ---------- Panels / cards ---------- */
 .panel {
-  background: linear-gradient(180deg, var(--char-raised), var(--char));
+  background: var(--char);
   border: 1px solid var(--stroke);
   border-radius: var(--radius-card);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 30px -18px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-panel), var(--hairline-top);
   padding: 18px;
   margin-bottom: 16px;
-  transition: border-color var(--ease);
+  transition: border-color var(--ease), box-shadow var(--ease);
 }
 /* A panel wrapping a data table (Profiles/Proxies/Logs) gets its own
    horizontal scrollbar on a narrow window instead of the whole page
@@ -408,7 +499,7 @@ h1, h2, h3, h4 {
 
 /* ---------- Form controls ---------- */
 input, select, textarea {
-  background: var(--char-raised);
+  background: var(--surface-input);
   border: 1px solid var(--stroke);
   color: var(--paper);
   border-radius: var(--radius-input);
@@ -420,54 +511,70 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--lime);
-  box-shadow: 0 0 0 3px var(--lime-glow);
+  box-shadow: var(--ring);
 }
 input[type="checkbox"] { accent-color: var(--lime); width: auto; padding: 0; cursor: pointer; transition: transform var(--ease); }
 input[type="checkbox"]:hover { transform: scale(1.08); }
 
-/* ---------- Buttons ---------- */
+/* ---------- Buttons ----------
+   Corners are the chip radius (8px), not the input radius (12px) — the
+   design system's own rule: "buttons and chips 8px, inputs/selects 12px".
+   Hover is a surface step + 1px lift + shadow swap, never a colour change
+   (README's "Accent discipline": lime is reserved for the ONE primary
+   action per view — .btn-ghost used to turn lime on hover, which broke
+   that rule the moment two ghost buttons sat on the same screen). */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  border-radius: var(--radius-input);
+  border-radius: var(--radius-chip);
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   border: 1px solid transparent;
-  transition: transform var(--ease), box-shadow var(--ease), background var(--ease), border-color var(--ease), opacity var(--ease);
+  transition: transform var(--ease), box-shadow var(--ease), background var(--ease), border-color var(--ease), color var(--ease), opacity var(--ease);
 }
-.btn:active { transform: translateY(1px); }
+.btn:active:not(:disabled) { transform: scale(0.985); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--lime) 0%, var(--lime-deep) 100%);
-  color: var(--ink);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 6px 16px -8px var(--lime-glow);
+  background: linear-gradient(180deg, var(--lime-bright), var(--lime));
+  border-color: var(--lime-deep);
+  color: var(--lime-ink);
+  box-shadow: var(--shadow-accent), var(--hairline-top-strong);
 }
 .btn-primary:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.25), 0 8px 20px -6px var(--lime-glow);
+  box-shadow: var(--shadow-lift), var(--hairline-top-strong);
   filter: brightness(1.06);
+  transform: translateY(-1px);
 }
 .btn-primary:active:not(:disabled) {
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
+  transform: scale(0.985);
 }
 
 .btn-ghost {
   background: var(--char-raised);
-  border-color: var(--stroke);
-  color: var(--paper);
+  border-color: var(--stroke-strong);
+  color: var(--ash);
+  box-shadow: var(--shadow-flat), var(--hairline-top);
 }
-.btn-ghost:hover:not(:disabled) { background: var(--char-hi); border-color: var(--lime-deep); color: var(--lime); }
+.btn-ghost:hover:not(:disabled) {
+  background: var(--char-max);
+  color: var(--paper);
+  box-shadow: var(--shadow-lift), var(--hairline-top);
+  transform: translateY(-1px);
+}
 
 .btn-danger-ghost {
   background: var(--char-raised);
-  border-color: var(--stroke);
+  border-color: var(--stroke-strong);
   color: var(--danger);
+  box-shadow: var(--shadow-flat), var(--hairline-top);
 }
-.btn-danger-ghost:hover:not(:disabled) { background: rgba(229, 72, 77, 0.12); border-color: var(--danger); }
+.btn-danger-ghost:hover:not(:disabled) { background: var(--danger-wash); border-color: var(--danger-line); box-shadow: var(--shadow-lift), var(--hairline-top); transform: translateY(-1px); }
 
 .btn-danger {
   background: linear-gradient(180deg, var(--danger) 0%, #a83236 100%);
@@ -508,10 +615,13 @@ input[type="checkbox"]:hover { transform: scale(1.08); }
   transition: color var(--ease), border-color var(--ease);
 }
 .tab-item:hover { color: var(--paper); }
+/* The active tab underline is one of the accent's sanctioned per-view
+   moments (README's "Accent discipline") — kept as a flat colour + border,
+   the glow text-shadow was dropped as part of this pass's move away from
+   diffuse glows toward flat washes and layered shadows. */
 .tab-item.active {
-  color: var(--lime);
+  color: var(--lime-bright);
   border-bottom-color: var(--lime);
-  text-shadow: 0 0 10px var(--lime-glow);
 }
 /* Unsaved-changes marker on one specific tab (ProfileEditorModal.tsx) —
  * distinct from the global Reset button, which only tells you *something*
@@ -537,8 +647,10 @@ th {
   letter-spacing: 0.05em;
 }
 td { transition: background var(--ease), box-shadow var(--ease); }
-tr:hover td { background: rgba(124, 179, 66, 0.05); }
-tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
+/* Row hover is a neutral surface step (README's own rule: accent is
+   reserved for ONE moment per view — the selected-row lime wash below,
+   not every hovered row too), never a colour change and never a scale. */
+tr:hover td { background: var(--char-raised); }
 /* Same treatment as the hover state above, but keyed off a REAL keyboard
    focus landing inside the row (its checkbox or any action button) rather
    than any focus at all — :has(:focus-visible), not :focus-within, so a
@@ -546,8 +658,7 @@ tr:hover td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
    :hover). Previously a keyboard user tabbing across many rows' action
    buttons had no row-level "you are here" cue, only the individual
    button's own default outline. */
-tr:has(:focus-visible) td { background: rgba(124, 179, 66, 0.05); }
-tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-deep); }
+tr:has(:focus-visible) td { background: var(--char-raised); }
 
 /* ---------- Proxy check-history panel (ProxiesPage.tsx) ---------- */
 .proxy-history-row td { background: var(--char); padding: 10px 14px; }
@@ -564,14 +675,14 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   border: none;
   padding: 2px 4px;
   margin: -2px -4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   width: 100%;
 }
-.log-message-toggle:hover { background: rgba(124, 179, 66, 0.05); }
+.log-message-toggle:hover { background: var(--char-raised); }
 .log-message-toggle svg { flex-shrink: 0; margin-top: 3px; color: var(--ash-dim); }
 .log-message {
   white-space: nowrap;
@@ -616,7 +727,12 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   box-shadow: 0 0 0 1px var(--danger);
 }
 
-/* ---------- Status pills ---------- */
+/* ---------- Status pills ----------
+   Colours now come from the wash/line token pairs, and Locked gets its own
+   --info blue instead of sharing --warn/amber with Starting/Stopping — two
+   genuinely different states (a permanent block vs. a transient one)
+   previously read as near-identical on some monitors/colour-vision
+   settings, which the icon alone didn't fully compensate for. */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -629,20 +745,20 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border: 1px solid transparent;
-  transition: background var(--ease), color var(--ease), border-color var(--ease), text-shadow var(--ease);
+  transition: background var(--ease), color var(--ease), border-color var(--ease);
 }
-.pill.on { background: rgba(124, 179, 66, 0.14); color: var(--lime); border-color: rgba(124, 179, 66, 0.35); text-shadow: 0 0 8px var(--lime-glow); }
-.pill.idle { background: rgba(170, 179, 162, 0.1); color: var(--ash); border-color: var(--stroke); }
-.pill.warn { background: rgba(210, 153, 34, 0.14); color: var(--warn); border-color: rgba(210, 153, 34, 0.35); }
-.pill.danger { background: rgba(229, 72, 77, 0.14); color: var(--danger); border-color: rgba(229, 72, 77, 0.35); }
-.pill.lock { background: rgba(210, 153, 34, 0.14); color: var(--warn); border-color: rgba(210, 153, 34, 0.35); }
+.pill.on { background: var(--lime-wash); color: var(--lime-bright); border-color: var(--lime-line); }
+.pill.idle { background: var(--neutral-wash); color: var(--ash); border-color: var(--neutral-line); }
+.pill.warn { background: var(--warn-wash); color: var(--warn); border-color: var(--warn-line); }
+.pill.danger { background: var(--danger-wash); color: var(--danger); border-color: var(--danger-line); }
+.pill.lock { background: var(--info-wash); color: var(--info); border-color: var(--info-line); }
 
 /* ---------- Tags ---------- */
 .tag {
   display: inline-block;
-  background: var(--char-hi);
+  background: var(--neutral-wash);
   border: 1px solid var(--stroke);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 1px 8px;
   margin-right: 4px;
   font-size: 11px;
@@ -659,10 +775,10 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   gap: 3px;
   margin-left: 8px;
   padding: 1px 7px;
-  border-radius: 6px;
-  background: var(--char-hi);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-wash);
   border: 1px solid var(--stroke);
-  color: var(--lime-deep);
+  color: var(--ash-dim);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   vertical-align: middle;
@@ -676,12 +792,15 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   font-size: 13px;
   border: 1px solid transparent;
 }
-.banner-error { background: rgba(229, 72, 77, 0.1); border-color: var(--danger); color: color-mix(in srgb, var(--danger) 70%, white); }
-.banner-success { background: rgba(124, 179, 66, 0.1); border-color: var(--lime); color: var(--lime); }
-.banner-warn { background: rgba(210, 153, 34, 0.1); border-color: var(--warn); color: var(--warn); }
-.banner-info { background: var(--char-hi); border-color: var(--stroke); color: var(--ash); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.banner-error { background: var(--danger-wash); border-color: var(--danger-line); color: color-mix(in srgb, var(--danger) 70%, white); }
+.banner-success { background: var(--lime-wash); border-color: var(--lime-line); color: var(--lime-bright); }
+.banner-warn { background: var(--warn-wash); border-color: var(--warn-line); color: var(--warn); }
+.banner-info { background: var(--char-raised); border-color: var(--stroke); color: var(--ash); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 
-/* ---------- Undo toast ---------- */
+/* ---------- Undo toast ----------
+   One of transparency-and-blur's three sanctioned uses (README): --glass at
+   14px blur + 140% saturation, same treatment as the design system's
+   scrim/context-menu family — was a flat --char-raised fill before. */
 .undo-toast {
   position: fixed;
   left: 50%;
@@ -692,10 +811,12 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   align-items: center;
   gap: 14px;
   padding: 11px 12px 11px 16px;
-  background: var(--char-raised);
-  border: 1px solid var(--stroke);
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-input);
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-overlay), var(--hairline-top);
   min-width: 320px;
 }
 .undo-toast-message { font-size: 13px; color: var(--paper); flex: 1; }
@@ -707,9 +828,11 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   cursor: pointer;
   padding: 4px;
   line-height: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 .undo-toast-close:hover { color: var(--paper); background: var(--char-hi); }
+/* The Undo affordance itself is one of the accent's sanctioned moments
+   (README's "Accent discipline") — the countdown bar stays lime. */
 .undo-toast-bar {
   position: absolute;
   left: 0;
@@ -724,16 +847,19 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   to { width: 0%; }
 }
 
-/* ---------- Bulk toolbar ---------- */
+/* ---------- Bulk toolbar ----------
+   The "N selected" bar is one of the accent's sanctioned per-view moments
+   — a lime wash + accent border, same language as a selected table row. */
 .bulk-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
   margin-bottom: 12px;
-  background: var(--char-raised);
-  border: 1px solid var(--lime-deep);
-  border-radius: var(--radius-input);
+  background: var(--lime-wash);
+  border: 1px solid var(--lime-line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-panel), var(--hairline-top);
 }
 
 /* ---------- Context menu ---------- */
@@ -741,43 +867,46 @@ tr:has(:focus-visible) td:first-child { box-shadow: inset 2px 0 0 var(--lime-dee
   position: fixed;
   z-index: 200;
   min-width: 180px;
-  background: var(--char-raised);
-  border: 1px solid var(--stroke);
-  border-radius: 10px;
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-overlay), var(--hairline-top);
   padding: 6px;
 }
 .context-menu-item {
   padding: 7px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   cursor: pointer;
   color: var(--paper);
+  transition: background var(--ease), color var(--ease);
 }
-.context-menu-item:hover, .context-menu-item:focus-visible { background: var(--char-hi); color: var(--lime); }
-.context-menu-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--lime-glow) inset; }
+.context-menu-item:hover, .context-menu-item:focus-visible { background: var(--char-hi); color: var(--paper); }
+.context-menu-item:focus-visible { outline: none; box-shadow: var(--ring) inset; }
 .context-menu-item.danger { color: var(--danger); }
-.context-menu-item.danger:hover, .context-menu-item.danger:focus-visible { background: rgba(229, 72, 77, 0.12); }
+.context-menu-item.danger:hover, .context-menu-item.danger:focus-visible { background: var(--danger-wash); }
 .context-menu-divider { height: 1px; background: var(--stroke); margin: 4px 2px; }
 
 /* ---------- Modal (glassmorphism) ---------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 8, 6, 0.6);
-  backdrop-filter: blur(3px);
+  background: var(--modal-bg);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
 }
 .modal-panel {
-  background: var(--modal-bg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(124, 179, 66, 0.2);
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--stroke-strong);
   border-radius: var(--radius-card);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 30px 60px -20px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--shadow-modal), var(--hairline-top-strong);
 }
 
 /* ---------- Layout utilities ----------
