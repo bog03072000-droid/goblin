@@ -599,6 +599,16 @@ input[type="checkbox"]:hover { transform: scale(1.08); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Transitional-status icon pulse (design system: "Transitional statuses —
+   Starting, Stopping, a proxy check in flight — pulse their icon at
+   1.4s"). Applied to the CircleDot icon inside a .pill.warn that
+   represents an in-flight/transitional state, not the pill itself. */
+@keyframes pill-icon-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.pill-icon-pulse { animation: pill-icon-pulse 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pill-icon-pulse { animation: none; }
+}
+
 /* ---------- Tabs (modal) ---------- */
 .tab-item {
   display: inline-flex;

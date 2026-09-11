@@ -145,7 +145,10 @@ describe('ProxiesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Test' }));
 
-    expect(await screen.findByText('OK (42ms)')).toBeInTheDocument();
+    // Status and latency are two separate cells since the design-system
+    // pass split them apart (latency now has its own colour-coded column).
+    expect(await screen.findByText('OK')).toBeInTheDocument();
+    expect(screen.getByText('42ms')).toBeInTheDocument();
   });
 
   it('History fetches and shows past checks on first open, then closes without re-fetching on a second click', async () => {
@@ -200,7 +203,8 @@ describe('ProxiesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /History/ })); // close
 
     fireEvent.click(screen.getByRole('button', { name: 'Test' }));
-    await screen.findByText('OK (99ms)');
+    await screen.findByText('OK');
+    await screen.findByText('99ms');
 
     fireEvent.click(screen.getByRole('button', { name: /History/ })); // reopen
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:checkHistory', { id: 'proxy-1' }));
@@ -227,7 +231,9 @@ describe('ProxiesPage', () => {
     await screen.findByText('My Proxy');
 
     fireEvent.click(screen.getByRole('button', { name: 'Test' }));
-    expect(await screen.findByText('Failed: connect ECONNREFUSED 1.2.3.4:8080')).toBeInTheDocument();
+    // The status pill itself just says FAIL — the full error (naming the
+    // port) is a title tooltip on that pill, not separate visible text.
+    expect(await screen.findByTitle('Failed: connect ECONNREFUSED 1.2.3.4:8080')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     const portInput = screen.getByLabelText('Port');
@@ -235,9 +241,9 @@ describe('ProxiesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('proxy:update', expect.objectContaining({ port: 9090 })));
-    // The stale failure text (which names the OLD port) must be gone — not
-    // still showing, and not replaced by some other leftover fragment of it.
-    expect(screen.queryByText('Failed: connect ECONNREFUSED 1.2.3.4:8080')).not.toBeInTheDocument();
+    // The stale failure tooltip (which names the OLD port) must be gone —
+    // not still showing, and not replaced by some other leftover fragment.
+    expect(screen.queryByTitle('Failed: connect ECONNREFUSED 1.2.3.4:8080')).not.toBeInTheDocument();
 
     // History must also re-fetch rather than show whatever was cached under
     // the old config, same guarantee the manual-Test case above already has.

@@ -1,5 +1,19 @@
 import { Fragment, useEffect, useState } from 'react';
-import { PlugZap, Wifi, Pencil, Trash2, History, ChevronDown, ChevronUp, ListPlus, MapPin } from 'lucide-react';
+import {
+  PlugZap,
+  Wifi,
+  Pencil,
+  Trash2,
+  History,
+  ChevronDown,
+  ChevronUp,
+  ListPlus,
+  MapPin,
+  CircleCheck,
+  CircleX,
+  Circle,
+  CircleDot,
+} from 'lucide-react';
 import type { ProxyRecord, ProxyProtocol, ProxyTestResult, ProxyCheckHistoryEntry } from '@shared/schemas/proxy';
 import type { ProfileListItem } from '@shared/schemas/profile';
 import type { Fingerprint } from '@shared/schemas/fingerprint';
@@ -71,6 +85,11 @@ function parseBulkProxyLines(text: string): { valid: ParsedBulkProxyLine[]; inva
   return { valid, invalid };
 }
 
+/** Latency above this reads as slow (--warn) rather than the normal
+ * secondary text colour — matches the design system's own "comfort
+ * threshold" for a proxied connection, not an arbitrary round number. */
+const LATENCY_SLOW_THRESHOLD_MS = 120;
+
 export function ProxiesPage(): JSX.Element {
   const { t } = useTranslation();
   const [proxies, setProxies] = useState<ProxyRecord[]>([]);
@@ -85,6 +104,12 @@ export function ProxiesPage(): JSX.Element {
   const [history, setHistory] = useState<Record<string, ProxyCheckHistoryEntry[]>>({});
   const historyAction = useAsyncAction();
   const { error, run } = useAsyncAction();
+  // Which proxy's manual Test is currently in flight — previously there was
+  // no per-row way to tell (only the page-wide `error` on failure), so a
+  // slow real network probe left that row looking identical to before the
+  // click for as long as it took to resolve. Mirrors geoPendingId's own
+  // existing per-row pattern below.
+  const [testingId, setTestingId] = useState<string | null>(null);
   // Proxy geolocation (IP -> country/timezone) — on-demand per proxy, not
   // fetched automatically for every stored proxy on page load, since the
   // free geolocation API this uses is rate-limited (see
@@ -135,6 +160,7 @@ export function ProxiesPage(): JSX.Element {
   }
 
   async function test(id: string): Promise<void> {
+    setTestingId(id);
     await run(async () => {
       const result = await callApi<'proxy:test', ProxyTestResult>('proxy:test', { id });
       setResults((prev) => ({ ...prev, [id]: result }));
@@ -146,6 +172,7 @@ export function ProxiesPage(): JSX.Element {
         return rest;
       });
     });
+    setTestingId(null);
   }
 
   /** Clears every cached test/geolocation result for a proxy after its
@@ -369,6 +396,7 @@ export function ProxiesPage(): JSX.Element {
               <th>{t('proxy.table.port')}</th>
               <th>{t('proxy.table.username')}</th>
               <th>{t('proxy.table.status')}</th>
+              <th>{t('proxy.table.latency')}</th>
               <th>{t('proxy.geolocate')}</th>
               <th>{t('proxy.table.actions')}</th>
             </tr>
@@ -383,28 +411,53 @@ export function ProxiesPage(): JSX.Element {
                 <td className="mono">{p.port}</td>
                 <td>{p.username ?? '—'}</td>
                 <td>
-                  {results[p.id] ? (
+                  {testingId === p.id ? (
+                    // Real network probe in flight — see test()'s own
+                    // comment for why this state didn't exist before.
+                    <span className="pill warn">
+                      <CircleDot size={12} strokeWidth={2.25} className="pill-icon-pulse" />
+                      {t('proxy.status.checking')}
+                    </span>
+                  ) : results[p.id] ? (
                     // A manual "Test" click this session always wins over the
                     // (possibly older) background-scheduler result below.
-                    <span className={`pill ${results[p.id]!.success ? 'on' : 'danger'}`}>
-                      {results[p.id]!.success
-                        ? t('proxy.status.ok', { ms: results[p.id]!.latencyMs ?? 0 })
-                        : t('proxy.status.failed', { error: results[p.id]!.error ?? '' })}
+                    <span
+                      className={`pill ${results[p.id]!.success ? 'on' : 'danger'}`}
+                      title={results[p.id]!.success ? undefined : t('proxy.status.failed', { error: results[p.id]!.error ?? '' })}
+                    >
+                      {results[p.id]!.success ? <CircleCheck size={12} strokeWidth={2.25} /> : <CircleX size={12} strokeWidth={2.25} />}
+                      {results[p.id]!.success ? t('proxy.status.ok') : t('proxy.status.failedShort')}
                     </span>
                   ) : p.lastCheckedAt ? (
                     // Persisted result from the periodic health-check
                     // scheduler (see proxyHealthScheduler.ts) or an earlier
                     // session's manual test — not just "no data yet".
                     <span className={`pill ${p.lastCheckStatus === 'OK' ? 'on' : 'danger'}`}>
+                      {p.lastCheckStatus === 'OK' ? <CircleCheck size={12} strokeWidth={2.25} /> : <CircleX size={12} strokeWidth={2.25} />}
                       {p.lastCheckStatus === 'OK'
-                        ? t('proxy.status.autoOk', { ms: p.lastCheckLatencyMs ?? 0, when: formatRelativeTime(p.lastCheckedAt, t) })
+                        ? t('proxy.status.autoOk', { when: formatRelativeTime(p.lastCheckedAt, t) })
                         : t('proxy.status.autoFail', { when: formatRelativeTime(p.lastCheckedAt, t) })}
                     </span>
                   ) : (
                     <span className="pill idle" title={t('proxy.status.neverChecked')}>
-                      —
+                      <Circle size={12} strokeWidth={2.25} />—
                     </span>
                   )}
+                </td>
+                <td className="mono">
+                  {(() => {
+                    // Same win-order as the status pill above: this
+                    // session's own manual test result beats a possibly
+                    // older persisted one, which beats "never checked".
+                    const ms = testingId === p.id ? null : results[p.id]?.latencyMs ?? p.lastCheckLatencyMs;
+                    if (ms === null || ms === undefined) return <span className="text-dim">—</span>;
+                    const slow = ms > LATENCY_SLOW_THRESHOLD_MS;
+                    return (
+                      <span className={slow ? 'text-warn' : undefined} title={slow ? t('proxy.status.latencySlowHint') : undefined}>
+                        {ms}ms
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>
                   {(() => {
@@ -435,8 +488,8 @@ export function ProxiesPage(): JSX.Element {
                   })()}
                 </td>
                 <td>
-                  <button className="btn btn-ghost btn-sm" onClick={() => void test(p.id)}>
-                    <Wifi size={13} strokeWidth={2.25} />
+                  <button className="btn btn-ghost btn-sm" disabled={testingId === p.id} onClick={() => void test(p.id)}>
+                    {testingId === p.id ? <span className="spinner" /> : <Wifi size={13} strokeWidth={2.25} />}
                     {t('proxy.test')}
                   </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => void toggleHistory(p.id)}>
@@ -460,7 +513,7 @@ export function ProxiesPage(): JSX.Element {
               </tr>
               {expandedHistoryId === p.id && (
                 <tr className="proxy-history-row">
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     {historyAction.pending && !history[p.id] ? (
                       <p className="text-dim text-sm m-0">{t('common.loading')}</p>
                     ) : !history[p.id] || history[p.id]!.length === 0 ? (
@@ -481,7 +534,10 @@ export function ProxiesPage(): JSX.Element {
                                 {formatRelativeTime(entry.checkedAt, t)}
                               </td>
                               <td>
-                                <span className={`pill ${entry.status === 'OK' ? 'on' : 'danger'}`}>{entry.status}</span>
+                                <span className={`pill ${entry.status === 'OK' ? 'on' : 'danger'}`}>
+                                  {entry.status === 'OK' ? <CircleCheck size={12} strokeWidth={2.25} /> : <CircleX size={12} strokeWidth={2.25} />}
+                                  {entry.status}
+                                </span>
                               </td>
                               <td className="mono">{entry.latencyMs !== null ? `${entry.latencyMs}ms` : '—'}</td>
                             </tr>
@@ -496,7 +552,7 @@ export function ProxiesPage(): JSX.Element {
             ))}
             {proxies.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-dim">
+                <td colSpan={9} className="text-dim">
                   {t('proxy.empty.none')}
                 </td>
               </tr>

@@ -357,6 +357,7 @@ const en = {
   'proxy.table.port': 'Port',
   'proxy.table.username': 'Username',
   'proxy.table.status': 'Status',
+  'proxy.table.latency': 'Latency',
   'proxy.table.actions': 'Actions',
   'proxy.geolocate': 'Check location',
   'proxy.geolocate.result': '{country} ({timezone})',
@@ -365,11 +366,16 @@ const en = {
     '{count} profile(s) using this proxy have a different timezone than its detected location ({country}) — their traffic and claimed timezone may not match.',
   'proxy.geolocate.hostOnlyNotice':
     "SOCKS5 proxies can't be checked through a real tunnel — this is the proxy's own advertised host location, not a verified exit IP.",
-  'proxy.status.ok': 'OK ({ms}ms)',
+  // Latency moved out into its own table column (see LATENCY_SLOW_THRESHOLD_MS
+  // in ProxiesPage.tsx) — the status pill itself now just says OK/FAIL/checking.
+  'proxy.status.ok': 'OK',
+  'proxy.status.failedShort': 'FAIL',
+  'proxy.status.checking': 'Working…',
   'proxy.status.failed': 'Failed: {error}',
-  'proxy.status.autoOk': 'OK · {ms}ms · {when}',
+  'proxy.status.autoOk': 'OK · {when}',
   'proxy.status.autoFail': 'FAIL · {when}',
   'proxy.status.neverChecked': 'Not checked yet',
+  'proxy.status.latencySlowHint': 'Above the 120ms comfort threshold',
   'proxy.status.justNow': 'just now',
   'proxy.status.minutesAgo': '{n}m ago',
   'proxy.status.hoursAgo': '{n}h ago',

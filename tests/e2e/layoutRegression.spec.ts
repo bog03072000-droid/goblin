@@ -1,7 +1,24 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, _electron as electron, type ElectronApplication, type Page, type Locator } from '@playwright/test';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+
+/** Reads a `background-color` only once it's stopped changing — `td {
+ * transition: background ... }` (global.css) means a read taken right
+ * after a class/focus change can land mid-animation instead of on the
+ * settled value. Two consecutive equal reads, ~40ms apart, is the actual
+ * signal the transition finished; a fixed timeout guess is either too
+ * short (flaky) or wastes time padding every call with worst-case slack. */
+async function readStableBackground(locator: Locator): Promise<string> {
+  let previous = await locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+  for (let i = 0; i < 25; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const current = await locator.evaluate((el) => getComputedStyle(el).backgroundColor);
+    if (current === previous) return current;
+    previous = current;
+  }
+  return previous;
+}
 
 /**
  * Regression coverage for a real bug that shipped once already: the Settings
@@ -79,14 +96,22 @@ test('a profile row highlights when keyboard focus lands on one of its buttons, 
   await expect(row).toBeVisible({ timeout: 10_000 });
   const firstCell = row.locator('td').first();
 
-  const unfocusedBackground = await firstCell.evaluate((el) => getComputedStyle(el).backgroundColor);
-
   // Real keyboard Tab presses, not a programmatic .focus() call — this
   // exercises the actual :has(:focus-visible) selector the same way a real
   // keyboard user would. Clicks the row's checkbox first, then Tab moves
   // focus onward within the same row, not out of it.
   const checkbox = row.locator('input[type="checkbox"]');
   await checkbox.click();
+  await expect(checkbox).toBeChecked();
+  // Captured AFTER selecting (not before): a selected row now carries its
+  // own lime-wash background (see ProfilesTable.tsx's row-selected class),
+  // so "unfocused" here means "selected but not focused", the actual state
+  // this test returns to once focus moves off the row again below.
+  // `td { transition: background ... }` (global.css) means a plain read
+  // right after the click can land mid-animation rather than on the
+  // settled value — waiting for two consecutive reads to agree (rather
+  // than a fixed timeout guess) is what actually makes this robust.
+  const unfocusedBackground = await readStableBackground(firstCell);
   await window.keyboard.press('Tab');
   const startButton = row.getByRole('button', { name: 'Start', exact: true });
   await expect(startButton).toBeFocused();
@@ -96,9 +121,17 @@ test('a profile row highlights when keyboard focus lands on one of its buttons, 
   // (rather than a fixed sleep) waits exactly as long as the real
   // transition takes, no more, no less, and would still fail if the rule
   // never actually applied at all.
+  // A neutral surface step (--char-raised), not a lime tint — the design
+  // system's own "accent discipline" rule reserves lime for one moment per
+  // view (the selected-row wash, the primary button, ...), not every
+  // focused/hovered row too. Asserted as "differs from the unfocused
+  // background" rather than a hardcoded RGB literal, since --char-raised
+  // resolves differently in light vs. dark theme (whichever this test
+  // machine's OS preference picks) — unlike the old rule this replaced,
+  // which was a theme-invariant hardcoded rgba() literal.
   await expect
     .poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor))
-    .toBe('rgba(124, 179, 66, 0.05)');
+    .not.toBe(unfocusedBackground);
 
   // Tabbing further, off the row's own buttons and onto whatever follows,
   // removes the highlight again — this isn't a permanent "was ever
@@ -107,7 +140,7 @@ test('a profile row highlights when keyboard focus lands on one of its buttons, 
     await window.keyboard.press('Tab');
   }
   await expect(startButton).not.toBeFocused();
-  await expect.poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(unfocusedBackground);
+  expect(await readStableBackground(firstCell)).toBe(unfocusedBackground);
 });
 
 test('a proxy row highlights on keyboard focus too, proving :has(:focus-visible) is a global rule, not ProfilesTable-specific', async () => {
@@ -134,9 +167,17 @@ test('a proxy row highlights on keyboard focus too, proving :has(:focus-visible)
   const historyButton = row.getByRole('button', { name: /History/, exact: false });
   await expect(historyButton).toBeFocused();
 
+  // A neutral surface step (--char-raised), not a lime tint — the design
+  // system's own "accent discipline" rule reserves lime for one moment per
+  // view (the selected-row wash, the primary button, ...), not every
+  // focused/hovered row too. Asserted as "differs from the unfocused
+  // background" rather than a hardcoded RGB literal, since --char-raised
+  // resolves differently in light vs. dark theme (whichever this test
+  // machine's OS preference picks) — unlike the old rule this replaced,
+  // which was a theme-invariant hardcoded rgba() literal.
   await expect
     .poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor))
-    .toBe('rgba(124, 179, 66, 0.05)');
+    .not.toBe(unfocusedBackground);
 
   // Moving focus off the row entirely (a plain click on non-interactive
   // page text) removes the highlight again — this isn't a permanent

@@ -117,7 +117,10 @@ const ProfileRow = memo(
         </td>
         <td>
           <span className={`pill ${PILL_VARIANT[profile.status]}`}>
-            <StatusIcon size={12} />
+            <StatusIcon
+              size={12}
+              className={profile.status === 'STARTING' || profile.status === 'STOPPING' ? 'pill-icon-pulse' : undefined}
+            />
             {t(STATUS_LABEL_KEYS[profile.status])}
           </span>
         </td>
