@@ -98,6 +98,7 @@ export function SettingsPage(): JSX.Element {
         <label className="field-inline">
           <input
             type="checkbox"
+            className="toggle"
             checked={settings.hardwareAcceleration}
             onChange={(e) => void save({ hardwareAcceleration: e.target.checked })}
           />
@@ -106,6 +107,7 @@ export function SettingsPage(): JSX.Element {
         <label className="field-inline">
           <input
             type="checkbox"
+            className="toggle"
             checked={settings.autoCacheCleanup}
             onChange={(e) => void save({ autoCacheCleanup: e.target.checked })}
           />

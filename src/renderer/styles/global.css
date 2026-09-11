@@ -516,6 +516,45 @@ input:focus, select:focus, textarea:focus {
 input[type="checkbox"] { accent-color: var(--lime); width: auto; padding: 0; cursor: pointer; transition: transform var(--ease); }
 input[type="checkbox"]:hover { transform: scale(1.08); }
 
+/* Pill toggle switch for a boolean setting (SettingsPage.tsx) — the
+   design system's own Toggle component look, drawn on the real
+   `<input type="checkbox">` itself via `appearance:none` rather than a
+   wrapping button, so the element stays a genuine checkbox: existing
+   label association, `checked`/`onChange`, and
+   `getByLabelText(...)`/`fireEvent.click` in tests all keep working
+   completely unchanged, only the paint differs. */
+input[type="checkbox"].toggle {
+  appearance: none;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-input);
+  transition: background var(--ease), border-color var(--ease);
+}
+input[type="checkbox"].toggle::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--ash-dim);
+  transition: transform var(--ease), background var(--ease);
+}
+input[type="checkbox"].toggle:checked {
+  border-color: var(--lime-line);
+  background: var(--lime-wash-hi);
+}
+input[type="checkbox"].toggle:checked::after {
+  transform: translateX(16px);
+  background: var(--paper);
+}
+input[type="checkbox"].toggle:hover { transform: none; }
+
 /* ---------- Buttons ----------
    Corners are the chip radius (8px), not the input radius (12px) — the
    design system's own rule: "buttons and chips 8px, inputs/selects 12px".
