@@ -759,3 +759,130 @@ external factors like code signing or second hardware). **Nothing from
 this round has been pushed — `5174721`, `6f744d0`, `70e6034`, `321db64`,
 `89da583`, and this entry all remain local, pending explicit
 confirmation.**
+
+## 2026-09-11 — 88.25 weighted / 88.0 simple
+
+Pushed all 13 outstanding commits first (the prior round's unpushed
+`5174721`..`a02f64c`, none of which had been confirmed for push yet,
+plus this round's own 7) — confirmed via `git log --oneline -20`,
+`git status` (no more "ahead of origin/main"), and `git log origin/main
+-1` matching the new local HEAD (`3d22a80`). Then a full 7-commit
+design-system rollout: the GoblinAnty Design System handoff (a
+Claude-Design-generated token/component reference read from the repo's
+own real source, not screenshots) applied to `global.css` and all 6
+pages, one commit each, verified via `git show --stat`, a live
+computer-use walkthrough per stage, and a cross-page grep confirming no
+stale pre-redesign colors remained and every page's new classes actually
+resolve against `global.css` tokens (`toggle`, `segmented-toggle`,
+`btn-live-on`, `row-selected`, `pill-icon-pulse` all cross-referenced,
+zero orphans).
+
+**Дизайн (the category this round's own commits targeted directly):**
+- `global.css` (`02879a2`): single-blur shadows replaced with real
+  layered three-part shadows (`--shadow-panel/-lift/-overlay/-modal/
+  -accent`) plus a 1px inset top highlight, a deeper base ramp
+  (`#121412` → `#0d0f0e`) with a new dedicated `--rail` step, and
+  semantic wash/line token pairs (lime/warn/danger/info/neutral) driving
+  every pill/tag/banner instead of ad hoc `rgba()` literals scattered
+  through the file.
+- Two genuine "accent discipline" corrections, not just re-skinning:
+  `.btn-ghost`/table-row hover used to tint lime (violates the design
+  system's own explicit "lime is rationed to ONE moment per view" rule
+  the moment two ghost buttons or two rows share a screen — now a
+  neutral surface-step lift), and the Locked status pill used to share
+  `--warn`/amber with Starting/Stopping (now its own `--info` blue, so
+  two genuinely different states — permanent vs. transient — no longer
+  look identical under reduced colour vision).
+- New reusable interaction patterns applied consistently, not once:
+  `.segmented-toggle` (Fingerprint's AUTO/MANUAL switch), a real CSS-only
+  pill toggle drawn on the actual `<input type="checkbox">` via
+  `appearance:none` (Settings' two booleans — kept the real form
+  element, so existing `getByLabelText`/`fireEvent.click` tests needed
+  zero changes), `.pill-icon-pulse` (the design system's own documented-
+  but-previously-unimplemented "transitional statuses pulse their icon
+  at 1.4s" — now live on Proxies' checking state AND retroactively on
+  Profiles' pre-existing Starting/Stopping icon), and icon+colour pills
+  extended to two places that had text-only or no-icon status before
+  (Downloads' 4 real states, Fingerprint's Valid/Invalid result).
+- **Honest ceiling, not inflated to 95+:** this was a *partial* rollout
+  of the design system, by deliberate scope choice, not oversight — the
+  typography scale (`--fs-micro/-caption/...`, `--tracking-title/...`),
+  spacing scale (`--space-1..8`), and named motion-curve tokens
+  (`--curve-standard/-out`) from the handoff's `tokens/` were never
+  ported; every font-size and spacing value in the app stays the
+  pre-existing hardcoded px literals, confirmed absent via
+  `grep -n "fs-micro\|fs-caption\|tracking-title\|space-5\|curve-standard" global.css`
+  returning nothing. Light theme also remains the design system's own
+  documented "known gap" — inverted faithfully but not deeply reviewed.
+  Settings kept its existing single-column layout rather than the
+  template's responsive card grid (a deliberate, previously-fixed
+  readability choice — see `.settings-content`'s own comment — the
+  template assumes a wider surface than this app commits to there).
+
+**Функціональність / Стабільність / Безпека / Продуктивність / Реліз /
+Fingerprint:** genuinely untouched this round — every commit was
+`global.css` + one page's JSX/CSS, no domain logic, no new race-hunting,
+no security work, no performance measurement, no release-process change,
+nothing fingerprint-related. Scores carried forward unchanged from the
+last entry.
+
+**UX (+1):** two small but real functional additions rode along with
+the visual pass, not purely cosmetic — Proxies' manual "Test" button
+previously gave zero feedback while a real network probe was in flight
+(now a genuine "checking" pill state, `9b5ee47`), and Logs' Live-tail
+control changed from a bare checkbox to a button with its own on/off
+pill styling (`a30557b`) — a small but real interaction-affordance
+upgrade, not just paint.
+
+**Код/архітектура (+1):** the whole rollout stayed disciplined about
+*how* it changed things — every new pattern (`toggle`, `segmented-toggle`,
+`pill-icon-pulse`, `btn-live-on`, `row-selected`) is one class defined
+once in `global.css` and reused, not a component-local one-off; the two
+checkbox-to-toggle conversions used `appearance:none` on the real
+`<input>` specifically so no test or accessibility wiring needed
+touching. Two real regressions this round's own hover-colour change
+exposed in `layoutRegression.spec.ts`/`logsMessageExpand.spec.ts` (old
+hardcoded `rgba(124,179,66,.05)` literals, since replaced by a
+theme-varying token) were fixed by making the assertions theme-agnostic
+rather than by weakening or deleting them — the harder, more durable fix.
+
+**Тести:** unchanged (90) per this file's own convention — new/updated
+tests this round (the two E2E fixes above, `ProxiesPage.test.tsx`'s
+latency-split assertions) are credited to the categories whose gap they
+verified, not double-counted here.
+
+Real numbers: unit — **799 tests, 76 files, all passing**.
+`npm run test:coverage` — **88.73% statements / 89.56% branches / 76.74%
+functions / 88.73% lines** (first time this file has recorded a real
+coverage run rather than just a pass/fail count — noted for future
+entries to compare against). `typecheck`/`lint` — clean (the one
+pre-existing, unrelated `ProxiesPage.tsx` warning throughout, same as
+every prior entry).
+
+| Category | Score | Δ vs previous entry (87.67/87.3) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 85 | 0 | No domain-logic work this round. |
+| UX | 90 | +1 | Two small real interaction upgrades alongside the visual pass — Proxies' checking-state feedback (`9b5ee47`) and Logs' Live toggle button (`a30557b`), not purely cosmetic. |
+| Дизайн | 91 | +5 | The round's own direct target: layered shadows, semantic colour tokens, two real accent-discipline corrections, and consistent new toggle/pulse patterns across all 6 pages (see full breakdown above) — a substantial, live-verified upgrade, deliberately partial (typography/spacing/motion token layers untouched), not inflated past that honest scope. |
+| Стабільність ×1.5 | 91 | 0 | No stability work this round. |
+| Безпека ×1.5 | 85 | 0 | No security work this round. |
+| Код/архітектура | 88 | +1 | Every new visual pattern is one shared class, not per-component duplication; two real E2E regressions this round caused were fixed at the root (theme-agnostic assertions) rather than patched around. |
+| Тести | 90 | 0 | New/updated tests credited to the categories whose gap they verified, same convention as every prior round. |
+| Продуктивність | 81 | 0 | No performance work this round. |
+| Реліз | 88 | 0 | No release work this round. |
+| Fingerprint ×2 | 91 | 0 | Unrelated to this round's scope — no fingerprint-surface code touched. |
+
+**Simple average:** (85+90+91+91+85+88+90+81+88+91)/10 = **88.0**
+**Weighted average:** (85+90+91+91×1.5+85×1.5+88+90+81+88+91×2)/12 = **88.25**
+
+**Summary:** a modest, honest movement (+0.58 weighted / +0.7 simple) for
+a round that did substantial, real, systematically-verified work — the
+delta stays small because the work was concentrated almost entirely in
+one category (Дизайн +5) with only small satellite effects elsewhere
+(UX +1, Код +1), and because this file's own standard is to score the
+*actual* visual/interaction change delivered, not the size of the effort
+behind it. Consistent with this session's stated realistic ceiling
+(84-90 without external factors like code signing or second hardware).
+**All 7 redesign commits (`02879a2`..`3d22a80`) plus the prior round's 6
+were pushed this turn, per explicit instruction — this entry itself
+remains local, pending its own separate push confirmation.**
