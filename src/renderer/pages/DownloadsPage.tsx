@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, FolderSearch, RotateCcw, Trash2 } from 'lucide-react';
+import { FolderOpen, FolderSearch, RotateCcw, Trash2, CircleCheck, CircleX, Circle, CircleAlert, type LucideIcon } from 'lucide-react';
 import type { DownloadWithStatus } from '@shared/schemas/download';
 import type { Profile } from '@shared/schemas/profile';
 import { callApi } from '../services/api';
@@ -110,6 +110,20 @@ export function DownloadsPage(): JSX.Element {
     return 'danger';
   }
 
+  // Real icon per status, not just colour — same convention as
+  // ProfilesTable's PILL_ICON. There is no genuine "downloading in
+  // progress" state to render here: a download only becomes a persisted
+  // DownloadRecord once it reaches completed/cancelled/failed (see
+  // download.ts's DownloadStateSchema) — the design system's own template
+  // shows a pulsing "Downloading" pill, but inventing a live-progress state
+  // this app doesn't actually track would misrepresent real data.
+  function statusIcon(d: DownloadWithStatus): LucideIcon {
+    if (d.missing) return CircleAlert;
+    if (d.state === 'completed') return CircleCheck;
+    if (d.state === 'cancelled') return Circle;
+    return CircleX;
+  }
+
   function statusLabel(d: DownloadWithStatus): string {
     if (d.missing) return t('downloads.status.missing');
     return t(`downloads.status.${d.state}` as const);
@@ -157,14 +171,19 @@ export function DownloadsPage(): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {downloads.map((d) => (
+            {downloads.map((d) => {
+              const StatusIcon = statusIcon(d);
+              return (
               <tr key={d.id}>
                 <td title={d.savePath}>{d.filename}</td>
                 <td>{d.profileName}</td>
                 <td className="mono">{formatBytes(d.totalBytes)}</td>
                 <td className="mono">{new Date(d.createdAt).toLocaleString()}</td>
                 <td>
-                  <span className={`pill ${statusPillVariant(d)}`}>{statusLabel(d)}</span>
+                  <span className={`pill ${statusPillVariant(d)}`}>
+                    <StatusIcon size={12} strokeWidth={2.25} />
+                    {statusLabel(d)}
+                  </span>
                 </td>
                 <td>
                   <div className="flex-row-wrap-gap6">
@@ -191,7 +210,8 @@ export function DownloadsPage(): JSX.Element {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {downloads.length === 0 && !error && (
               <tr>
                 <td colSpan={6} className="text-dim">
