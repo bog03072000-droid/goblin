@@ -297,6 +297,43 @@
   --tracking-tight: -0.01em;
   --tracking-normal: 0;
   --tracking-caps: 0.08em;
+
+  /* Spacing scale, ported verbatim from tokens/spacing.css: a strict
+     seven-step scale (4/8/12/16/24/32/48) plus a 2px hairline step and a
+     64px breathing-room step. Wired up below to the layout containers
+     whose existing literal padding/gap/margin already lands on one of
+     these steps (.content, .toolbar, .panel, .modal-body-pad, etc.) —
+     values that don't land exactly on a step (e.g. a stray 18px or 14px
+     from before this scale existed) are left as their own literals rather
+     than forced onto the nearest step, which would silently change
+     spacing rather than just naming it. */
+  --space-px: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Recurring composites from spacing.css, named for what they mean
+     rather than their raw px value — wired up below to .content/.toolbar
+     (page gutter) and .panel (panel padding), the two places this app's
+     existing literals (20px, 18px) differed from the reference's own
+     specified 24px/16px, verified live rather than assumed harmless.
+     --gutter-row/--gutter-cell-x are declared but deliberately NOT
+     applied to table th/td: the reference's 12px/16px cell padding would
+     visibly grow every row past the --row-h:44px convention a past
+     session already fixed deliberately for table density — same
+     reasoning as --lh-body being declared but not applied to body text. */
+  --gutter-page: var(--space-5);
+  --gutter-panel: var(--space-4);
+  --gutter-row: var(--space-3);
+  --gutter-cell-x: var(--space-4);
+  --gap-inline: var(--space-2);
+  --gap-stack: var(--space-4);
+  --gap-section: var(--space-6);
 }
 
 /* Light palette — sage-tinted neutrals (not neutral gray) so it still reads
@@ -460,10 +497,10 @@ h1, h2, h3, h4 {
   width: 208px;
   background: var(--rail);
   box-shadow: inset -1px 0 0 var(--stroke);
-  padding: 16px 0;
+  padding: var(--space-4) 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-px);
 }
 
 .sidebar-brand {
@@ -514,14 +551,16 @@ h1, h2, h3, h4 {
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .toolbar {
   display: flex;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--gutter-page);
   border-bottom: 1px solid var(--stroke);
   align-items: center;
   background: var(--char);
   flex-wrap: wrap;
 }
-.content { flex: 1; overflow: auto; padding: 20px; }
+/* 24px page gutter (--gutter-page), the reference's own explicit spec —
+   was 20px, a pre-existing approximation from before this scale existed. */
+.content { flex: 1; overflow: auto; padding: var(--gutter-page); }
 
 /* ---------- Panels / cards ---------- */
 .panel {
@@ -529,8 +568,10 @@ h1, h2, h3, h4 {
   border: 1px solid var(--stroke);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-panel), var(--hairline-top);
-  padding: 18px;
-  margin-bottom: 16px;
+  /* 16px panel padding (--gutter-panel), the reference's own explicit
+     spec — was 18px, same reasoning as .content above. */
+  padding: var(--gutter-panel);
+  margin-bottom: var(--space-4);
   transition: border-color var(--ease), box-shadow var(--ease);
 }
 /* A panel wrapping a data table (Profiles/Proxies/Logs) gets its own
@@ -1139,7 +1180,7 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
    (New Profile/Custom setup) then wrapped BELOW, landing them under the
    unrelated filter row instead of under the fields they act on. See
    ProfilesToolbar.tsx. */
-.toolbar-group { display: flex; flex-direction: column; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--stroke); background: var(--char); }
+.toolbar-group { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--gutter-page); border-bottom: 1px solid var(--stroke); background: var(--char); }
 .toolbar-group .toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .inline-flex { display: inline-flex; }
 .bulk-failure-list { margin: 6px 0 0; padding-left: 18px; }
@@ -1210,10 +1251,10 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .confirm-icon { flex-shrink: 0; margin-top: 1px; color: var(--warn); }
 
 .modal-panel-groups { width: 420px; max-height: 70vh; display: flex; flex-direction: column; }
-.modal-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--stroke); }
+.modal-header { display: flex; align-items: center; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--stroke); }
 .modal-header-title { margin: 0; flex: 1; }
-.modal-body-scroll { padding: 16px; overflow: auto; flex: 1; }
-.group-create-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.modal-body-scroll { padding: var(--space-4); overflow: auto; flex: 1; }
+.group-create-row { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
 .group-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--stroke); }
 .group-name { flex: 1; font-size: 13px; }
 .group-count { color: var(--ash-dim); font-size: 11px; }
@@ -1231,6 +1272,6 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .tab-item-capitalize { text-transform: capitalize; }
 .modal-close-btn { margin: 8px; }
 .field-textarea { min-height: 60px; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px; border-top: 1px solid var(--stroke); }
-.modal-body-pad { padding: 16px; overflow: auto; }
+.modal-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--stroke); }
+.modal-body-pad { padding: var(--space-4); overflow: auto; }
 .reset-btn { margin: 8px 0; }
