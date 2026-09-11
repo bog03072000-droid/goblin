@@ -78,3 +78,34 @@ test('the real rejection message from an invalid IPC payload maps to the intende
   // fallback a real user would find useless.
   expect(shown).not.toBe(en['common.unexpectedError']);
 });
+
+/**
+ * The three tests above only ever exercised `groups:create` — real proof
+ * the Zod-validation-on-every-channel MECHANISM works end-to-end, but not
+ * proof that every individual channel's own schema actually enforces its
+ * own constraints correctly. `IpcRequestSchemas` (contracts.ts) has 63
+ * channels; a schema keyed to the wrong shape, or missing a `.min()`/
+ * `.max()`/enum constraint it looks like it has, would only ever be caught
+ * by exercising that SPECIFIC channel — checked here are real, non-mocked
+ * calls against three channels with genuinely different schema shapes
+ * (a numeric range bound, an enum, a string length-1 minimum), spanning
+ * proxy, settings and profiles channels rather than three more
+ * variations on groups:create.
+ */
+test('proxy:create rejects a port outside the real 1-65535 range, not silently clamped or accepted', async () => {
+  await expect(
+    invokeIpc(window, 'proxy:create', { name: 'Bad Port', protocol: 'http', host: '127.0.0.1', port: 99999 }),
+  ).rejects.toThrow();
+});
+
+test('settings:update rejects a theme value outside the real enum, not silently ignored', async () => {
+  await expect(invokeIpc(window, 'settings:update', { theme: 'rainbow' })).rejects.toThrow();
+});
+
+test('profiles:create rejects an empty name (real min(1) constraint), not silently defaulted', async () => {
+  await expect(invokeIpc(window, 'profiles:create', { name: '' })).rejects.toThrow();
+});
+
+test('settings:update rejects cacheLimitMb below its real 50MB floor, not silently clamped', async () => {
+  await expect(invokeIpc(window, 'settings:update', { cacheLimitMb: 5 })).rejects.toThrow();
+});
