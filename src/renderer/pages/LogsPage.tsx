@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, ChevronDown, ChevronUp, CircleDot, Circle } from 'lucide-react';
 import type { ActivityLogEntry, ActivityEventType } from '@shared/schemas/activityLog';
 import type { ProfileListItem } from '@shared/schemas/profile';
 import { callApi } from '../services/api';
@@ -174,10 +174,22 @@ export function LogsPage(): JSX.Element {
             </option>
           ))}
         </select>
-        <label className="flex-row-gap6">
-          <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
+        {/* A styled toggle button, not a plain checkbox — the design
+            system's own "Live tail" treatment: a lime-wash pill with a
+            pulsing dot while live, a neutral ghost pill while paused.
+            Same underlying `live` boolean and polling effect as before,
+            purely a visual/interaction swap. aria-label (not just visible
+            text) keeps getByLabelText('Live') working for the existing
+            test that toggles this control. */}
+        <button
+          className={`btn btn-sm ${live ? 'btn-live-on' : 'btn-ghost'}`}
+          aria-label={t('logs.live')}
+          title={live ? t('logs.live.pause') : t('logs.live.resume')}
+          onClick={() => setLive((v) => !v)}
+        >
+          {live ? <CircleDot size={13} strokeWidth={2.25} className="pill-icon-pulse" /> : <Circle size={13} strokeWidth={2.25} />}
           {t('logs.live')}
-        </label>
+        </button>
         <button className="btn btn-ghost" onClick={() => void exportLogs()} disabled={exportAction.pending}>
           <Download size={14} strokeWidth={2.25} />
           {exportAction.pending ? t('common.loading') : t('logs.export')}

@@ -463,6 +463,8 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'logs.filter.allEvents': 'Усі події',
   'logs.filter.allProfiles': 'Усі профілі',
   'logs.live': 'Наживо',
+  'logs.live.pause': 'Призупинити наживо-стрічку',
+  'logs.live.resume': 'Відновити наживо-стрічку',
   'logs.loadMore': 'Завантажити ще',
   'logs.export': 'Експортувати журнал',
   'logs.export.success': 'Експортовано до {path}',

@@ -463,6 +463,8 @@ const en = {
   'logs.filter.allEvents': 'All events',
   'logs.filter.allProfiles': 'All profiles',
   'logs.live': 'Live',
+  'logs.live.pause': 'Pause the live tail',
+  'logs.live.resume': 'Resume the live tail',
   'logs.loadMore': 'Load more',
   'logs.export': 'Export logs',
   'logs.export.success': 'Exported to {path}',

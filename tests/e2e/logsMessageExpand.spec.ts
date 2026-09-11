@@ -73,9 +73,15 @@ test('a log message expands on click, and its row highlights on real keyboard fo
   await window.keyboard.press('Tab'); // back onto the same toggle, via keyboard this time
   await expect(toggle).toBeFocused();
 
+  // A neutral surface step (--char-raised), not a lime tint — the design
+  // system's own "accent discipline" rule reserves lime for one moment per
+  // view, not every focused/hovered row too. Asserted as "differs from
+  // the unfocused background" rather than a hardcoded RGB literal, since
+  // --char-raised resolves differently in light vs. dark theme (whichever
+  // this test machine's OS preference picks).
   await expect
     .poll(() => firstCell.evaluate((el) => getComputedStyle(el).backgroundColor))
-    .toBe('rgba(124, 179, 66, 0.05)');
+    .not.toBe(unfocusedBackground);
 
   await window.getByText('Profiles', { exact: true }).click();
   await window.getByText('Logs', { exact: true }).click();

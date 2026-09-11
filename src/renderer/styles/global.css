@@ -583,6 +583,23 @@ input[type="checkbox"]:hover { transform: scale(1.08); }
 }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
 
+/* LogsPage.tsx's "Live tail" toggle while active — a lime wash + accent
+   border, same "one sanctioned accent moment per view" language as a
+   selected table row. Ghost styling (ash text, neutral border) covers the
+   paused state via .btn-ghost, so only the ON state needs its own rule. */
+.btn-live-on {
+  background: var(--lime-wash);
+  border-color: var(--lime-line);
+  color: var(--lime-bright);
+  box-shadow: none;
+}
+.btn-live-on:hover:not(:disabled) {
+  background: var(--lime-wash-hi);
+  color: var(--lime-bright);
+  box-shadow: none;
+  transform: none;
+}
+
 .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 8px; }
 
 /* ---------- Spinner ---------- */
