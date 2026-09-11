@@ -51,11 +51,22 @@ documented.
 
 **Real friction points found (both minor, neither a functional bug):**
 
-- Deleting a cookie or a localStorage entry is instant and irreversible —
+- ~~Deleting a cookie or a localStorage entry is instant and irreversible —
   no confirmation, no undo toast (unlike deleting a whole profile, which
   does get an undo toast). For a destructive action a user could trigger
   by a stray click, this is a real inconsistency with the app's own pattern
-  elsewhere.
+  elsewhere.~~ **Fixed 2026-09-11**: both now show the same `UndoToast` the
+  rest of the app uses (`common.undo`, 30s window). Since cookies/
+  localStorage aren't DB-persisted the way a whole profile is, there's no
+  server-side soft-delete to restore from — `useProfileStorageData.ts`'s
+  `removeCookie`/`removeLocalStorageItem` instead capture the full deleted
+  entry in a closure before deleting, and Undo calls the same `addCookie`/
+  `addLocalStorageItem` the manual "Add" form uses, genuinely re-creating it
+  (not just restoring it from state). Verified live end-to-end in
+  `tests/e2e/cookieEditor.spec.ts` (delete → toast appears naming the real
+  cookie → Undo → the exact same name/value reappears in the table, re-read
+  from the real session, not a local echo) and via 3 new unit tests in
+  `tests/unit/useProfileStorageData.test.tsx`.
 - The "Додати cookie" URL field's placeholder (`example.com`) doesn't hint
   whether a scheme is expected; a bare domain worked correctly in this test,
   but a user coming from a browser's own cookie-editor UI (which usually

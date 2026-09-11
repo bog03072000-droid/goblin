@@ -86,3 +86,57 @@ test('cookie editor: gated while stopped, then real add/list/delete against a ru
   await row.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
+
+test('cookie editor: deleting shows an undo toast, and Undo genuinely restores the exact cookie', async () => {
+  await window.getByPlaceholder('New profile name').fill('E2E Cookie Undo Profile');
+  await window.getByRole('button', { name: 'Custom setup' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E Cookie Undo Profile' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await expect(window.locator('.modal-panel-lg')).toBeVisible({ timeout: 15_000 });
+  await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+  await window.getByText('storage', { exact: true }).click();
+
+  const cookieTable = window.locator('table', { has: window.locator('th', { hasText: 'Domain' }) });
+  await expect(cookieTable.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
+
+  await window.getByPlaceholder('example.com').fill('example.com');
+  const nameInputs = window.locator('.panel', { has: window.locator('h4', { hasText: 'Add cookie' }) }).locator('input.mono');
+  await nameInputs.nth(1).fill('e2e_undo_cookie');
+  await nameInputs.nth(2).fill('undo-me-value');
+  await window.getByRole('button', { name: 'Add', exact: true }).click();
+
+  const cookieRow = window.locator('tr', { has: window.locator('td', { hasText: 'e2e_undo_cookie' }) });
+  await expect(cookieRow).toBeVisible({ timeout: 10_000 });
+
+  await cookieRow.getByRole('button').click();
+  await expect(cookieRow).toHaveCount(0, { timeout: 10_000 });
+
+  // Real undo toast, not a mock: names the deleted cookie, and clicking
+  // Undo re-creates it through the same addCookie path the Add form uses,
+  // with the exact same value it had before deletion.
+  const toast = window.locator('.undo-toast', { hasText: 'e2e_undo_cookie' });
+  await expect(toast).toBeVisible({ timeout: 5_000 });
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(toast).toHaveCount(0);
+
+  const restoredRow = window.locator('tr', { has: window.locator('td', { hasText: 'e2e_undo_cookie' }) });
+  await expect(restoredRow).toBeVisible({ timeout: 10_000 });
+  await expect(restoredRow.locator('td').nth(2)).toHaveText('undo-me-value');
+
+  // Clean up: delete it again for real this time, dismissing the toast
+  // rather than undoing.
+  await restoredRow.getByRole('button').click();
+  await expect(window.locator('.undo-toast')).toBeVisible({ timeout: 5_000 });
+  await window.locator('.undo-toast-close').click();
+  await expect(window.locator('.undo-toast')).toHaveCount(0);
+
+  await window.getByRole('button', { name: 'Close' }).click();
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});

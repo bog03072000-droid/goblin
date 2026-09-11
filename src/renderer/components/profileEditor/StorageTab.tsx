@@ -3,6 +3,8 @@ import { Cookie, Database, Trash2, RefreshCw, Plus } from 'lucide-react';
 import type { CookieInfo, CookieSetInput } from '@shared/schemas/cookie';
 import type { LocalStorageEntry, LocalStorageSetInput } from '@shared/schemas/localStorageEntry';
 import { useTranslation } from '../../i18n';
+import { UndoToast } from '../UndoToast';
+import { UNDO_WINDOW_MS, type StorageUndoState } from '../../hooks/useProfileStorageData';
 
 const EMPTY_DRAFT = { url: '', name: '', value: '', secure: true, httpOnly: false, persist: false };
 const EMPTY_LS_DRAFT = { key: '', value: '' };
@@ -130,6 +132,8 @@ export function StorageTab({
   onRefreshLocalStorage,
   onRemoveLocalStorageItem,
   onAddLocalStorageItem,
+  undoState,
+  onDismissUndo,
 }: {
   profilePath: string;
   onClearCache: () => void;
@@ -145,6 +149,12 @@ export function StorageTab({
   onRefreshLocalStorage: () => void;
   onRemoveLocalStorageItem: (key: string) => void;
   onAddLocalStorageItem: (input: LocalStorageSetInput) => void;
+  /** A just-deleted cookie or localStorage entry, still restorable —
+   * closes a real, previously-documented gap (docs/STORAGE_TAB_LIVE_AUDIT.md):
+   * this was the only destructive action in the app with neither a
+   * confirm dialog nor an undo toast. */
+  undoState: StorageUndoState | null;
+  onDismissUndo: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -334,6 +344,15 @@ export function StorageTab({
       </div>
 
       {isRunning && <AddLocalStorageForm onAdd={onAddLocalStorageItem} />}
+
+      {undoState && (
+        <UndoToast
+          message={undoState.message}
+          durationMs={UNDO_WINDOW_MS}
+          onUndo={undoState.restore}
+          onDismiss={onDismissUndo}
+        />
+      )}
     </div>
   );
 }

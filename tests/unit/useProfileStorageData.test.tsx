@@ -101,6 +101,81 @@ describe('useProfileStorageData', () => {
     expect(invoke).toHaveBeenCalledWith('profiles:localStorage:list', { id: 'p1' });
   });
 
+  it('removeCookie sets an undo state; restoring it re-adds the exact same cookie via addCookie', async () => {
+    const invoke = mockInvoke({
+      'profiles:cookies:remove': () => undefined,
+      'profiles:cookies:list': () => [],
+      'profiles:cookies:set': () => undefined,
+    });
+    const { result } = renderHook(() => useProfileStorageData('p1'), { wrapper });
+
+    const cookie = makeCookie({ domain: '.example.com', path: '/app', secure: true, name: 'tok', value: 'secret-value' });
+    await act(() => result.current.removeCookie(cookie));
+
+    expect(result.current.undoState).not.toBeNull();
+    expect(result.current.undoState!.message).toContain('tok');
+
+    await act(() => {
+      result.current.undoState!.restore();
+    });
+
+    // Same url-derivation formula removeCookie itself uses (domain minus
+    // leading dot, defaulting to https since secure:true).
+    expect(invoke).toHaveBeenCalledWith('profiles:cookies:set', {
+      id: 'p1',
+      cookie: {
+        url: 'https://example.com/app',
+        name: 'tok',
+        value: 'secret-value',
+        path: '/app',
+        secure: true,
+        httpOnly: false,
+        sameSite: undefined,
+        expirationDate: undefined,
+      },
+    });
+    // Restoring dismisses the toast — it shouldn't still be offering to
+    // undo something that was just un-done.
+    await waitFor(() => expect(result.current.undoState).toBeNull());
+  });
+
+  it('removeLocalStorageItem captures the real value from already-loaded state and restores it exactly on undo', async () => {
+    const invoke = mockInvoke({
+      'profiles:localStorage:list': () => ({ origin: 'https://example.com', items: [{ key: 'k', value: 'real-value' }] }),
+      'profiles:localStorage:remove': () => undefined,
+      'profiles:localStorage:set': () => undefined,
+    });
+    const { result } = renderHook(() => useProfileStorageData('p1'), { wrapper });
+    await act(() => result.current.loadLocalStorage());
+
+    await act(() => result.current.removeLocalStorageItem('k'));
+    expect(result.current.undoState).not.toBeNull();
+    expect(result.current.undoState!.message).toContain('k');
+
+    await act(() => {
+      result.current.undoState!.restore();
+    });
+
+    // The value ('real-value') is what makes this a genuine restore rather
+    // than just re-creating an empty key — proves the value was actually
+    // captured from state before the delete, not reconstructed blind.
+    expect(invoke).toHaveBeenCalledWith('profiles:localStorage:set', { id: 'p1', item: { key: 'k', value: 'real-value' } });
+  });
+
+  it('dismissUndo clears the pending undo state without restoring anything', async () => {
+    mockInvoke({
+      'profiles:cookies:remove': () => undefined,
+      'profiles:cookies:list': () => [],
+    });
+    const { result } = renderHook(() => useProfileStorageData('p1'), { wrapper });
+
+    await act(() => result.current.removeCookie(makeCookie()));
+    expect(result.current.undoState).not.toBeNull();
+
+    act(() => result.current.dismissUndo());
+    expect(result.current.undoState).toBeNull();
+  });
+
   it('a rejected list call surfaces via `error` instead of throwing out of the hook', async () => {
     mockInvoke({
       'profiles:cookies:list': () => {

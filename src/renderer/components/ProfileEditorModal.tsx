@@ -81,6 +81,8 @@ export function ProfileEditorModal({
     removeLocalStorageItem,
     addLocalStorageItem,
     error: storageError,
+    undoState: storageUndoState,
+    dismissUndo: dismissStorageUndo,
   } = useProfileStorageData(profileId);
   // Baseline snapshot of the last-loaded-or-saved General/Proxy field values —
   // compared against current state to detect unsaved edits, so closing the
@@ -369,6 +371,8 @@ export function ProfileEditorModal({
               onRefreshLocalStorage={() => void loadLocalStorage()}
               onRemoveLocalStorageItem={(key) => void removeLocalStorageItem(key)}
               onAddLocalStorageItem={(input) => void addLocalStorageItem(input)}
+              undoState={storageUndoState}
+              onDismissUndo={dismissStorageUndo}
             />
           )}
 
