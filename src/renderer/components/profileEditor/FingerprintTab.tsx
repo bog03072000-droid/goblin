@@ -1,3 +1,4 @@
+import { CircleCheck, CircleAlert, CircleX } from 'lucide-react';
 import type { Fingerprint, FingerprintValidationResult, FingerprintOptionsResponse } from '@shared/schemas/fingerprint';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { FieldOverridesPicker, type FieldOverrides } from './FieldOverridesPicker';
@@ -246,12 +247,14 @@ export function FingerprintTab({
   return (
     <div>
       <div className="fp-toolbar">
-        <button className={`btn btn-sm ${!manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => onManualModeChange(false)}>
-          {t('editor.fingerprint.auto')}
-        </button>
-        <button className={`btn btn-sm ${manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => onManualModeChange(true)}>
-          {t('editor.fingerprint.manual')}
-        </button>
+        <div className="segmented-toggle">
+          <button className={`btn btn-sm ${!manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => onManualModeChange(false)}>
+            {t('editor.fingerprint.auto')}
+          </button>
+          <button className={`btn btn-sm ${manualMode ? 'btn-primary' : 'btn-ghost'}`} onClick={() => onManualModeChange(true)}>
+            {t('editor.fingerprint.manual')}
+          </button>
+        </div>
         {!manualMode && (
           <button className="btn btn-ghost btn-sm" onClick={onRegenerate}>
             {t('editor.fingerprint.regenerate')}
@@ -488,17 +491,22 @@ export function FingerprintTab({
 
       {validation && (
         <div className="mt-10 text-sm">
-          <p className={validation.valid ? 'text-valid' : 'text-invalid'}>
-            {validation.valid ? t('editor.fingerprint.valid') : t('editor.fingerprint.invalid')}
+          <p className="mb-0">
+            <span className={`pill ${validation.valid ? 'on' : 'danger'}`}>
+              {validation.valid ? <CircleCheck size={12} strokeWidth={2.25} /> : <CircleX size={12} strokeWidth={2.25} />}
+              {validation.valid ? t('editor.fingerprint.valid') : t('editor.fingerprint.invalid')}
+            </span>
           </p>
           {validation.errors.map((e) => (
-            <p key={e} className="text-invalid">
-              ERROR: {e}
+            <p key={e} className="text-invalid flex-row-gap6">
+              <CircleAlert size={13} strokeWidth={2.25} />
+              {e}
             </p>
           ))}
           {validation.warnings.map((w) => (
-            <p key={w} className="text-warn">
-              WARNING: {w}
+            <p key={w} className="text-warn flex-row-gap6">
+              <CircleAlert size={13} strokeWidth={2.25} />
+              {w}
             </p>
           ))}
         </div>

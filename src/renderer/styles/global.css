@@ -983,6 +983,45 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .capitalize { text-transform: capitalize; }
 
 .fp-toolbar { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+
+/* AUTO/MANUAL environment-mode switch (FingerprintTab.tsx) — the design
+   system's own "SegmentedToggle": a sunken pill container with the active
+   option raised on a surface step, rather than two separate buttons where
+   the active one just changes color (which is what this used to be —
+   .btn-primary + .btn-ghost side by side). Reuses the same `.btn`
+   markup/classes so no JSX structure changed, only the wrapper + a
+   `.segmented-toggle .btn` override below. */
+.segmented-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-input);
+  background: var(--surface-input);
+}
+.segmented-toggle .btn {
+  border-radius: var(--radius-sm);
+  border-color: transparent;
+  background: transparent;
+  color: var(--ash-dim);
+  box-shadow: none;
+}
+.segmented-toggle .btn:hover:not(:disabled) {
+  background: transparent;
+  color: var(--paper);
+  box-shadow: none;
+  transform: none;
+}
+.segmented-toggle .btn.btn-primary {
+  background: var(--char-max);
+  color: var(--paper);
+  box-shadow: none;
+}
+.segmented-toggle .btn.btn-primary:hover:not(:disabled) {
+  background: var(--char-max);
+  transform: none;
+}
 .toolbar-inline { border-bottom: none; background: transparent; padding: 0; margin-bottom: 12px; }
 .selected-count { font-size: 12px; display: inline-flex; align-items: center; }
 .toolbar-wrap { flex-wrap: wrap; }
