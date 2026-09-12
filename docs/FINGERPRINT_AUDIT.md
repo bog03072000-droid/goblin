@@ -3037,3 +3037,52 @@ above) — the mask is installed by the same `buildCoreScript()` that
 already fails to reach a Service Worker's own global scope for the
 reasons documented there, so a script running inside a real Service
 Worker sees neither the spoofed values nor this mask, same as before.
+
+## Twenty-third investigation — the toString mask's own diagnostics regression, found via bisection, fixed
+
+**A real, previously-undetected side effect of the toString-mask stage
+above.** `diagnostics.html`'s own `isOverridden(fn)` check — used to
+report `canvasMode`/`audioMode`/`fontsMode` as `APPLIED` vs `MISMATCH` on
+the Fingerprint Diagnostics page — inferred "this was overridden" from
+the *absence* of `[native code]` in `fn.toString()`. The toString mask
+above exists specifically to make an overridden function's `toString()`
+**contain** `[native code]` (that is the entire point of the feature) —
+which means, once that stage shipped, the diagnostics page's own
+self-check started reading every masked override as "not overridden,"
+reporting `canvasMode`/`audioMode`/`fontsMode` `MISMATCH` even when the
+real spoofing was active and correct.
+
+**Found via bisection, not inspection.** A later round's regression
+check on `fingerprintEnforcement.spec.ts` found the diagnostics-snapshot
+test failing intermittently on a different field each run
+(`canvasMode`, then `timezone`). Isolated to a genuine regression (not
+environment flakiness) by checking out the exact commit right after the
+toString-mask stage landed, in a clean worktree, and re-running the same
+test 3x — failed consistently, with the same `canvasMode` mismatch every
+time. The state immediately before that commit passed 3/3.
+
+**Fixed two ways, both real gaps:**
+1. `diagnostics.html`'s `isOverridden()` now checks a `__pfIsMarked`
+   registry the toString mask exposes non-enumerably on `self`
+   (`spoofingScript.ts`) instead of sniffing toString content — the
+   diagnostics page asks the mask directly rather than trying to infer
+   its effect from the same signal the mask is designed to fake.
+2. A second, narrower gap found during the same investigation: a masked
+   function's own `.name` property stayed empty — `__pfMark()` marks an
+   anonymous function passed as a call argument, which gets no name
+   inference in JS, unlike a function assigned directly to a variable or
+   property. A real, unpatched native method's `.name` always matches
+   what its `toString()` reports (`getImageData.name === 'getImageData'`;
+   a native accessor getter's `.name` is literally `'get userAgent'`) —
+   a masked function's mismatch between an empty `.name` and a
+   toString() claiming a real name was itself a narrow but real
+   detection signal a script comparing the two could have caught. Fixed
+   by having `__pfMark()` also set `.name` to match.
+
+**Verified**: 14/14 `fingerprintEnforcement.spec.ts` E2E tests passing,
+twice in a row, after both fixes — including the specific
+`'spoofed methods report themselves as native code'` test from the
+toString-mask stage itself, which had also started failing
+deterministically from the `.name` gap alone (isolated separately by
+reverting only the `.name` fix and re-running — same failure,
+confirming it was a second, independent bug, not a symptom of the first).

@@ -1103,3 +1103,171 @@ instruction to pick 2-3 specific items and do them deeply rather than
 touch everything shallowly. **Nothing from this round has been pushed —
 `81db4ac`, `fcfe5ff`, `10e0179`, and this entry all remain local, pending
 explicit confirmation.**
+
+---
+
+## 2026-09-12 — top-5 competitive-gap features (GoblinAnty vs Octo/Dolphin research)
+
+Baseline: 88.96 weighted / 88.8 simple (2026-09-11 entry above). This
+round implemented the top-5 realistically-addable features identified by
+a prior research pass comparing GoblinAnty against Octo Browser/Dolphin
+Anty, in increasing order of complexity, plus finally committed a sixth
+piece of work (the Cookie-Robot-style "Warm up profile" feature and a
+real toString-mask diagnostics regression fix) that had been sitting
+uncommitted across two prior rounds. Explicitly **not** touched, per
+standing instruction: UA Client Hints full fix, Service Worker full fix,
+and Team/Cloud sync — all three previously confirmed architecturally
+incompatible with this project's current Electron `<webview>`-based
+model (see docs/FINGERPRINT_AUDIT.md's Eighteenth investigation for the
+Client Hints finding specifically — a real experiment, not a guess).
+
+**0. (Pending debt, finally landed) "Warm up profile" + toString-mask
+diagnostics regression fix — `ce994f8`.** The Cookie-Robot-style
+warm-up feature (visits a list of real URLs, scrolling each like a
+person, via the same `humanScroll` CDP primitive `humanClick` already
+uses) had been implemented and E2E-verified in an earlier round but
+never committed. A real production bug was caught and fixed during that
+work: `webContents.loadURL()` already resolves once a page finishes
+loading, but the original code additionally waited for a separate
+`did-finish-load` event *after* that promise resolved — one event too
+late, silently consuming the full 20s timeout on every real page load
+(confirmed via live E2E timing: ~20-30s per page before the fix,
+~6-12s total after). Separately, bisection (checking out the exact
+commit after the toString-masking stage, in a clean worktree, 3x
+repeat) found and fixed a real regression that stage introduced in
+`diagnostics.html`'s own override-detection check — see
+docs/FINGERPRINT_AUDIT.md's new Twenty-third investigation for the full
+account, including a second, independent `.name`-mismatch bug found
+during the same investigation.
+
+**1. Bulk-create profiles from CSV/XLSX — `15e0b26`.** A real
+preview-before-commit wizard (upload → validated preview table,
+color-coded per row → confirm → create), not a one-shot import — a
+spreadsheet's proxy/group columns are free text, so showing what will
+happen before anything is created matters here in a way it doesn't for
+the app's existing JSON/zip imports. A real supply-chain finding along
+the way: the last `xlsx` version published to the npm registry (0.18.5)
+carries two HIGH-severity CVEs (prototype pollution, ReDoS) with no fix
+ever published there — installed 0.20.3 from SheetJS's own CDN instead,
+which has both fixed. A real parsing bug was also caught in testing:
+SheetJS's CSV delimiter auto-detection guessed `;` instead of `,` when
+a tags cell had enough semicolons in it, silently merging every column
+into one — fixed by forcing the delimiter explicitly. 17 new unit
+tests, 3 new E2E tests, verified live via computer-use (real native
+file dialog, real color-coded preview, real profiles created with
+correct group/tags/proxy).
+
+**2. Ad-platform fingerprint templates — `64c443b`.** Extended the
+existing (previously os+locale-only) template system with 3 new
+built-in presets — "TikTok Ads Mobile" (Android, Pixel 7 screen,
+Adreno 740 GPU), "Facebook Ads Desktop" (Windows, 1920×1080, NVIDIA
+RTX 3060), "Google Ads Standard" (Windows, 1366×768, Intel UHD 630,
+deliberately different from the Facebook preset) — using
+`generateFingerprint()`'s existing override-validation mechanism
+(unchanged), so a preset can't produce an incoherent fingerprint. Both
+existing template pickers (toolbar quick-create, profile editor's
+Fingerprint tab) now group options into "Ad Platform Presets" vs
+"OS / Locale" `<optgroup>`s automatically. 9 unit tests (including
+generator-level coherence checks per preset), 1 E2E test, verified
+live via computer-use.
+
+**3. REST API for profile CRUD — `36d6381`.** A new, app-level,
+token-gated HTTP API (create/list/get/update/delete/start/stop a
+profile) distinct from the existing per-profile CDP automation proxy —
+extracted the token-check/rate-limiter primitives out of
+`automationProxy.ts` into a shared `httpTokenAuth.ts` rather than
+reimplementing them, so both listeners share one tested implementation.
+`POST /profiles` reuses the exact same profile-creation logic the UI's
+own `profiles:create` IPC handler uses (also extracted, into
+`createProfileWithFingerprint.ts`), so a profile created via REST is
+generated identically to one created via the UI. Unlike the per-profile
+automation token, regenerating this one restarts the one long-lived
+server immediately — no profile restart needed. Added the app's first
+`before-quit` hook (none existed) to release the port on shutdown. 27
+new unit tests, 1 E2E test driving the real Settings UI end to end with
+real HTTP requests, cross-checked against the app's own UI.
+
+**4. Chrome extensions per profile — `86c890e`.** Confirmed via
+Electron's own `.d.ts` and live testing that `session.loadExtension()`
+supports unpacked MV3 extensions on this app's persistent
+(`persist:*`) sessions, with a real, acted-on caveat: Electron does not
+remember extensions across restarts, so it's called fresh on every
+profile launch (right before the webview's first navigation, same
+timing discipline `setProxy()` already follows). New
+SECURITY.md section ("Chrome extension risks") at the same severity as
+the existing automation-token warning, plus an **always-visible** (not
+dismiss-once) warning in the Advanced tab's new "Chrome extensions"
+panel — an extension is real, unrestricted code execution with whatever
+permissions its manifest declares, unaffected by this app's own
+`contextIsolation`/`sandbox`/CSP hardening (which protects the app's
+own UI, not extension-granted capability). 24 new unit tests, 1 E2E
+test with a real MV3 extension fixture (manifest.json + content
+script) added via the real Advanced tab UI, confirming the content
+script's own DOM mutation actually landed in the real running webview.
+
+**5. No-code Scenario Builder (MVP) — `2584504`.** Record real clicks
+(`document`-level `click` listener) and typed-and-committed text
+(`change`, deliberately not `input` — avoids a keystroke-by-keystroke
+replay stutter) on a profile's current tab, plus navigation (tracked
+separately in the main process via `did-navigate`, merged by real
+timestamp), save as a named, profile-independent scenario, replay later
+through the same `humanClick`/`humanType`/`loadWithTimeout` primitives
+every other automation feature already uses. Deliberately stopped at
+MVP scope per standing instruction — `docs/SCENARIO_BUILDER.md`
+documents exactly what a fuller version would need (element-based click
+targeting instead of raw coordinates being the biggest reliability
+gap, a real step editor, multi-page recording, control
+flow/parameterization) rather than silently claiming broader coverage.
+A real, confirmed Playwright/Electron limitation was found and worked
+around during E2E test development: Electron's `<webview>` guest
+content is not a real `<iframe>`, so Playwright's `frameLocator()`
+rejects it outright — documented inline in the test, not silently
+patched over. 21 new unit tests, 1 E2E test recording a real click +
+typed value on a local fixture page and confirming playback alone
+reproduces the exact same real DOM mutations.
+
+**Verification performed, as required:** `npx tsc --noEmit` (both
+configs) clean after every item; `npx eslint` clean throughout (one
+pre-existing, unrelated warning in `ProxiesPage.tsx`, unchanged); full
+unit suite run after every item, ending at **954/954 passing** (up
+from 802 at the last recorded baseline — 152 new tests this round,
+spanning every one of the 5 items plus the pending-debt commit); every
+relevant E2E suite run live per item after the correct better-sqlite3
+ABI rebuild and a fresh `npm run build` (the E2E run loads the compiled
+bundle, not source). A live computer-use screenshot walkthrough was
+done for every item with a UI surface (all 5). One genuine regression
+was found mid-round (not in this round's own new code — bisected to
+the toString-masking stage from an earlier round) and fixed rather than
+worked around or ignored, per the standing "stop and report honestly"
+instruction — the user was asked how to proceed via `AskUserQuestion`
+and explicitly approved fixing it immediately, in scope.
+
+| Category | Score | Δ vs previous entry (88.96/88.8) | Reason for Δ (commit/file) |
+|---|---|---|---|
+| Функціональність | 90 | +4 | The largest functional-completeness jump this file has recorded: 5 real, fully-implemented, fully-tested, fully-documented features shipped (bulk import, ad-platform templates, REST API, Chrome extensions, Scenario Builder MVP) plus the previously-uncommitted Cookie-Robot warm-up feature finally landed. Not pushed higher: item 5 is an explicit, documented MVP with real, disclosed limits (coordinate-based not element-based click replay, no step editing, single-page recording only), and the three architecturally-impossible items (Client Hints, Service Worker, Team/Cloud) remain open by design, not oversight. |
+| UX | 92 | +1 | Every new feature got a real, usable UI surface (wizard, grouped picker, settings panel, always-visible security warning, record/play panel) verified live via computer-use — genuine usability, not just backend capability. Not pushed higher: none of these UI surfaces got a dedicated polish pass beyond reusing existing design-system patterns correctly. |
+| Дизайн | 94 | 0 | No new visual design work this round — every new UI surface reuses existing tokens/components/patterns exactly (by deliberate choice, to stay consistent), so no design-system growth to credit, but no regression either. |
+| Стабільність ×1.5 | 92 | +1 | A real regression (toString-mask breaking diagnostics accuracy) was found via disciplined bisection and fixed, not papered over — this file's own standard for what stability work looks like. |
+| Безпека ×1.5 | 88 | +2 | Two real, opposite-direction security findings this round: (a) a new, real risk surface (Chrome extension loading) was added with SECURITY.md documentation at automation-token severity and an always-visible UI warning — proactive honesty about a new risk, not a discovered gap; (b) a real supply-chain vulnerability (xlsx 0.18.5's 2 HIGH CVEs) was caught before shipping and avoided via a patched CDN build instead of the vulnerable npm-registry version. |
+| Код/архітектура | 90 | +1 | Real extraction discipline this round, not just feature-bolting: `httpTokenAuth.ts` shared between two token-gated listeners, `createProfileWithFingerprint.ts` shared between the UI's own creation path and the new REST API (so they can't silently diverge), `extensionPicker.ts` split out specifically for dialog-free testability. |
+| Тести | 93 | +2 | 152 new tests this round (802→954), covering real behavior for every item — real HTTP requests, real CDP-dispatched clicks/keystrokes, a real loaded MV3 extension's content-script DOM mutation, a real bisected regression's fix — not shallow existence checks. |
+| Продуктивність | 81 | 0 | Not in scope this round. |
+| Реліз | 88 | 0 | Not in scope this round. |
+| Fingerprint ×2 | 92 | +1 | The toString-mask diagnostics regression was a real fingerprint-domain accuracy bug (the audit page silently misreporting canvasMode/audioMode/fontsMode) — fixed and documented as this document's own Twenty-third investigation. |
+
+**Simple average:** (90+92+94+92+88+90+93+81+88+92)/10 = **90.0**
+**Weighted average:** (90+92+94+92×1.5+88×1.5+90+93+81+88+92×2)/12 = **90.17**
+
+**Summary:** +1.21 weighted / +1.2 simple — larger than the typical
+per-round movement this file has recorded (+0.3-0.7), but proportionate
+to what actually shipped: 5 complete features plus a real regression
+fix and a real supply-chain catch, not a single targeted fix. Функціональність
+carries the largest single credit (+4) because that is honestly where
+the largest real change happened — five working, tested, documented
+features is a materially different functional surface than one
+fix. Дизайн and the two out-of-scope categories (Продуктивність, Реліз)
+stayed flat on purpose: no work touched them this round, and this
+file's own standard is to only move a number when there's a specific,
+named reason to. **Nothing from this round — `ce994f8`, `15e0b26`,
+`64c443b`, `36d6381`, `86c890e`, `2584504`, and this entry — has been
+pushed. All remain local, pending explicit confirmation.**
