@@ -67,6 +67,18 @@ export function registerIpc(deps: IpcDependencies): void {
       seed: p.name + Date.now(),
       os: template?.definition.os ?? p.fingerprint?.os,
       locale: template?.definition.locale ?? p.fingerprint?.locale,
+      // An ad-platform preset's own screen/GPU/hardware pins (see
+      // templateRepository.ts) apply as the generated base here too — still
+      // just a base, since the `{ ...generated, ...p.fingerprint }` merge
+      // below still lets an explicit manual-mode field the user typed win
+      // over whatever the template picked, same precedence os/locale above
+      // already had.
+      screenWidth: template?.definition.screenWidth,
+      screenHeight: template?.definition.screenHeight,
+      hardwareConcurrency: template?.definition.hardwareConcurrency,
+      deviceMemory: template?.definition.deviceMemory,
+      webglVendor: template?.definition.webglVendor,
+      webglRenderer: template?.definition.webglRenderer,
     });
     // User-supplied overrides from the creation modal (manual mode fields,
     // spoofing toggles) win over the generated base — same merge shape
@@ -100,12 +112,12 @@ export function registerIpc(deps: IpcDependencies): void {
       locale: template?.definition.locale,
       osVersion: p.osVersion,
       browserVersion: p.browserVersion,
-      screenWidth: p.screenWidth,
-      screenHeight: p.screenHeight,
-      hardwareConcurrency: p.hardwareConcurrency,
-      deviceMemory: p.deviceMemory,
-      webglVendor: p.webglVendor,
-      webglRenderer: p.webglRenderer,
+      screenWidth: p.screenWidth ?? template?.definition.screenWidth,
+      screenHeight: p.screenHeight ?? template?.definition.screenHeight,
+      hardwareConcurrency: p.hardwareConcurrency ?? template?.definition.hardwareConcurrency,
+      deviceMemory: p.deviceMemory ?? template?.definition.deviceMemory,
+      webglVendor: p.webglVendor ?? template?.definition.webglVendor,
+      webglRenderer: p.webglRenderer ?? template?.definition.webglRenderer,
     });
   });
   handle('fingerprint:options', () => ({

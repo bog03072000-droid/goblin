@@ -187,13 +187,28 @@ export function ProfilesToolbar({
         </button>
       </div>
       <div className="toolbar-row">
-        <select value={templateId} onChange={(e) => onTemplateIdChange(e.target.value)}>
+        <select value={templateId} onChange={(e) => onTemplateIdChange(e.target.value)} title={t('profiles.template.assign')}>
           <option value="">{t('profiles.template.auto')}</option>
-          {templates.map((tmpl) => (
-            <option key={tmpl.id} value={tmpl.id}>
-              {tmpl.name}
-            </option>
-          ))}
+          {templates.some((tmpl) => tmpl.id.startsWith('ad-')) && (
+            <optgroup label={t('profiles.template.adPresetsGroup')}>
+              {templates
+                .filter((tmpl) => tmpl.id.startsWith('ad-'))
+                .map((tmpl) => (
+                  <option key={tmpl.id} value={tmpl.id}>
+                    {tmpl.name}
+                  </option>
+                ))}
+            </optgroup>
+          )}
+          <optgroup label={t('profiles.template.osLocaleGroup')}>
+            {templates
+              .filter((tmpl) => !tmpl.id.startsWith('ad-'))
+              .map((tmpl) => (
+                <option key={tmpl.id} value={tmpl.id}>
+                  {tmpl.name}
+                </option>
+              ))}
+          </optgroup>
         </select>
         <input
           id="profiles-create-name-input"

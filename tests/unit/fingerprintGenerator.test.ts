@@ -186,6 +186,90 @@ describe('fingerprint generator explicit field overrides', () => {
   });
 });
 
+describe('ad-platform preset coherence (templateRepository.ts BUILTIN_TEMPLATES definitions, exercised the same way registerIpc.ts feeds a template into the generator)', () => {
+  it('TikTok Ads Mobile produces a valid Android fingerprint with the exact pinned screen/GPU/hardware', () => {
+    const fp = generateFingerprint({
+      seed: 'preset-tiktok',
+      os: 'android',
+      locale: 'en-US',
+      screenWidth: 412,
+      screenHeight: 915,
+      hardwareConcurrency: 8,
+      deviceMemory: 8,
+      webglVendor: 'Google Inc. (Qualcomm)',
+      webglRenderer: 'ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)',
+    });
+
+    expect(validateFingerprint(fp).errors).toEqual([]);
+    expect(fp.os).toBe('android');
+    expect(fp.screenWidth).toBe(412);
+    expect(fp.screenHeight).toBe(915);
+    expect(fp.hardwareConcurrency).toBe(8);
+    expect(fp.deviceMemory).toBe(8);
+    expect(fp.webglVendor).toBe('Google Inc. (Qualcomm)');
+    expect(fp.webglRenderer).toBe('ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)');
+    // The Pixel 7 screen pairs with a fixed DPR — proof the screen came from
+    // the real bundled {width, height, deviceScaleFactor} unit, not an
+    // independently-picked resolution that happened to match.
+    expect(fp.deviceScaleFactor).toBe(2.625);
+  });
+
+  it('Facebook Ads Desktop produces a valid Windows fingerprint with the exact pinned screen/GPU/hardware', () => {
+    const fp = generateFingerprint({
+      seed: 'preset-facebook',
+      os: 'windows',
+      locale: 'en-US',
+      screenWidth: 1920,
+      screenHeight: 1080,
+      hardwareConcurrency: 8,
+      deviceMemory: 16,
+      webglVendor: 'Google Inc. (NVIDIA)',
+      webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)',
+    });
+
+    expect(validateFingerprint(fp).errors).toEqual([]);
+    expect(fp.os).toBe('windows');
+    expect(fp.screenWidth).toBe(1920);
+    expect(fp.screenHeight).toBe(1080);
+    expect(fp.hardwareConcurrency).toBe(8);
+    expect(fp.deviceMemory).toBe(16);
+    expect(fp.webglVendor).toBe('Google Inc. (NVIDIA)');
+  });
+
+  it('Google Ads Standard produces a valid Windows fingerprint, distinct from the Facebook preset', () => {
+    const fp = generateFingerprint({
+      seed: 'preset-google',
+      os: 'windows',
+      locale: 'en-US',
+      screenWidth: 1366,
+      screenHeight: 768,
+      hardwareConcurrency: 4,
+      deviceMemory: 8,
+      webglVendor: 'Google Inc. (Intel)',
+      webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)',
+    });
+
+    expect(validateFingerprint(fp).errors).toEqual([]);
+    expect(fp.screenWidth).toBe(1366);
+    expect(fp.screenHeight).toBe(768);
+    expect(fp.webglVendor).toBe('Google Inc. (Intel)');
+  });
+
+  it('every seed produces the identical fingerprint for the same preset (deterministic, not randomized per-run)', () => {
+    const options = {
+      seed: 'preset-determinism',
+      os: 'android' as const,
+      screenWidth: 412,
+      screenHeight: 915,
+      webglVendor: 'Google Inc. (Qualcomm)',
+      webglRenderer: 'ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)',
+    };
+    const a = generateFingerprint(options);
+    const b = generateFingerprint(options);
+    expect(a).toEqual(b);
+  });
+});
+
 describe('fingerprint validator', () => {
   it('rejects a Windows OS with a macOS platform string', () => {
     const fp = generateFingerprint({ seed: 'win-seed', os: 'windows' });
