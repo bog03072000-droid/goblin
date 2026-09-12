@@ -9,11 +9,17 @@ import {
   type EnforceableFingerprint,
 } from './fingerprintEnforcement';
 import { buildSpoofingScript } from './spoofingScript';
-import { parseArgs, readStdinCredentials } from './profileWindowArgs';
+import { parseArgs, readStdinCredentials, migrationsDir } from './profileWindowArgs';
+import { getDb } from '../database/db';
+import { ScenarioRepository } from '../database/scenarioRepository';
+import { ScenarioSaveInputSchema } from '../../shared/schemas/scenario';
 import { setupDownloadHandling } from './profileWindowDownloads';
 import { findFreePort, startAutomationProxy } from './automationProxy';
 import { humanClick, humanScroll, type CdpSession } from '../../shared/automation/humanInputDriver';
 import { runWarmup, type WarmupProgressEvent } from './warmupOrchestrator';
+import { ScenarioRecordingManager } from '../automation/scenarioRecording';
+import { playScenario } from '../automation/scenarioPlayer';
+import { ScenarioStepSchema } from '../../shared/schemas/scenario';
 import {
   resolveLanguages,
   buildSpoofableFingerprint,
@@ -299,6 +305,7 @@ export function runProfileWindowProcess(): void {
     // the <webview> tag's `src` attribute). Entries are removed on
     // 'destroyed' so closing tabs doesn't leak references.
     const webviewsById = new Map<number, Electron.WebContents>();
+    const scenarioRecording = new ScenarioRecordingManager();
     ipcMain.on('pf:navigate', (_event, webContentsId: number, url: string) => {
       const target = webviewsById.get(webContentsId);
       if (!target) return;
@@ -365,6 +372,61 @@ export function runProfileWindowProcess(): void {
         });
       },
     );
+
+    // No-code Scenario Builder (MVP — see docs/SCENARIO_BUILDER.md): record
+    // real click/typed-text/navigation on whatever page is currently
+    // loaded, then replay it later (here or against a different running
+    // profile) through the same humanClick/humanType primitives every
+    // other automation feature in this app already uses. One recording
+    // session per webContentsId, tracked by scenarioRecording — starting
+    // twice on the same tab without stopping first is a no-op (see its own
+    // `start()`).
+    ipcMain.handle('pf:scenario-record-start', async (_event, webContentsId: number) => {
+      const target = webviewsById.get(webContentsId);
+      if (!target) throw new Error('No tab is attached yet');
+      return scenarioRecording.start(target);
+    });
+    ipcMain.handle('pf:scenario-record-stop', async (_event, webContentsId: number) => {
+      const target = webviewsById.get(webContentsId);
+      if (!target) throw new Error('No tab is attached yet');
+      return scenarioRecording.stop(target);
+    });
+    ipcMain.handle('pf:scenario-play', async (_event, webContentsId: number, steps: unknown) => {
+      const target = webviewsById.get(webContentsId);
+      if (!target) throw new Error('No tab is attached yet');
+      const parsed = ScenarioStepSchema.array().max(200).parse(steps);
+      if (!target.debugger.isAttached()) target.debugger.attach('1.3');
+      const cdpSession: CdpSession = {
+        send: (method, params) => target.debugger.sendCommand(method, params),
+      };
+      await playScenario(target, cdpSession, parsed, (progress) => {
+        win.webContents.send('pf:scenario-play-progress', progress);
+      });
+      return { ok: true };
+    });
+
+    // Named scenario storage — not per-profile: a scenario recorded here
+    // can be replayed against any other running profile too, so this reads/
+    // writes the same shared `scenarios` table every profile's own child
+    // process connects to directly (same "open a second better-sqlite3
+    // connection to the same on-disk file, WAL mode already supports it"
+    // pattern profileWindowDownloads.ts's recordDownload() already uses —
+    // not a new concurrency model). No-ops (empty list / throws) when this
+    // profile was launched without a dbPath, same guard downloads use.
+    ipcMain.handle('pf:scenario-list', () => {
+      if (!args.dbPath) return [];
+      return new ScenarioRepository(getDb(args.dbPath, migrationsDir())).list();
+    });
+    ipcMain.handle('pf:scenario-save', (_event, input: unknown) => {
+      if (!args.dbPath) throw new Error('No database available for this profile');
+      const parsed = ScenarioSaveInputSchema.parse(input);
+      return new ScenarioRepository(getDb(args.dbPath, migrationsDir())).save(parsed);
+    });
+    ipcMain.handle('pf:scenario-delete', (_event, id: unknown) => {
+      if (!args.dbPath) throw new Error('No database available for this profile');
+      new ScenarioRepository(getDb(args.dbPath, migrationsDir())).delete(String(id));
+      return { ok: true };
+    });
 
     // localStorage editor support (ProfileManager.sendChildRequest, same
     // protocol/retry as the cookies: handlers above). Unlike cookies

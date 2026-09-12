@@ -50,6 +50,27 @@
         <div id="warmup-status" class="hint"></div>
       </div>
     </div>
+    <div class="scenario-wrap">
+      <button id="scenario-toggle" class="btn" title="Record real clicks/typed text/navigation on this page and save them as a reusable scenario, or play one back — a minimal, no-code way to script repeated actions without writing Puppeteer/Playwright yourself"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>Scenario</button>
+      <div id="scenario-panel" class="scenario-panel" hidden>
+        <h4>Scenario Builder</h4>
+        <p class="hint">Records real clicks, typed text (on field blur/Enter), and navigation on THIS tab only — recording does not survive switching tabs or the recorded page's own full reload. A minimal first version, not a full visual editor.</p>
+
+        <div class="scenario-record-row">
+          <button id="scenario-record-toggle" class="btn btn-primary" type="button">Record</button>
+          <span id="scenario-record-status" class="hint"></span>
+        </div>
+
+        <div id="scenario-save-row" class="scenario-save-row" hidden>
+          <input id="scenario-name" type="text" placeholder="Scenario name" />
+          <button id="scenario-save" class="btn btn-primary" type="button">Save</button>
+        </div>
+
+        <h4>Saved scenarios</h4>
+        <div id="scenario-list" class="scenario-list"></div>
+        <div id="scenario-play-status" class="hint"></div>
+      </div>
+    </div>
     <div class="downloads-wrap">
       <button id="downloads-toggle" class="icon-btn" title="Downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg><span id="downloads-badge" class="downloads-badge" hidden>0</span></button>
       <div id="downloads-panel" class="downloads-panel" hidden></div>

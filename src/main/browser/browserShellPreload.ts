@@ -75,3 +75,49 @@ contextBridge.exposeInMainWorld('pfWarmup', {
   },
 });
 
+export interface ScenarioStep {
+  type: 'click' | 'type' | 'navigate';
+  x?: number;
+  y?: number;
+  text?: string;
+  url?: string;
+  delayMs: number;
+}
+export interface ScenarioPlayProgressEvent {
+  index: number;
+  total: number;
+  step: ScenarioStep;
+}
+
+/** No-code Scenario Builder MVP (see docs/SCENARIO_BUILDER.md and
+ * profileWindowEntry.ts's `pf:scenario-*` handlers) — record real
+ * click/typed-text/navigation on the current tab, then replay it here or
+ * later against a different profile. Recording/playing act on a specific
+ * tab's WebContents (same shape as pfWarmup above); listing/saving/
+ * deleting named scenarios is a separate, profile-independent store (see
+ * `window.profileforge.invoke('scenarios:*', ...)` in the manager
+ * process — not exposed here, since the shell window is a distinct
+ * renderer with its own, narrower preload). */
+export interface Scenario {
+  id: string;
+  name: string;
+  steps: ScenarioStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+contextBridge.exposeInMainWorld('pfScenario', {
+  recordStart: (webContentsId: number): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('pf:scenario-record-start', webContentsId),
+  recordStop: (webContentsId: number): Promise<ScenarioStep[]> =>
+    ipcRenderer.invoke('pf:scenario-record-stop', webContentsId),
+  play: (webContentsId: number, steps: ScenarioStep[]): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('pf:scenario-play', webContentsId, steps),
+  onPlayProgress: (cb: (progress: ScenarioPlayProgressEvent) => void): void => {
+    ipcRenderer.on('pf:scenario-play-progress', (_e, payload: ScenarioPlayProgressEvent) => cb(payload));
+  },
+  list: (): Promise<Scenario[]> => ipcRenderer.invoke('pf:scenario-list'),
+  save: (input: { id?: string; name: string; steps: ScenarioStep[] }): Promise<Scenario> =>
+    ipcRenderer.invoke('pf:scenario-save', input),
+  delete: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('pf:scenario-delete', id),
+});

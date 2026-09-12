@@ -199,6 +199,168 @@ warmupStartBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Scenario Builder (MVP) --------------------------------------------
+const scenarioToggle = document.getElementById('scenario-toggle');
+const scenarioPanel = document.getElementById('scenario-panel');
+const scenarioRecordToggle = document.getElementById('scenario-record-toggle');
+const scenarioRecordStatus = document.getElementById('scenario-record-status');
+const scenarioSaveRow = document.getElementById('scenario-save-row');
+const scenarioNameEl = document.getElementById('scenario-name');
+const scenarioSaveBtn = document.getElementById('scenario-save');
+const scenarioListEl = document.getElementById('scenario-list');
+const scenarioPlayStatusEl = document.getElementById('scenario-play-status');
+
+let scenarioRecording = false;
+let scenarioRecordedSteps = null;
+
+scenarioToggle.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  scenarioPanel.hidden = !scenarioPanel.hidden;
+  if (!scenarioPanel.hidden) void refreshScenarioList();
+});
+document.addEventListener('click', (ev) => {
+  if (!scenarioPanel.hidden && !scenarioPanel.contains(ev.target) && ev.target !== scenarioToggle) {
+    scenarioPanel.hidden = true;
+  }
+});
+
+async function refreshScenarioList() {
+  let scenarios;
+  try {
+    scenarios = await window.pfScenario.list();
+  } catch (err) {
+    scenarioListEl.textContent = 'Failed to load: ' + (err && err.message ? err.message : String(err));
+    return;
+  }
+  scenarioListEl.innerHTML = '';
+  if (scenarios.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'hint';
+    empty.textContent = 'No saved scenarios yet.';
+    scenarioListEl.appendChild(empty);
+    return;
+  }
+  scenarios.forEach((s) => {
+    const item = document.createElement('div');
+    item.className = 'scenario-list-item';
+    const info = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'scenario-name';
+    name.textContent = s.name;
+    const count = document.createElement('div');
+    count.className = 'scenario-step-count';
+    count.textContent = s.steps.length + ' step(s)';
+    info.appendChild(name);
+    info.appendChild(count);
+    const actions = document.createElement('div');
+    actions.className = 'scenario-list-actions';
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn btn-sm btn-primary';
+    playBtn.type = 'button';
+    playBtn.textContent = 'Play';
+    playBtn.addEventListener('click', () => void playScenarioById(s));
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-sm';
+    deleteBtn.type = 'button';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => void deleteScenarioById(s.id));
+    actions.appendChild(playBtn);
+    actions.appendChild(deleteBtn);
+    item.appendChild(info);
+    item.appendChild(actions);
+    scenarioListEl.appendChild(item);
+  });
+}
+
+async function playScenarioById(scenario) {
+  const tab = activeTab();
+  if (!tab) return;
+  scenarioPlayStatusEl.textContent = 'Playing "' + scenario.name + '"…';
+  try {
+    await window.pfScenario.play(tab.webview.getWebContentsId(), scenario.steps);
+    scenarioPlayStatusEl.textContent = 'Done playing "' + scenario.name + '".';
+  } catch (err) {
+    scenarioPlayStatusEl.textContent = 'Failed: ' + (err && err.message ? err.message : String(err));
+  }
+}
+
+async function deleteScenarioById(id) {
+  try {
+    await window.pfScenario.delete(id);
+    void refreshScenarioList();
+  } catch (err) {
+    scenarioPlayStatusEl.textContent = 'Failed to delete: ' + (err && err.message ? err.message : String(err));
+  }
+}
+
+window.pfScenario.onPlayProgress((p) => {
+  scenarioPlayStatusEl.textContent = 'Playing step ' + (p.index + 1) + '/' + p.total + ' (' + p.step.type + ')…';
+});
+
+scenarioRecordToggle.addEventListener('click', async () => {
+  const tab = activeTab();
+  if (!tab) return;
+  if (!scenarioRecording) {
+    scenarioRecordToggle.disabled = true;
+    try {
+      const result = await window.pfScenario.recordStart(tab.webview.getWebContentsId());
+      if (!result.ok) {
+        scenarioRecordStatus.textContent = 'Already recording on this tab.';
+        return;
+      }
+      scenarioRecording = true;
+      scenarioRecordedSteps = null;
+      scenarioSaveRow.hidden = true;
+      scenarioRecordToggle.textContent = 'Stop';
+      scenarioRecordToggle.classList.add('scenario-record-toggle-active');
+      scenarioRecordStatus.textContent = 'Recording — click and type on the page normally.';
+    } catch (err) {
+      scenarioRecordStatus.textContent = 'Failed to start: ' + (err && err.message ? err.message : String(err));
+    } finally {
+      scenarioRecordToggle.disabled = false;
+    }
+  } else {
+    scenarioRecordToggle.disabled = true;
+    try {
+      const steps = await window.pfScenario.recordStop(tab.webview.getWebContentsId());
+      scenarioRecording = false;
+      scenarioRecordToggle.textContent = 'Record';
+      scenarioRecordToggle.classList.remove('scenario-record-toggle-active');
+      if (steps.length === 0) {
+        scenarioRecordStatus.textContent = 'Nothing recorded — try clicking/typing before stopping.';
+        scenarioSaveRow.hidden = true;
+      } else {
+        scenarioRecordedSteps = steps;
+        scenarioRecordStatus.textContent = 'Recorded ' + steps.length + ' step(s).';
+        scenarioSaveRow.hidden = false;
+      }
+    } catch (err) {
+      scenarioRecordStatus.textContent = 'Failed to stop: ' + (err && err.message ? err.message : String(err));
+    } finally {
+      scenarioRecordToggle.disabled = false;
+    }
+  }
+});
+
+scenarioSaveBtn.addEventListener('click', async () => {
+  const name = scenarioNameEl.value.trim();
+  if (!name) {
+    scenarioRecordStatus.textContent = 'Enter a name for this scenario first.';
+    return;
+  }
+  if (!scenarioRecordedSteps || scenarioRecordedSteps.length === 0) return;
+  try {
+    await window.pfScenario.save({ name, steps: scenarioRecordedSteps });
+    scenarioRecordStatus.textContent = 'Saved "' + name + '".';
+    scenarioSaveRow.hidden = true;
+    scenarioNameEl.value = '';
+    scenarioRecordedSteps = null;
+    void refreshScenarioList();
+  } catch (err) {
+    scenarioRecordStatus.textContent = 'Failed to save: ' + (err && err.message ? err.message : String(err));
+  }
+});
+
 document.getElementById('home').addEventListener('click', () => navigate(startUrl));
 document.getElementById('back').addEventListener('click', () => activeTab() && activeTab().webview.goBack());
 document.getElementById('fwd').addEventListener('click', () => activeTab() && activeTab().webview.goForward());
