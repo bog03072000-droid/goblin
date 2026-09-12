@@ -57,7 +57,7 @@ test('enabling a schedule, setting a time and days, persists across closing and 
   await window.getByRole('button', { name: 'Fri', exact: true }).click();
   await expect(window.getByText('Pick at least one day for the schedule to actually run.')).toHaveCount(0);
 
-  const timeInput = window.getByLabel('Time');
+  const timeInput = window.getByLabel('Time', { exact: true });
   await timeInput.fill('14:30');
   await timeInput.blur();
 
@@ -77,7 +77,7 @@ test('enabling a schedule, setting a time and days, persists across closing and 
   await window.getByText('advanced', { exact: true }).click();
 
   await expect(window.getByLabel('Enable scheduled start')).toBeChecked();
-  await expect(window.getByLabel('Time')).toHaveValue('14:30');
+  await expect(window.getByLabel('Time', { exact: true })).toHaveValue('14:30');
   await expect(window.getByRole('button', { name: 'Wed', exact: true })).toHaveClass(/btn-primary/);
   await expect(window.getByRole('button', { name: 'Fri', exact: true })).toHaveClass(/btn-primary/);
   await expect(window.getByRole('button', { name: 'Mon', exact: true })).not.toHaveClass(/btn-primary/);
@@ -121,4 +121,117 @@ test('bulk "Enable schedule"/"Disable schedule" toggle several selected profiles
   await window.getByText('advanced', { exact: true }).click();
   await expect(window.getByLabel('Enable scheduled start')).not.toBeChecked();
   await window.getByRole('button', { name: 'Close', exact: true }).click();
+});
+
+test('switching to "One-time" mode, setting a date/time and a time zone, persists across closing and reopening the editor', async () => {
+  await window.getByText('Profiles', { exact: true }).click();
+  await window.getByPlaceholder('New profile name').fill('E2E OneTime Profile');
+  await window.getByRole('button', { name: 'Custom setup' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E OneTime Profile' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+  await window.getByText('advanced', { exact: true }).click();
+  await window.getByLabel('Enable scheduled start').check();
+
+  // Defaults to Recurring — the time/days UI from the test above.
+  await expect(window.getByText('Days', { exact: true })).toBeVisible();
+
+  await window.getByRole('button', { name: 'One-time', exact: true }).click();
+  await expect(window.getByText('Days', { exact: true })).toHaveCount(0);
+  await expect(window.getByText('Start at', { exact: true })).toBeVisible();
+  await expect(window.getByText('Pick a date and time for the schedule to actually run.')).toBeVisible();
+
+  await window.getByLabel('Time zone').selectOption('Asia/Tokyo');
+  const oneTimeInput = window.getByLabel('Start at');
+  await oneTimeInput.fill('2030-06-15T10:00');
+  await oneTimeInput.blur();
+  await expect(window.getByText('Pick a date and time for the schedule to actually run.')).toHaveCount(0);
+  await expect(window.getByText(/Next run:/)).toBeVisible();
+
+  await window.getByRole('button', { name: 'Close', exact: true }).click();
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await expect(window.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+  await window.getByText('advanced', { exact: true }).click();
+
+  await expect(window.getByRole('button', { name: 'One-time', exact: true })).toHaveClass(/btn-primary/);
+  await expect(window.getByLabel('Time zone')).toHaveValue('Asia/Tokyo');
+  await expect(window.getByLabel('Start at')).toHaveValue('2030-06-15T10:00');
+  await window.getByRole('button', { name: 'Close', exact: true }).click();
+});
+
+test('a one-time schedule due in the past really auto-starts the profile with no user action, then disables itself so it never fires again', async () => {
+  // A short poll interval so this test doesn't wait a real 30s — the exact
+  // mechanism tests/unit/profileScheduler.test.ts already covers with an
+  // injectable `now`; this is the one place that proves the real, running
+  // scheduler (a setInterval in the actual main process, not test code)
+  // genuinely calls ProfileManager.start() end to end for a one-time
+  // schedule, the same live-firing bar tests/e2e/proxyHealthScheduler-style
+  // suites hold their own periodic mechanisms to.
+  const userDataDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-e2e-schedule-once-'));
+  const app2 = await electron.launch({
+    args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userDataDir2}`],
+    env: { ...process.env, PF_E2E_LOCALE: 'en', PF_PROFILE_SCHEDULE_CHECK_INTERVAL_MS: '1000' },
+  });
+  try {
+    const window2 = await app2.firstWindow();
+    await window2.waitForLoadState('domcontentloaded');
+
+    await window2.getByPlaceholder('New profile name').fill('E2E OneTime Fire Profile');
+    await window2.getByRole('button', { name: 'Custom setup' }).click();
+    await window2.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+    const row = window2.locator('tr', { has: window2.locator('td', { hasText: 'E2E OneTime Fire Profile' }) });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await expect(window2.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+    await window2.getByText('advanced', { exact: true }).click();
+    await window2.getByLabel('Enable scheduled start').check();
+    await window2.getByRole('button', { name: 'One-time', exact: true }).click();
+
+    // The current local minute, truncated to :00 seconds — by the time the
+    // 1s-interval scheduler polls again, this instant is already <= now,
+    // so it's genuinely due, not a fabricated already-past timestamp
+    // written straight to the database.
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const nowMinuteLocal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const oneTimeInput = window2.getByLabel('Start at');
+    await oneTimeInput.fill(nowMinuteLocal);
+    await oneTimeInput.blur();
+
+    await window2.getByRole('button', { name: 'Close', exact: true }).click();
+
+    // Real auto-start: no Start button clicked anywhere in this test. This
+    // also exercises a real, separate UI gap found live while building this
+    // test: ProfilesPage.tsx's poll only used to run while a profile was
+    // already visibly STARTING/STOPPING — a background-originated change
+    // (this scheduler) skips that step entirely, so the row silently never
+    // updated until ProfilesPage.tsx was fixed to also poll while any
+    // profile has scheduling enabled at all (see that file's own comment).
+    await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 20_000 });
+
+    await row.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 15_000 });
+
+    // scheduleEnabled was turned back off the moment it fired — reopen and
+    // confirm the checkbox itself reflects that, not just that it didn't
+    // restart within this test's own short window.
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await expect(window2.locator('text=Loading…')).toHaveCount(0, { timeout: 15_000 });
+    await window2.getByText('advanced', { exact: true }).click();
+    await expect(window2.getByLabel('Enable scheduled start')).not.toBeChecked();
+    await window2.getByRole('button', { name: 'Close', exact: true }).click();
+
+    // Wait past two more poll intervals to prove it genuinely never fires
+    // a second time (scheduleEnabled false is what the scheduler itself
+    // gates on, not just the UI's own display).
+    await window2.waitForTimeout(2500);
+    await expect(row).toHaveAttribute('data-status', 'STOPPED');
+  } finally {
+    await app2.close();
+    fs.rmSync(userDataDir2, { recursive: true, force: true });
+  }
 });

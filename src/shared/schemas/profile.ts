@@ -16,11 +16,40 @@ export type ProfileStatus = z.infer<typeof ProfileStatusSchema>;
 // remapped to an ISO Monday-first week) so ProfileScheduler's runOnce() can
 // compare against `new Date().getDay()` directly with no translation layer.
 export const ScheduleDaySchema = z.number().int().min(0).max(6);
-// 24-hour "HH:MM" in the local system time zone — same posture as the rest
-// of this app's time handling (no per-profile time zone selector; see
-// docs/FINGERPRINT_AUDIT.md for why the fingerprint's own claimed time zone
-// is a separate, independent concern from when the OS actually starts it).
+// 24-hour "HH:MM", interpreted in scheduleTimezone if set, otherwise the
+// local system time zone — same posture as the rest of this app's time
+// handling for the "otherwise" case (see docs/FINGERPRINT_AUDIT.md for why
+// the fingerprint's own claimed time zone is a separate, independent
+// concern from when the OS actually starts a profile).
 export const ScheduleTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM (24-hour)');
+
+// A real IANA zone name (e.g. "Europe/Kyiv"), or null to keep the original
+// behavior (the OS's own local time) — every profile created before this
+// field existed has this as null and keeps working identically, unchanged.
+// Not validated against Intl.supportedValuesOf('timeZone') at the schema
+// level (that list is Node/engine-version-dependent and this schema is
+// shared with the renderer, which builds the picker's own option list from
+// the same real API — see ScheduleTab's own source) — an invalid/unknown
+// zone is handled defensively where it's actually used (ProfileScheduler
+// falls back to local time and logs a warning, same "one bad item doesn't
+// stop the others" posture as the rest of that scheduler).
+export const ScheduleTimezoneSchema = z.string().min(1).max(100);
+
+// "recurring" (the original, still-default behavior: scheduleTime +
+// scheduleDays, every matching week) vs "once" (scheduleOneTimeAt: a single
+// absolute instant, never repeats, and disables scheduleEnabled the moment
+// it fires — see ProfileScheduler).
+export const ScheduleModeSchema = z.enum(['recurring', 'once']);
+export type ScheduleMode = z.infer<typeof ScheduleModeSchema>;
+
+// An absolute UTC instant (real ISO 8601, e.g. from `Date.toISOString()`),
+// not a wall-clock HH:MM — a one-time schedule doesn't need a time zone to
+// interpret it, since "this exact moment" is the same instant everywhere.
+// The UI collects it via a local date/time picker (interpreted in
+// scheduleTimezone if set, else the OS local zone) and converts to this
+// absolute form before saving, the same way scheduleTime does the reverse
+// (an absolute concept, converted to/from a zone at the UI boundary).
+export const ScheduleOneTimeAtSchema = z.string().datetime({ offset: true });
 
 // Profile IDs are generated server-side (main process). This pattern is enforced
 // wherever a renderer-supplied ID is used to derive a filesystem path, to block
@@ -61,6 +90,13 @@ export const ProfileSchema = z.object({
   scheduleTime: ScheduleTimeSchema.nullable(),
   scheduleDays: z.array(ScheduleDaySchema).nullable(),
   scheduleLastTriggeredAt: z.string().nullable(),
+  // "recurring" (default, original behavior) or "once" — see
+  // ScheduleModeSchema. scheduleTimezone applies to scheduleTime's HH:MM
+  // (recurring only); scheduleOneTimeAt is a real absolute instant (once
+  // only) and ignores scheduleTimezone entirely (see ScheduleOneTimeAtSchema).
+  scheduleMode: ScheduleModeSchema,
+  scheduleTimezone: ScheduleTimezoneSchema.nullable(),
+  scheduleOneTimeAt: ScheduleOneTimeAtSchema.nullable(),
 });
 export type Profile = z.infer<typeof ProfileSchema>;
 
@@ -99,5 +135,8 @@ export const ProfileUpdateInputSchema = z.object({
   scheduleEnabled: z.boolean().optional(),
   scheduleTime: ScheduleTimeSchema.nullable().optional(),
   scheduleDays: z.array(ScheduleDaySchema).nullable().optional(),
+  scheduleMode: ScheduleModeSchema.optional(),
+  scheduleTimezone: ScheduleTimezoneSchema.nullable().optional(),
+  scheduleOneTimeAt: ScheduleOneTimeAtSchema.nullable().optional(),
 });
 export type ProfileUpdateInput = z.infer<typeof ProfileUpdateInputSchema>;

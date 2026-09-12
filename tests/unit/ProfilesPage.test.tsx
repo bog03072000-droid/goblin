@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { I18nProvider } from '../../src/renderer/i18n';
 import { ProfilesPage } from '../../src/renderer/pages/ProfilesPage';
@@ -384,5 +384,61 @@ describe('ProfilesPage', () => {
     // refresh() call — confirms the (group, profile-list) double-refresh
     // this wrapper does, not just the groups:delete call itself.
     await waitFor(() => expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list').length).toBeGreaterThanOrEqual(2));
+  });
+});
+
+describe('ProfilesPage — background poll for scheduler-originated status changes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Real gap found live via tests/e2e/profileSchedule.spec.ts: ProfileScheduler
+  // (a background main-process timer) can flip a profile straight from
+  // STOPPED to RUNNING with no STARTING step this page ever observes via a
+  // renderer-initiated click — the poll used to only run while a profile was
+  // already visibly STARTING/STOPPING, so that transition was invisible
+  // until something unrelated happened to call refresh() again.
+  it('keeps polling profiles:list while a profile has scheduling enabled, even with no transitional (STARTING/STOPPING) profile at all', async () => {
+    let currentStatus: 'STOPPED' | 'RUNNING' = 'STOPPED';
+    const invoke = mockInvoke(
+      baseHandlers({
+        'profiles:list': () => [makeProfile({ name: 'Scheduled', scheduleEnabled: true, status: currentStatus })],
+      }),
+    );
+    await act(async () => {
+      renderPage();
+    });
+    expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list')).toHaveLength(1);
+
+    // Simulate the real scheduler flipping the status in the backend,
+    // between polls — nothing in this test clicks Start.
+    currentStatus = 'RUNNING';
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(rowFor('Scheduled')).toHaveAttribute('data-status', 'RUNNING');
+    expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not keep polling when no profile is scheduled and none is transitional', async () => {
+    const invoke = mockInvoke(
+      baseHandlers({ 'profiles:list': () => [makeProfile({ name: 'Plain', scheduleEnabled: false, status: 'STOPPED' })] }),
+    );
+    await act(async () => {
+      renderPage();
+    });
+    expect(screen.getByText('Plain')).toBeInTheDocument();
+    expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list')).toHaveLength(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(invoke.mock.calls.filter((c) => c[0] === 'profiles:list')).toHaveLength(1);
   });
 });

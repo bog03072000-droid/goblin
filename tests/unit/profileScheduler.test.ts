@@ -54,6 +54,40 @@ describe('ProfileRepository schedule fields', () => {
     expect(created.scheduleTime).toBeNull();
     expect(created.scheduleDays).toBeNull();
     expect(created.scheduleLastTriggeredAt).toBeNull();
+    expect(created.scheduleMode).toBe('recurring');
+    expect(created.scheduleTimezone).toBeNull();
+    expect(created.scheduleOneTimeAt).toBeNull();
+  });
+
+  it('update() persists scheduleMode/scheduleTimezone/scheduleOneTimeAt and round-trips them on a fresh read', () => {
+    const created = makeProfile('p');
+    const oneTimeAt = '2026-12-25T08:00:00.000Z';
+    const updated = profiles.update(created.id, {
+      scheduleEnabled: true,
+      scheduleMode: 'once',
+      scheduleTimezone: 'Europe/Kyiv',
+      scheduleOneTimeAt: oneTimeAt,
+    });
+    expect(updated.scheduleMode).toBe('once');
+    expect(updated.scheduleTimezone).toBe('Europe/Kyiv');
+    expect(updated.scheduleOneTimeAt).toBe(oneTimeAt);
+
+    const reread = profiles.getById(created.id)!;
+    expect(reread.scheduleMode).toBe('once');
+    expect(reread.scheduleTimezone).toBe('Europe/Kyiv');
+    expect(reread.scheduleOneTimeAt).toBe(oneTimeAt);
+  });
+
+  it('switching scheduleMode back to "recurring" clears neither scheduleTimezone nor scheduleTime/scheduleDays — the caller decides what to clear, same as every other field', () => {
+    const created = makeProfile('p');
+    profiles.update(created.id, {
+      scheduleMode: 'once',
+      scheduleTimezone: 'Europe/Kyiv',
+      scheduleOneTimeAt: '2026-12-25T08:00:00.000Z',
+    });
+    const backToRecurring = profiles.update(created.id, { scheduleMode: 'recurring', scheduleTime: '09:00', scheduleDays: [1] });
+    expect(backToRecurring.scheduleMode).toBe('recurring');
+    expect(backToRecurring.scheduleTimezone).toBe('Europe/Kyiv');
   });
 
   it('update() persists scheduleEnabled/scheduleTime/scheduleDays and round-trips scheduleDays as a real array', () => {
@@ -236,5 +270,127 @@ describe('ProfileScheduler.runOnce', () => {
 
     expect(profiles.getById(bad.id)!.status).toBe('ERROR');
     expect(profiles.getById(good.id)!.status).toBe('RUNNING');
+  });
+
+  describe('per-profile time zone', () => {
+    it('a profile scheduled for 09:00 in a zone that is NOT the machine local zone does not fire at the machine-local 09:00', async () => {
+      // WEDNESDAY_9AM is constructed via the local Date constructor
+      // (new Date(2026, 8, 2, 9, 0, 0)) — i.e. it IS 09:00 in whatever zone
+      // the test runner's machine is actually in. A profile scheduled for
+      // "09:00 in Asia/Tokyo" should not fire at this instant unless the
+      // test machine itself happens to be UTC+9 — asserting the negative
+      // here, then the positive case below at the real matching instant,
+      // is what actually proves scheduleTimezone is consulted at all
+      // rather than silently ignored.
+      const profile = makeProfile('TokyoScheduled');
+      profiles.update(profile.id, {
+        scheduleEnabled: true,
+        scheduleTime: '09:00',
+        scheduleDays: [3],
+        scheduleTimezone: 'Asia/Tokyo',
+      });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      // A UTC instant that is 09:00 local machine time but NOT 09:00 Tokyo
+      // time, unless the machine itself is already UTC+9 — construct the
+      // "definitely not Tokyo 09:00" instant directly in UTC instead of
+      // relying on the machine's own offset.
+      const notTokyo9am = new Date('2026-09-02T09:00:00Z'); // 18:00 in Tokyo
+      await scheduler.runOnce(notTokyo9am);
+
+      expect(profiles.getById(profile.id)!.status).toBe('STOPPED');
+    });
+
+    it('a profile scheduled for 09:00 in Asia/Tokyo fires at the real UTC instant that is 09:00 in Tokyo, regardless of the machine\'s own local time', async () => {
+      const profile = makeProfile('TokyoScheduled2');
+      // 2026-09-02T00:00:00Z is exactly 09:00 on Wednesday in Tokyo (UTC+9).
+      const tokyo9am = new Date('2026-09-02T00:00:00Z');
+      profiles.update(profile.id, {
+        scheduleEnabled: true,
+        scheduleTime: '09:00',
+        scheduleDays: [3],
+        scheduleTimezone: 'Asia/Tokyo',
+      });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      await scheduler.runOnce(tokyo9am);
+
+      expect(profiles.getById(profile.id)!.status).toBe('RUNNING');
+    });
+
+    it('an invalid time zone name falls back to local time rather than crashing the whole poll (other profiles still get checked)', async () => {
+      const bad = makeProfile('BadZone');
+      const good = makeProfile('GoodZone');
+      profiles.update(bad.id, {
+        scheduleEnabled: true,
+        scheduleTime: '09:00',
+        scheduleDays: [3],
+        scheduleTimezone: 'Not/AZone',
+      });
+      profiles.update(good.id, { scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [3] });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      // WEDNESDAY_9AM is 09:00 local time — the "bad" profile's invalid
+      // zone should fall back to local time too, so it fires exactly like
+      // the "good" profile rather than throwing and skipping every
+      // profile after it in the same tick.
+      await expect(scheduler.runOnce(WEDNESDAY_9AM)).resolves.toBeUndefined();
+
+      expect(profiles.getById(bad.id)!.status).toBe('RUNNING');
+      expect(profiles.getById(good.id)!.status).toBe('RUNNING');
+    });
+  });
+
+  describe('one-time schedule (scheduleMode: "once")', () => {
+    it('fires a due one-time schedule and then turns scheduleEnabled back off, so it never fires a second time', async () => {
+      const profile = makeProfile('OneTime');
+      const dueAt = new Date(WEDNESDAY_9AM.getTime() - 60_000).toISOString(); // one minute in the past
+      profiles.update(profile.id, {
+        scheduleEnabled: true,
+        scheduleMode: 'once',
+        scheduleOneTimeAt: dueAt,
+      });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      await scheduler.runOnce(WEDNESDAY_9AM);
+
+      const afterFirst = profiles.getById(profile.id)!;
+      expect(afterFirst.status).toBe('RUNNING');
+      expect(afterFirst.scheduleEnabled).toBe(false);
+      expect(afterFirst.scheduleLastTriggeredAt).not.toBeNull();
+
+      // Stop it and poll again much later — a re-enabled-looking schedule
+      // (scheduleEnabled is now false) must not fire again regardless of
+      // how much later the next poll runs.
+      await manager.stop(profile.id);
+      const muchLater = new Date(WEDNESDAY_9AM.getTime() + 24 * 60 * 60 * 1000);
+      await scheduler.runOnce(muchLater);
+      expect(profiles.getById(profile.id)!.status).toBe('STOPPED');
+    });
+
+    it('does not fire a one-time schedule whose moment has not arrived yet', async () => {
+      const profile = makeProfile('NotYetDue');
+      const notYetDue = new Date(WEDNESDAY_9AM.getTime() + 60_000).toISOString(); // one minute in the future
+      profiles.update(profile.id, {
+        scheduleEnabled: true,
+        scheduleMode: 'once',
+        scheduleOneTimeAt: notYetDue,
+      });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      await scheduler.runOnce(WEDNESDAY_9AM);
+
+      expect(profiles.getById(profile.id)!.status).toBe('STOPPED');
+    });
+
+    it('a one-time schedule with no scheduleOneTimeAt set never fires, even with scheduleEnabled true', async () => {
+      const profile = makeProfile('MissingOneTime');
+      profiles.update(profile.id, { scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: null });
+
+      const scheduler = new ProfileScheduler(profiles, manager, 60_000);
+      await scheduler.runOnce(WEDNESDAY_9AM);
+
+      expect(profiles.getById(profile.id)!.status).toBe('STOPPED');
+    });
   });
 });

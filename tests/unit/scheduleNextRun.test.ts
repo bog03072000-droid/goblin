@@ -46,3 +46,42 @@ describe('computeNextScheduledRun', () => {
     expect(next).toEqual(new Date('2026-09-14T09:00:00'));
   });
 });
+
+describe('computeNextScheduledRun with a per-profile time zone', () => {
+  it('computes the next run in the given IANA zone, not the local machine time zone — verified against a real UTC instant', () => {
+    // 2026-09-07T00:00:00Z is exactly 09:00 on Monday in Asia/Tokyo (UTC+9,
+    // no DST) — deliberately chosen so the assertion doesn't depend on
+    // whatever time zone the test runner's own machine happens to be in.
+    const now = new Date('2026-09-07T00:00:00Z');
+    // Exactly-now (09:00 Monday Tokyo) counts as already passed, same rule
+    // as the local-time path — rolls to the following Monday.
+    const next = computeNextScheduledRun(now, '09:00', [1], 'Asia/Tokyo');
+    expect(next).toEqual(new Date('2026-09-14T00:00:00Z'));
+  });
+
+  it('picks a later time the same day, in the target zone', () => {
+    const now = new Date('2026-09-07T00:00:00Z'); // 09:00 Monday in Tokyo
+    const next = computeNextScheduledRun(now, '10:00', [1], 'Asia/Tokyo');
+    // 10:00 Tokyo the same day = 01:00 UTC.
+    expect(next).toEqual(new Date('2026-09-07T01:00:00Z'));
+  });
+
+  it('two different zones for the identical wall-clock schedule produce different real instants', () => {
+    const now = new Date('2026-09-07T00:00:00Z');
+    const tokyo = computeNextScheduledRun(now, '12:00', [1], 'Asia/Tokyo');
+    const newYork = computeNextScheduledRun(now, '12:00', [1], 'America/New_York');
+    expect(tokyo).not.toEqual(newYork);
+  });
+
+  it('falls back to local-time behavior for an invalid/unrecognized zone name, rather than throwing or returning null', () => {
+    const now = new Date('2026-09-07T08:00:00'); // Monday, local
+    const withBadZone = computeNextScheduledRun(now, '09:00', [1], 'Not/AZone');
+    const localOnly = computeNextScheduledRun(now, '09:00', [1], null);
+    expect(withBadZone).toEqual(localOnly);
+  });
+
+  it('omitting the time zone argument entirely still uses local time (backward compatible with every pre-existing call site)', () => {
+    const now = new Date('2026-09-07T08:00:00');
+    expect(computeNextScheduledRun(now, '09:00', [1])).toEqual(new Date('2026-09-07T09:00:00'));
+  });
+});

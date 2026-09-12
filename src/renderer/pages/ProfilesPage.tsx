@@ -92,12 +92,24 @@ export function ProfilesPage(): JSX.Element {
   // returns — so without this poll, the UI would freeze on STARTING/STOPPING until
   // some unrelated action happened to trigger another refresh().
   const hasTransitionalProfile = profiles.some((p) => p.status === 'STARTING' || p.status === 'STOPPING');
+  // A real, separate gap this poll's original condition alone left open,
+  // found live via profileSchedule.spec.ts: ProfileScheduler (a background
+  // main-process timer, not a renderer-initiated click) can flip a
+  // profile straight from STOPPED to RUNNING with no STARTING step this
+  // page ever observes — so hasTransitionalProfile above never becomes
+  // true, the poll never turns on, and the row silently stays STOPPED in
+  // the UI (confirmed against the real database showing RUNNING the whole
+  // time) until something unrelated happens to call refresh() again. Any
+  // profile with scheduling enabled at all is a real candidate for this —
+  // recurring or one-time — so it keeps the same poll alive while one
+  // exists, not just while a transition is already visibly in flight.
+  const hasScheduledProfile = profiles.some((p) => p.scheduleEnabled);
   useEffect(() => {
-    if (!hasTransitionalProfile) return;
+    if (!hasTransitionalProfile && !hasScheduledProfile) return;
     const interval = setInterval(() => void refresh(), 1000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasTransitionalProfile]);
+  }, [hasTransitionalProfile, hasScheduledProfile]);
 
   const allTags = useMemo(() => Array.from(new Set(profiles.flatMap((p) => p.tags))).sort(), [profiles]);
 

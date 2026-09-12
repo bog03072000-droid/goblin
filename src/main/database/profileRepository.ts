@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import type { Profile, ProfileListItem, ProfileStatus } from '../../shared/schemas/profile';
+import type { Profile, ProfileListItem, ProfileStatus, ScheduleMode } from '../../shared/schemas/profile';
 import { encryptSecret, decryptSecret } from '../security/credentialVault';
 
 interface ProfileRow {
@@ -24,6 +24,9 @@ interface ProfileRow {
   schedule_time: string | null;
   schedule_days: string | null;
   schedule_last_triggered_at: string | null;
+  schedule_mode: string;
+  schedule_timezone: string | null;
+  schedule_one_time_at: string | null;
 }
 
 interface ProfileListRow extends ProfileRow {
@@ -113,6 +116,9 @@ export class ProfileRepository {
       scheduleTime: row.schedule_time,
       scheduleDays: row.schedule_days ? (JSON.parse(row.schedule_days) as number[]) : null,
       scheduleLastTriggeredAt: row.schedule_last_triggered_at,
+      scheduleMode: row.schedule_mode as ScheduleMode,
+      scheduleTimezone: row.schedule_timezone,
+      scheduleOneTimeAt: row.schedule_one_time_at,
     };
   }
 
@@ -233,6 +239,9 @@ export class ProfileRepository {
       scheduleEnabled: boolean;
       scheduleTime: string | null;
       scheduleDays: number[] | null;
+      scheduleMode: ScheduleMode;
+      scheduleTimezone: string | null;
+      scheduleOneTimeAt: string | null;
     }>,
   ): Profile {
     const columns: Record<string, unknown> = {};
@@ -245,6 +254,9 @@ export class ProfileRepository {
     if (patch.scheduleEnabled !== undefined) columns['schedule_enabled'] = patch.scheduleEnabled ? 1 : 0;
     if (patch.scheduleTime !== undefined) columns['schedule_time'] = patch.scheduleTime;
     if (patch.scheduleDays !== undefined) columns['schedule_days'] = JSON.stringify(patch.scheduleDays);
+    if (patch.scheduleMode !== undefined) columns['schedule_mode'] = patch.scheduleMode;
+    if (patch.scheduleTimezone !== undefined) columns['schedule_timezone'] = patch.scheduleTimezone;
+    if (patch.scheduleOneTimeAt !== undefined) columns['schedule_one_time_at'] = patch.scheduleOneTimeAt;
     columns['updated_at'] = new Date().toISOString();
 
     const update = this.db.transaction(() => {

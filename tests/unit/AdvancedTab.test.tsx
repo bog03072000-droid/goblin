@@ -31,6 +31,13 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     scheduleTime: null,
     scheduleDays: null,
     scheduleLastTriggeredAt: null,
+    // Matches the real DB column default (014_schedule_timezone_and_once.sql)
+    // — every existing test in this file implicitly exercises the
+    // "recurring" mode, same as every profile that predates one-time
+    // schedules and per-profile time zones.
+    scheduleMode: 'recurring',
+    scheduleTimezone: null,
+    scheduleOneTimeAt: null,
     ...overrides,
   } as Profile;
 }
@@ -210,6 +217,79 @@ describe('AdvancedTab — live schedule validation', () => {
     renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [] }) });
     expect(screen.queryByText(/Next run:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
+  });
+});
+
+describe('AdvancedTab — schedule mode/timezone/one-time', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('defaults to showing the recurring time/days UI, and clicking "One-time" switches the mode', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }) });
+    expect(screen.getByDisplayValue('09:00')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'One-time' }));
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleMode: 'once' });
+  });
+
+  it('shows the one-time date/time picker instead of time/days once scheduleMode is "once"', () => {
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: null }) });
+    expect(screen.getByText('Start at')).toBeInTheDocument();
+    expect(screen.queryByText('Days')).not.toBeInTheDocument();
+  });
+
+  it('clicking "Recurring" while already on "once" switches back, and does not re-send the same mode redundantly', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once' }) });
+    fireEvent.click(screen.getByRole('button', { name: 'One-time' })); // already "once" — no-op
+    expect(onSaveAutomation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recurring' }));
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleMode: 'recurring' });
+  });
+
+  it('changing the time zone select saves scheduleTimezone, and picking "System" back saves null', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleTime: '09:00', scheduleDays: [1] }) });
+    const select = screen.getByLabelText('Time zone') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'Asia/Tokyo' } });
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleTimezone: 'Asia/Tokyo' });
+
+    fireEvent.change(select, { target: { value: '' } });
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleTimezone: null });
+  });
+
+  it('shows a missing-date warning for a one-time schedule with no scheduleOneTimeAt set yet', () => {
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: null }) });
+    expect(screen.getByText('Pick a date and time for the schedule to actually run.')).toBeInTheDocument();
+  });
+
+  it('entering a future one-time date/time and blurring saves it as a real absolute UTC instant', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00'));
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: null }) });
+    const input = screen.getByLabelText('Start at') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '2026-12-25T08:00' } });
+    fireEvent.blur(input);
+    expect(onSaveAutomation).toHaveBeenCalledWith({ scheduleOneTimeAt: new Date('2026-12-25T08:00').toISOString() });
+  });
+
+  it('shows the "already passed" warning for a one-time moment in the past, and a plain next-run hint for one in the future', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T08:00:00'));
+    // Two independent renders, not a rerender of the same instance —
+    // oneTimeDraft is local useState seeded once from the initial profile
+    // prop (same established pattern as timeDraft/scheduleDays elsewhere in
+    // this component), so swapping the profile prop on an existing instance
+    // wouldn't reset that draft; a fresh render is what actually exercises
+    // "this profile's own passed-vs-future state", not a same-instance prop
+    // swap this component was never designed to react to live.
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: '2020-01-01T00:00:00.000Z' }) });
+    expect(screen.getByText(/already passed/)).toBeInTheDocument();
+    cleanup();
+
+    renderTab({ profile: makeProfile({ scheduleEnabled: true, scheduleMode: 'once', scheduleOneTimeAt: '2030-01-01T00:00:00.000Z' }) });
+    expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Next run:/)).toBeInTheDocument();
   });
 });
 

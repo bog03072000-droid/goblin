@@ -93,9 +93,14 @@ const ProfileRow = memo(
   }): JSX.Element {
     const { t } = useTranslation();
     const StatusIcon = PILL_ICON[profile.status];
-    const nextRun = profile.scheduleEnabled
-      ? computeNextScheduledRun(new Date(), profile.scheduleTime, profile.scheduleDays)
-      : null;
+    // One-time schedules carry their own absolute instant directly —
+    // computeNextScheduledRun's recurring day/time-of-week walk doesn't
+    // apply to them at all.
+    const nextRun = !profile.scheduleEnabled
+      ? null
+      : profile.scheduleMode === 'once'
+        ? (profile.scheduleOneTimeAt ? new Date(profile.scheduleOneTimeAt) : null)
+        : computeNextScheduledRun(new Date(), profile.scheduleTime, profile.scheduleDays, profile.scheduleTimezone);
     return (
       <tr
         className={isSelected ? 'row-selected' : undefined}
