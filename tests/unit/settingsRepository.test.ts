@@ -44,4 +44,39 @@ describe('SettingsRepository', () => {
     expect(settings.autoCacheCleanup).toBe(true);
     expect(settings.cacheLimitMb).toBe(DEFAULT_SETTINGS.cacheLimitMb);
   });
+
+  it('restApiEnabled/restApiPort default to off/null and round-trip through update()', () => {
+    expect(repo.getAll().restApiEnabled).toBe(false);
+    expect(repo.getAll().restApiPort).toBeNull();
+    const updated = repo.update({ restApiEnabled: true, restApiPort: 5900 });
+    expect(updated.restApiEnabled).toBe(true);
+    expect(updated.restApiPort).toBe(5900);
+  });
+
+  it('getRestApiToken returns null before any token has been generated', () => {
+    expect(repo.getRestApiToken()).toBeNull();
+  });
+
+  it('regenerateRestApiToken stores a real, retrievable token, never in plaintext in the raw table', () => {
+    const token = repo.regenerateRestApiToken();
+    expect(token).toHaveLength(72);
+    expect(repo.getRestApiToken()).toBe(token);
+
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('restApiTokenEncrypted') as { value: string };
+    expect(row.value).not.toContain(token);
+  });
+
+  it('regenerating invalidates the previous token', () => {
+    const first = repo.regenerateRestApiToken();
+    const second = repo.regenerateRestApiToken();
+    expect(second).not.toBe(first);
+    expect(repo.getRestApiToken()).toBe(second);
+  });
+
+  it('the REST API token is never part of getAll()\'s Settings result', () => {
+    repo.regenerateRestApiToken();
+    const settings = repo.getAll() as Record<string, unknown>;
+    expect(settings['restApiToken']).toBeUndefined();
+    expect(settings['restApiTokenEncrypted']).toBeUndefined();
+  });
 });

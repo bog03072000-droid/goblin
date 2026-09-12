@@ -13,8 +13,10 @@ import type { GroupRepository } from '../database/groupRepository';
 import type { DownloadRepository } from '../database/downloadRepository';
 import type { ImportExportService } from '../profiles/importExport';
 import type { BulkCsvImportService } from '../profiles/bulkCsvImportService';
+import type { RestApiManager } from '../api/restApiManager';
 import type { DownloadWithStatus } from '../../shared/schemas/download';
 import { generateFingerprint } from '../fingerprint/generator';
+import { createProfileWithFingerprint } from '../profiles/createProfileWithFingerprint';
 import { validateFingerprint } from '../fingerprint/validator';
 import { PLATFORM_PROFILES, BROWSER_VERSIONS } from '../fingerprint/platformProfiles';
 import { testProxyConnection } from '../proxy/proxyTester';
@@ -33,6 +35,7 @@ export interface IpcDependencies {
   settings: SettingsRepository;
   groups: GroupRepository;
   downloads: DownloadRepository;
+  restApiManager: RestApiManager;
 }
 
 /** Registers every IPC handler with Zod validation on the incoming payload —
@@ -61,31 +64,7 @@ export function registerIpc(deps: IpcDependencies): void {
 
   handle('profiles:list', (p) => deps.profiles.list(p));
   handle('profiles:get', (p) => deps.profiles.getById(p.id));
-  handle('profiles:create', (p) => {
-    const template = p.templateId ? deps.templates.getById(p.templateId) : null;
-    const generated = generateFingerprint({
-      seed: p.name + Date.now(),
-      os: template?.definition.os ?? p.fingerprint?.os,
-      locale: template?.definition.locale ?? p.fingerprint?.locale,
-      // An ad-platform preset's own screen/GPU/hardware pins (see
-      // templateRepository.ts) apply as the generated base here too — still
-      // just a base, since the `{ ...generated, ...p.fingerprint }` merge
-      // below still lets an explicit manual-mode field the user typed win
-      // over whatever the template picked, same precedence os/locale above
-      // already had.
-      screenWidth: template?.definition.screenWidth,
-      screenHeight: template?.definition.screenHeight,
-      hardwareConcurrency: template?.definition.hardwareConcurrency,
-      deviceMemory: template?.definition.deviceMemory,
-      webglVendor: template?.definition.webglVendor,
-      webglRenderer: template?.definition.webglRenderer,
-    });
-    // User-supplied overrides from the creation modal (manual mode fields,
-    // spoofing toggles) win over the generated base — same merge shape
-    // fingerprint:update already uses for post-creation edits.
-    const fingerprint = deps.fingerprints.create({ ...generated, ...p.fingerprint });
-    return deps.profileManager.create(p, fingerprint.id);
-  });
+  handle('profiles:create', (p) => createProfileWithFingerprint(deps, p));
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
   handle('profiles:getAutomationToken', (p) => ({ token: deps.profiles.getAutomationToken(p.id) }));
   handle('profiles:regenerateAutomationToken', (p) => ({ token: deps.profiles.regenerateAutomationToken(p.id) }));
@@ -226,7 +205,19 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('groups:setProxyPool', (p) => deps.groups.setProxyPool(p.groupId, p.proxyIds));
 
   handle('settings:get', () => deps.settings.getAll());
-  handle('settings:update', (p) => deps.settings.update(p));
+  handle('settings:update', (p) => {
+    const updated = deps.settings.update(p);
+    void deps.restApiManager.sync();
+    return updated;
+  });
+
+  handle('restApi:getToken', () => ({ token: deps.settings.getRestApiToken() }));
+  handle('restApi:regenerateToken', async () => {
+    const token = deps.settings.regenerateRestApiToken();
+    await deps.restApiManager.sync();
+    return { token };
+  });
+  handle('restApi:getStatus', () => ({ running: deps.restApiManager.isRunning() }));
 
   // Surfaces credentialVault's plaintext fallback to the UI (Settings page
   // banner) rather than leaving it a code-only, docs-only "known limitation"

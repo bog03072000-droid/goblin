@@ -436,6 +436,15 @@ const uk: Partial<Record<TranslationKey, string>> = {
   'settings.defaultAutomationPort': 'Порт автоматизації за замовчуванням',
   'settings.defaultAutomationPort.hint':
     "Пропонований початковий порт, коли ви вперше вмикаєте автоматизацію для профілю (вкладка Advanced) — лише зручність, не резервується і не гарантує унікальність. Кожному профілю все одно потрібен власний вільний порт, якщо кілька профілів з увімкненою автоматизацією працюють одночасно.",
+  'settings.title.restApi': 'REST API',
+  'settings.restApi.hint':
+    'Локальний, захищений токеном HTTP API для створення/перегляду/оновлення/видалення/запуску/зупинки профілів із зовнішнього скрипта — ті самі операції, що виконує UI застосунку, на відміну від per-profile CDP automation proxy вище (який керує вже запущеним браузером профілю). Прив\'язаний лише до 127.0.0.1, вимкнений за замовчуванням.',
+  'settings.restApi.enable': 'Увімкнути REST API',
+  'settings.restApi.port': 'Порт (лише 127.0.0.1)',
+  'settings.restApi.statusRunning': 'Запущено.',
+  'settings.restApi.statusStopped': 'Не запущено — перевірте, що порт вільний, і спробуйте перемкнути чекбокс ще раз.',
+  'settings.restApi.token': 'API токен',
+  'settings.restApi.exampleLabel': 'Приклад (список профілів)',
   'settings.title.logging': 'Журналювання',
   'settings.title.language': 'Мова',
   'settings.title.help': 'Клавіатурні скорочення',

@@ -14,6 +14,7 @@ import { DownloadRepository } from './database/downloadRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
 import { BulkCsvImportService } from './profiles/bulkCsvImportService';
+import { RestApiManager } from './api/restApiManager';
 import { ProxyHealthScheduler } from './proxy/proxyHealthScheduler';
 import { ProfileScheduler } from './profiles/profileScheduler';
 import { registerIpc } from './ipc/registerIpc';
@@ -85,6 +86,11 @@ function runManagerProcess(): void {
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
     const bulkCsvImport = new BulkCsvImportService(fingerprints, proxies, groups, profileManager, logs);
     const downloads = new DownloadRepository(db);
+    const restApiManager = new RestApiManager(settings, { profiles, profileManager, templates, fingerprints });
+    // Starts immediately if the REST API was already enabled in a previous
+    // session — never blocks app startup on it (sync() itself never throws,
+    // see its own comment on why a bad port shouldn't crash the app).
+    void restApiManager.sync();
 
     // Runs for the lifetime of the app (its own interval is .unref()'d, so
     // it never keeps the process alive on its own) — see
@@ -107,6 +113,7 @@ function runManagerProcess(): void {
       settings,
       groups,
       downloads,
+      restApiManager,
     });
 
     mainWindow = new BrowserWindow({
@@ -129,6 +136,17 @@ function runManagerProcess(): void {
     }
 
     setUpAutoUpdater(mainWindow);
+
+    // No before-quit/will-quit hook existed anywhere in this process before
+    // this — nothing previously needed to release a long-lived resource on
+    // shutdown; the manager process relied on OS process teardown alone.
+    // The REST API server is the first thing that actually needs an
+    // explicit close() (a lingering listen()'d socket otherwise keeps the
+    // port bound until the OS reclaims it, which can delay a fast
+    // restart-the-app cycle from rebinding the same port).
+    app.on('before-quit', () => {
+      restApiManager.stop();
+    });
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

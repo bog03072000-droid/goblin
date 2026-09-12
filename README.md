@@ -306,6 +306,75 @@ machine can fully control that profile — read cookies, run arbitrary
 JavaScript on any open page, see everything the profile does. Regenerating
 it (same Advanced tab) immediately invalidates the old one.
 
+### REST API (profile management, not a running browser)
+
+The CDP proxy above drives an already-running profile's *browser*. A
+separate, app-level REST API (`src/main/api/restApiServer.ts`) instead
+drives the profile *manager* itself — create/list/get/update/delete/start/
+stop a profile — the same operations the app's own UI performs, from an
+external script with no UI interaction at all. Off by default; enable it in
+**Settings → REST API**.
+
+Same security posture as the automation proxy above, reusing the identical
+primitives (`src/main/security/httpTokenAuth.ts`) rather than a separate
+implementation: bound to `127.0.0.1` only, every request must present a
+token (`?token=` query parameter or `Authorization: Bearer <token>`) checked
+with `crypto.timingSafeEqual`, and repeated bad-token attempts from one
+source are rate-limited (429). A wrong or missing token gets a real `401`.
+Unlike the per-profile automation token — which only takes effect for a
+profile process at its own launch — regenerating the REST API token restarts
+the one long-lived server in the manager process immediately, so the change
+takes effect right away, no profile restart needed.
+
+**Enabling it**: Settings → REST API → check "Enable REST API" → set a port
+→ copy the generated token.
+
+**Endpoints** (JSON in, JSON out):
+
+| Method   | Path                     | Does |
+|----------|--------------------------|------|
+| `GET`    | `/profiles`              | List profiles (`?search=`/`?tag=`/`?groupId=` filters) |
+| `GET`    | `/profiles/:id`          | Get one profile |
+| `POST`   | `/profiles`              | Create a profile — same body shape as the app's own creation modal (`name`, optional `templateId`, `proxyId`, `groupId`, `tags`, `fingerprint` overrides) |
+| `PATCH`  | `/profiles/:id`          | Update fields (name, description, proxyId, groupId, tags, schedule, …) |
+| `DELETE` | `/profiles/:id`          | Soft-delete (same undo window as the UI's own delete) |
+| `POST`   | `/profiles/:id/start`    | Start the profile's browser process |
+| `POST`   | `/profiles/:id/stop`     | Stop it |
+
+**Example (curl):**
+
+```bash
+# List profiles
+curl "http://127.0.0.1:<port>/profiles?token=<token>"
+
+# Create one, using the "TikTok Ads Mobile" preset (see Fingerprint templates)
+curl -X POST "http://127.0.0.1:<port>/profiles?token=<token>" \
+  -H "content-type: application/json" \
+  -d '{"name": "New Profile", "templateId": "ad-tiktok-mobile"}'
+
+# Start it
+curl -X POST "http://127.0.0.1:<port>/profiles/<id>/start?token=<token>"
+```
+
+**Example (Node, `undici`/`fetch`):**
+
+```js
+const base = 'http://127.0.0.1:<port>';
+const token = '<token>';
+
+const created = await fetch(`${base}/profiles?token=${token}`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: 'New Profile' }),
+}).then((r) => r.json());
+
+await fetch(`${base}/profiles/${created.id}/start?token=${token}`, { method: 'POST' });
+```
+
+**Treat this token like a password too** — same practical implication as the
+automation token above: anyone with it can create, modify, or delete any
+profile on this machine.
+
 ### Human-like input (`humanClick`/`humanType`/`humanScroll`)
 
 `src/shared/automation/humanInputDriver.ts` exports three helpers for

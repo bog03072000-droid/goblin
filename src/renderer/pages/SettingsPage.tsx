@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Languages, Gauge, HardDrive, SlidersHorizontal, ScrollText, Keyboard, CircleCheck, ShieldAlert, ShieldCheck, Copy, RefreshCw, Globe } from 'lucide-react';
 import type { Settings } from '@shared/schemas/settings';
 import { callApi } from '../services/api';
 import { useAsyncAction } from '../hooks/useAsyncAction';
@@ -11,7 +11,17 @@ export function SettingsPage(): JSX.Element {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
   const [encryptionAvailable, setEncryptionAvailable] = useState(true);
+  const [restApiToken, setRestApiToken] = useState<string | null>(null);
+  const [restApiRunning, setRestApiRunning] = useState(false);
+  const [copied, setCopied] = useState<'token' | 'snippet' | null>(null);
   const { error, run } = useAsyncAction();
+
+  async function refreshRestApiStatus(): Promise<void> {
+    const { token } = await callApi<'restApi:getToken', { token: string | null }>('restApi:getToken', {});
+    setRestApiToken(token);
+    const { running } = await callApi<'restApi:getStatus', { running: boolean }>('restApi:getStatus', {});
+    setRestApiRunning(running);
+  }
 
   useEffect(() => {
     void run(async () => {
@@ -22,9 +32,25 @@ export function SettingsPage(): JSX.Element {
         {},
       );
       setEncryptionAvailable(encStatus.available);
+      await refreshRestApiStatus();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function copy(value: string, what: 'token' | 'snippet'): void {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(what);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  }
+
+  async function regenerateRestApiToken(): Promise<void> {
+    await run(async () => {
+      const { token } = await callApi<'restApi:regenerateToken', { token: string }>('restApi:regenerateToken', {});
+      setRestApiToken(token);
+      await refreshRestApiStatus();
+    });
+  }
 
   async function save(patch: Partial<Settings>): Promise<void> {
     await run(async () => {
@@ -32,6 +58,11 @@ export function SettingsPage(): JSX.Element {
       setSettings(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+      // Toggling restApiEnabled or changing restApiPort takes effect
+      // immediately in the main process (RestApiManager.sync(), called from
+      // the settings:update handler) — refresh here so the running/token
+      // state shown on this page never lags behind what's actually live.
+      if ('restApiEnabled' in patch || 'restApiPort' in patch) await refreshRestApiStatus();
     });
   }
 
@@ -177,6 +208,86 @@ export function SettingsPage(): JSX.Element {
           />
         </label>
         <p className="text-dim text-xs mb-0">{t('settings.defaultAutomationPort.hint')}</p>
+      </div>
+
+      <div className="panel">
+        <h3 className="fp-heading"><Globe size={16} strokeWidth={2.25} />{t('settings.title.restApi')}</h3>
+        <p className="text-dim text-xs">{t('settings.restApi.hint')}</p>
+        <label className="field">
+          <span className="inline-flex" style={{ alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={settings.restApiEnabled}
+              onChange={(e) => void save({ restApiEnabled: e.target.checked })}
+            />
+            {t('settings.restApi.enable')}
+          </span>
+        </label>
+        {settings.restApiEnabled && (
+          <>
+            <label className="field field-narrow">
+              {t('settings.restApi.port')}
+              <input
+                className="mono field-input-160"
+                type="number"
+                min={1024}
+                max={65535}
+                value={settings.restApiPort ?? ''}
+                onChange={(e) => void save({ restApiPort: e.target.value ? Number(e.target.value) : null })}
+              />
+            </label>
+            <p className="text-dim text-xs">
+              {restApiRunning ? t('settings.restApi.statusRunning') : t('settings.restApi.statusStopped')}
+            </p>
+            <label className="field">
+              {t('settings.restApi.token')}
+              <div className="inline-flex" style={{ alignItems: 'center', gap: 8 }}>
+                <input className="mono" readOnly value={restApiToken ?? ''} style={{ width: 340 }} />
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => restApiToken && copy(restApiToken, 'token')}
+                  title={t('editor.advanced.automation.copyToken')}
+                >
+                  <Copy size={14} />
+                  {copied === 'token' ? t('common.copied') : t('common.copy')}
+                </button>
+                <button
+                  className="btn btn-danger-ghost btn-sm"
+                  type="button"
+                  onClick={() => void regenerateRestApiToken()}
+                  title={t('editor.advanced.automation.regenerateHint')}
+                >
+                  <RefreshCw size={14} />
+                  {t('editor.advanced.automation.regenerate')}
+                </button>
+              </div>
+            </label>
+            {settings.restApiPort && restApiToken && (
+              <label className="field">
+                {t('settings.restApi.exampleLabel')}
+                <div className="inline-flex" style={{ alignItems: 'center', gap: 8 }}>
+                  <input
+                    className="mono"
+                    readOnly
+                    style={{ width: 460 }}
+                    value={`curl http://127.0.0.1:${settings.restApiPort}/profiles?token=${restApiToken}`}
+                  />
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() =>
+                      copy(`curl http://127.0.0.1:${settings.restApiPort}/profiles?token=${restApiToken}`, 'snippet')
+                    }
+                  >
+                    <Copy size={14} />
+                    {copied === 'snippet' ? t('common.copied') : t('common.copy')}
+                  </button>
+                </div>
+              </label>
+            )}
+          </>
+        )}
       </div>
 
       <div className="panel">

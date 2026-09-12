@@ -34,6 +34,14 @@ export const SettingsSchema = z.object({
   // others that also have automation enabled; the app can't know that in
   // advance, so this stays a suggestion, not a reservation.
   defaultAutomationPort: z.number().int().min(1024).max(65535).nullable().default(null),
+  // App-level REST API (create/list/update/delete/start/stop over plain
+  // HTTP, distinct from the per-profile CDP automation proxy above) — see
+  // restApiServer.ts. The token itself is never part of this schema (same
+  // posture as a profile's own automationToken never being part of the
+  // plain Profile object) — it's fetched separately via the dedicated
+  // restApi:getToken/regenerateToken IPC channels.
+  restApiEnabled: z.boolean().default(false),
+  restApiPort: z.number().int().min(1024).max(65535).nullable().default(null),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

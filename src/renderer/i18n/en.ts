@@ -436,6 +436,15 @@ const en = {
   'settings.defaultAutomationPort': 'Default automation port',
   'settings.defaultAutomationPort.hint':
     "Suggested starting port when you first enable automation on a profile (Advanced tab) — a convenience only, not reserved or unique. Each profile still needs its own free port if you run several with automation enabled at the same time.",
+  'settings.title.restApi': 'REST API',
+  'settings.restApi.hint':
+    'A local, token-gated HTTP API for creating/listing/updating/deleting/starting/stopping profiles from an external script — the same operations the app\'s own UI performs, distinct from the per-profile CDP automation proxy above (which drives an already-running profile\'s browser). Bound to 127.0.0.1 only, off by default.',
+  'settings.restApi.enable': 'Enable REST API',
+  'settings.restApi.port': 'Port (127.0.0.1 only)',
+  'settings.restApi.statusRunning': 'Running.',
+  'settings.restApi.statusStopped': 'Not running — check the port is free and try toggling the checkbox again.',
+  'settings.restApi.token': 'API token',
+  'settings.restApi.exampleLabel': 'Example (list profiles)',
   'settings.title.logging': 'Logging',
   'settings.title.language': 'Language',
   'settings.title.help': 'Keyboard Shortcuts',

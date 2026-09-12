@@ -19,8 +19,17 @@ function makeSettings(overrides: Partial<Settings> = {}): Settings {
  * (window.profileforge.invoke — see services/api.ts's callApi), same
  * pattern as ProxiesPage.test.tsx. */
 function mockInvoke(handlers: Partial<Record<string, (payload: unknown) => unknown>>) {
+  // SettingsPage always fetches REST API status on mount (see
+  // refreshRestApiStatus()) regardless of what a given test actually cares
+  // about — defaulted here so every existing/future test doesn't need to
+  // repeat these two unless it specifically wants different values.
+  const defaults: Partial<Record<string, (payload: unknown) => unknown>> = {
+    'restApi:getToken': () => ({ token: null }),
+    'restApi:getStatus': () => ({ running: false }),
+  };
+  const merged = { ...defaults, ...handlers };
   const invoke = vi.fn((channel: string, payload: unknown) => {
-    const handler = handlers[channel];
+    const handler = merged[channel];
     if (!handler) throw new Error(`Unmocked IPC channel in test: ${channel}`);
     return Promise.resolve(handler(payload));
   });
@@ -155,5 +164,57 @@ describe('SettingsPage', () => {
     });
     renderPage();
     expect(await screen.findByText(/simultaneously launching profile/i)).toBeInTheDocument();
+  });
+
+  it('REST API section is collapsed to just the enable checkbox until it is turned on', async () => {
+    mockInvoke({
+      'settings:get': () => makeSettings({ restApiEnabled: false }),
+      'security:credentialEncryptionStatus': () => ({ available: true }),
+    });
+    renderPage();
+
+    await screen.findByText('Enable REST API');
+    expect(screen.queryByText('Port (127.0.0.1 only)')).not.toBeInTheDocument();
+    expect(screen.queryByText('API token')).not.toBeInTheDocument();
+  });
+
+  it('enabling the REST API checkbox saves the setting and reveals port/token fields with the real token', async () => {
+    const invoke = mockInvoke({
+      'settings:get': () => makeSettings({ restApiEnabled: false }),
+      'security:credentialEncryptionStatus': () => ({ available: true }),
+      'settings:update': (p) => makeSettings({ ...(p as Partial<Settings>), restApiPort: 5900 }),
+      'restApi:getToken': () => ({ token: 'a'.repeat(72) }),
+      'restApi:getStatus': () => ({ running: true }),
+    });
+    renderPage();
+
+    const checkbox = await screen.findByLabelText('Enable REST API');
+    fireEvent.click(checkbox);
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('settings:update', expect.objectContaining({ restApiEnabled: true })),
+    );
+    expect(await screen.findByDisplayValue('a'.repeat(72))).toBeInTheDocument();
+    expect(await screen.findByText('Running.')).toBeInTheDocument();
+  });
+
+  it('clicking "Regenerate" fetches a fresh token and displays it', async () => {
+    let currentToken = 'old-token-value';
+    mockInvoke({
+      'settings:get': () => makeSettings({ restApiEnabled: true, restApiPort: 5900 }),
+      'security:credentialEncryptionStatus': () => ({ available: true }),
+      'restApi:getToken': () => ({ token: currentToken }),
+      'restApi:getStatus': () => ({ running: true }),
+      'restApi:regenerateToken': () => {
+        currentToken = 'new-token-value';
+        return { token: currentToken };
+      },
+    });
+    renderPage();
+
+    await screen.findByDisplayValue('old-token-value');
+    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }));
+
+    expect(await screen.findByDisplayValue('new-token-value')).toBeInTheDocument();
   });
 });

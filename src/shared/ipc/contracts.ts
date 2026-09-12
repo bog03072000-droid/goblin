@@ -139,6 +139,9 @@ export const IpcRequestSchemas = {
 
   'settings:get': z.object({}),
   'settings:update': SettingsUpdateSchema,
+  'restApi:getToken': z.object({}),
+  'restApi:regenerateToken': z.object({}),
+  'restApi:getStatus': z.object({}),
 
   'security:credentialEncryptionStatus': z.object({}),
 

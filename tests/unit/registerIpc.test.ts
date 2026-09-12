@@ -138,6 +138,13 @@ function makeDeps() {
     settings: {
       getAll: vi.fn(() => ({ maxConcurrentLaunches: 4 })),
       update: vi.fn((patch) => ({ maxConcurrentLaunches: 4, ...patch })),
+      getRestApiToken: vi.fn(() => null),
+      regenerateRestApiToken: vi.fn(() => 'fake-token'),
+    },
+    restApiManager: {
+      sync: vi.fn(async () => undefined),
+      stop: vi.fn(),
+      isRunning: vi.fn(() => false),
     },
     groups: {
       list: vi.fn(() => []),
@@ -516,6 +523,18 @@ describe('registerIpc', () => {
     it('security:credentialEncryptionStatus reports safeStorage.isEncryptionAvailable() (false under the test mock)', async () => {
       const result = await invoke('security:credentialEncryptionStatus', {});
       expect(result).toEqual({ available: false });
+    });
+
+    it('settings:update also re-syncs the REST API server, so a live enable/port change takes effect immediately', async () => {
+      await invoke('settings:update', { restApiEnabled: true });
+      expect(deps.restApiManager.sync).toHaveBeenCalled();
+    });
+
+    it('restApi:getToken/regenerateToken/getStatus route to settingsRepository/restApiManager', async () => {
+      expect(await invoke('restApi:getToken', {})).toEqual({ token: null });
+      expect(await invoke('restApi:regenerateToken', {})).toEqual({ token: 'fake-token' });
+      expect(deps.restApiManager.sync).toHaveBeenCalled();
+      expect(await invoke('restApi:getStatus', {})).toEqual({ running: false });
     });
   });
 
