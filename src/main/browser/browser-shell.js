@@ -152,6 +152,53 @@ document.getElementById('test-human-input').addEventListener('click', async () =
     }, 2500);
   }
 });
+// --- Warm up profile (Cookie-Robot-style) -----------------------------
+const warmupToggle = document.getElementById('warmup-toggle');
+const warmupPanel = document.getElementById('warmup-panel');
+const warmupUrlsEl = document.getElementById('warmup-urls');
+const warmupDurationEl = document.getElementById('warmup-duration');
+const warmupStartBtn = document.getElementById('warmup-start');
+const warmupStatusEl = document.getElementById('warmup-status');
+
+warmupToggle.addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  warmupPanel.hidden = !warmupPanel.hidden;
+});
+document.addEventListener('click', (ev) => {
+  if (!warmupPanel.hidden && !warmupPanel.contains(ev.target) && ev.target !== warmupToggle) {
+    warmupPanel.hidden = true;
+  }
+});
+
+window.pfWarmup.onProgress((p) => {
+  var label = p.status === 'skipped-invalid-url' ? 'Skipped (invalid URL)' : p.status;
+  warmupStatusEl.textContent = (p.index + 1) + '/' + p.total + ' — ' + label + ': ' + p.url;
+});
+
+warmupStartBtn.addEventListener('click', async () => {
+  const urls = warmupUrlsEl.value
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const minutes = Number(warmupDurationEl.value) || 5;
+  const tab = activeTab();
+  if (!tab) return;
+  if (urls.length === 0) {
+    warmupStatusEl.textContent = 'Enter at least one URL first.';
+    return;
+  }
+  warmupStartBtn.disabled = true;
+  warmupStatusEl.textContent = 'Starting…';
+  try {
+    const result = await window.pfWarmup.run(tab.webview.getWebContentsId(), urls, minutes * 60);
+    warmupStatusEl.textContent = 'Done — visited ' + result.visited + ' page(s)' + (result.skipped ? ', skipped ' + result.skipped + ' invalid URL(s)' : '') + '.';
+  } catch (err) {
+    warmupStatusEl.textContent = 'Failed: ' + (err && err.message ? err.message : String(err));
+  } finally {
+    warmupStartBtn.disabled = false;
+  }
+});
+
 document.getElementById('home').addEventListener('click', () => navigate(startUrl));
 document.getElementById('back').addEventListener('click', () => activeTab() && activeTab().webview.goBack());
 document.getElementById('fwd').addEventListener('click', () => activeTab() && activeTab().webview.goForward());

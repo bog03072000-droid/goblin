@@ -88,8 +88,21 @@
       return a !== 'unavailable' && a === b;
     }
 
+    // Prefers the spoofing script's own __pfIsMarked registry (see
+    // spoofingScript.ts) over sniffing fn.toString() for the literal string
+    // "[native code]" — the toString-masking feature deliberately makes
+    // every overridden function's toString() report [native code] too, so
+    // a toString-only check here would always read "not overridden" once
+    // that mask is installed. The toString fallback stays for the case
+    // where no spoofing is active at all (nothing to mark, __pfIsMarked
+    // never gets defined) and for unit tests that exercise this file
+    // outside a real page.
     function isOverridden(fn) {
-      try { return typeof fn === 'function' && fn.toString().indexOf('[native code]') === -1; } catch (e) { return false; }
+      try {
+        if (typeof fn !== 'function') return false;
+        if (typeof window.__pfIsMarked === 'function') return window.__pfIsMarked(fn);
+        return fn.toString().indexOf('[native code]') === -1;
+      } catch (e) { return false; }
     }
 
     function mediaDevicesLookFake(devices) {

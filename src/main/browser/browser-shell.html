@@ -35,6 +35,21 @@
     <button id="devtools" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>DevTools</button>
     <button id="diagnostics" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"/><path d="M14.12 3.88 16 2"/><path d="M21 21a4 4 0 0 0-3.81-4"/><path d="M21 5a4 4 0 0 1-3.55 3.97"/><path d="M22 13h-4"/><path d="M3 21a4 4 0 0 1 3.81-4"/><path d="M3 5a4 4 0 0 0 3.55 3.97"/><path d="M6 13H2"/><path d="m8 2 1.88 1.88"/><path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"/></svg>Diagnostics</button>
     <button id="test-human-input" class="btn" title="Runs a real human-like mouse move+click+scroll on the current page, visibly, so you can confirm the feature works without writing your own automation script"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg>Test human input</button>
+    <div class="warmup-wrap">
+      <button id="warmup-toggle" class="btn" title="Visits a list of real URLs one by one, scrolling each like a real person, to build organic browsing history/cookies before real use — the same idea as a &quot;Cookie Robot&quot; in other antidetect tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg>Warm up profile</button>
+      <div id="warmup-panel" class="warmup-panel" hidden>
+        <h4>Warm up profile</h4>
+        <p class="hint">Visits each URL below in turn, scrolling like a real person, to build organic browsing history before real use.</p>
+        <label>URLs (one per line)
+          <textarea id="warmup-urls" rows="4" placeholder="https://example.com&#10;https://news.ycombinator.com"></textarea>
+        </label>
+        <label>Duration (minutes)
+          <input id="warmup-duration" type="number" min="1" max="60" value="5" />
+        </label>
+        <button id="warmup-start" class="btn btn-primary" type="button">Start</button>
+        <div id="warmup-status" class="hint"></div>
+      </div>
+    </div>
     <div class="downloads-wrap">
       <button id="downloads-toggle" class="icon-btn" title="Downloads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg><span id="downloads-badge" class="downloads-badge" hidden>0</span></button>
       <div id="downloads-panel" class="downloads-panel" hidden></div>

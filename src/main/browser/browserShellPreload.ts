@@ -51,3 +51,27 @@ contextBridge.exposeInMainWorld('pfNav', {
 contextBridge.exposeInMainWorld('pfHumanInput', {
   test: (webContentsId: number): Promise<{ ok: boolean }> => ipcRenderer.invoke('pf:test-human-input', webContentsId),
 });
+
+export interface WarmupProgressEvent {
+  index: number;
+  total: number;
+  url: string;
+  status: 'loading' | 'browsing' | 'done' | 'error' | 'skipped-invalid-url';
+  error?: string;
+}
+
+/** Lets the toolbar's "Warm up profile" button (see README's Automation
+ * section — the Cookie-Robot-style feature) drive a real sequence of
+ * page visits against whatever tab is currently active, over the same
+ * `webContents.debugger` CDP session pattern `pfHumanInput` already uses —
+ * see profileWindowEntry.ts's 'pf:warmup' handler for what it actually
+ * does. `onProgress` reports each page as it's visited so the panel can
+ * show a live "3/8: https://..." status rather than a single opaque wait. */
+contextBridge.exposeInMainWorld('pfWarmup', {
+  run: (webContentsId: number, urls: string[], durationSeconds: number): Promise<{ visited: number; skipped: number }> =>
+    ipcRenderer.invoke('pf:warmup', webContentsId, urls, durationSeconds),
+  onProgress: (cb: (progress: WarmupProgressEvent) => void): void => {
+    ipcRenderer.on('pf:warmup-progress', (_e, payload: WarmupProgressEvent) => cb(payload));
+  },
+});
+

@@ -118,8 +118,34 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
   var __pfFnNames = new WeakMap();
   function __pfMark(fn, name) {
     try { __pfFnNames.set(fn, name); } catch (e) {}
+    // A real native method's own .name always matches what its toString()
+    // reports (e.g. getImageData.name === 'getImageData'; a native
+    // accessor getter's .name is literally 'get userAgent'). Our patched
+    // function is created as an anonymous argument to this call, so
+    // without this it keeps its inferred (empty) name — a mismatch
+    // between fn.name and the toString mask's output that a detector
+    // comparing the two would catch. Setting it here keeps both signals
+    // consistent with each other, the same way they are on a real,
+    // unpatched Chromium build.
+    try { Object.defineProperty(fn, 'name', { value: name, configurable: true }); } catch (e) {}
     return fn;
   }
+  // diagnostics.html's own "is this overridden?" check used to work by
+  // looking for the ABSENCE of "[native code]" in fn.toString() — which
+  // installToStringMask below now deliberately defeats (that's the whole
+  // point of this feature). Left as-is, that turned our own diagnostics
+  // page into a false negative for every masked override (canvasMode/
+  // audioMode/fontsMode all reported MISMATCH despite the real override
+  // being active — caught via fingerprintEnforcement.spec.ts regressing
+  // after this feature landed). __pfIsMarked exposes the same
+  // __pfFnNames registry non-enumerably so diagnostics.html can ask
+  // directly instead of relying on toString content.
+  try {
+    Object.defineProperty(self, '__pfIsMarked', {
+      value: function (fn) { return __pfFnNames.has(fn); },
+      writable: false, enumerable: false, configurable: true,
+    });
+  } catch (e) {}
   (function installToStringMask() {
     var realToString = Function.prototype.toString;
     var nativeToStringSrc = realToString.call(realToString);

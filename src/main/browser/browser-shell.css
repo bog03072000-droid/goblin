@@ -302,6 +302,57 @@ body { display: flex; flex-direction: column; }
   white-space: nowrap;
 }
 
+/* ---------- Warm up profile (Cookie-Robot-style) ---------- */
+.warmup-wrap { position: relative; flex: 0 0 auto; }
+.warmup-panel {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 300px;
+  background: var(--char-raised);
+  border: 1px solid var(--stroke-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-overlay);
+  z-index: 50;
+  padding: var(--space-3);
+}
+.warmup-panel h4 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--paper);
+}
+.warmup-panel .hint {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-caption);
+  color: var(--ash-dim);
+  line-height: 1.4;
+}
+.warmup-panel label {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--ash);
+  margin-bottom: var(--space-2);
+}
+.warmup-panel textarea,
+.warmup-panel input {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--stroke);
+  background: var(--surface-input);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  padding: var(--space-1) var(--space-2);
+  resize: vertical;
+}
+.warmup-panel textarea:focus,
+.warmup-panel input:focus { outline: none; border-color: var(--lime); box-shadow: var(--ring); }
+.warmup-panel .btn { width: 100%; justify-content: center; }
+#warmup-status { margin-top: var(--space-2); margin-bottom: 0; word-break: break-word; }
+
 /* ---------- Downloads ---------- */
 .downloads-wrap { position: relative; flex: 0 0 auto; }
 .downloads-badge {
