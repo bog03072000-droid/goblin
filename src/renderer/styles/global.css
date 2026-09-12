@@ -1315,3 +1315,9 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .modal-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--stroke); }
 .modal-body-pad { padding: var(--space-4); overflow: auto; }
 .reset-btn { margin: 8px 0; }
+
+.bulk-import-upload { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--space-2) 0; }
+.table-scroll-wrap { overflow-x: auto; max-height: 50vh; overflow-y: auto; }
+.row-invalid { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.status-PASS { color: var(--lime-bright); font-size: 12px; }
+.status-MISMATCH { color: var(--danger); font-size: 12px; }

@@ -13,6 +13,7 @@ import { GroupRepository } from './database/groupRepository';
 import { DownloadRepository } from './database/downloadRepository';
 import { ProfileManager } from './profiles/profileManager';
 import { ImportExportService } from './profiles/importExport';
+import { BulkCsvImportService } from './profiles/bulkCsvImportService';
 import { ProxyHealthScheduler } from './proxy/proxyHealthScheduler';
 import { ProfileScheduler } from './profiles/profileScheduler';
 import { registerIpc } from './ipc/registerIpc';
@@ -82,6 +83,7 @@ function runManagerProcess(): void {
     const groups = new GroupRepository(db);
     const profileManager = new ProfileManager(profilesRoot, profiles, fingerprints, proxies, logs, dbPath, groups);
     const importExport = new ImportExportService(profiles, fingerprints, proxies, logs, profileManager);
+    const bulkCsvImport = new BulkCsvImportService(fingerprints, proxies, groups, profileManager, logs);
     const downloads = new DownloadRepository(db);
 
     // Runs for the lifetime of the app (its own interval is .unref()'d, so
@@ -101,6 +103,7 @@ function runManagerProcess(): void {
       logs,
       templates,
       importExport,
+      bulkCsvImport,
       settings,
       groups,
       downloads,

@@ -67,6 +67,7 @@ export function ProfilesToolbar({
   quickCreatePending,
   onImport,
   onImportFromGoLogin,
+  onBulkImport,
   onRestore,
   onExportAll,
 }: {
@@ -105,6 +106,7 @@ export function ProfilesToolbar({
   quickCreatePending: boolean;
   onImport: () => void;
   onImportFromGoLogin: () => void;
+  onBulkImport: () => void;
   onRestore: () => void;
   onExportAll: () => void;
 }): JSX.Element {
@@ -269,6 +271,10 @@ export function ProfilesToolbar({
         >
           <Upload size={14} strokeWidth={2.25} />
           {t('profiles.importGoLogin')}
+        </button>
+        <button className="btn btn-ghost" onClick={onBulkImport} title={t('bulkImport.toolbar.hint')}>
+          <Upload size={14} strokeWidth={2.25} />
+          {t('bulkImport.toolbar.label')}
         </button>
         <button className="btn btn-ghost" onClick={onRestore}>
           <ArchiveRestore size={14} strokeWidth={2.25} />

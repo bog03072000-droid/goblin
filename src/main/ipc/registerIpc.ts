@@ -12,6 +12,7 @@ import type { SettingsRepository } from '../database/settingsRepository';
 import type { GroupRepository } from '../database/groupRepository';
 import type { DownloadRepository } from '../database/downloadRepository';
 import type { ImportExportService } from '../profiles/importExport';
+import type { BulkCsvImportService } from '../profiles/bulkCsvImportService';
 import type { DownloadWithStatus } from '../../shared/schemas/download';
 import { generateFingerprint } from '../fingerprint/generator';
 import { validateFingerprint } from '../fingerprint/validator';
@@ -28,6 +29,7 @@ export interface IpcDependencies {
   logs: ActivityLogRepository;
   templates: TemplateRepository;
   importExport: ImportExportService;
+  bulkCsvImport: BulkCsvImportService;
   settings: SettingsRepository;
   groups: GroupRepository;
   downloads: DownloadRepository;
@@ -182,6 +184,8 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:importFromCompetitor', (p) => deps.importExport.importFromCompetitorDialog(p.vendor));
   handle('profiles:backup', (p) => deps.importExport.backupProfile(p.id));
   handle('profiles:restore', () => deps.importExport.restoreProfile());
+  handle('profiles:bulkImportParse', () => deps.bulkCsvImport.parseFromDialog());
+  handle('profiles:bulkImportCommit', (p) => deps.bulkCsvImport.commit(p.rows));
 
   handle('profiles:bulkStart', (p) => {
     const concurrency = deps.settings.getAll().maxConcurrentLaunches;

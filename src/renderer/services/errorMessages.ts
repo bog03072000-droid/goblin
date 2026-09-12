@@ -32,6 +32,10 @@ const PATTERNS: Array<[RegExp, TranslationKey]> = [
   // generic "unexpected error" message.
   [/LOW_MEMORY:/, 'errors.lowMemory'],
   [/"code":\s*"/, 'errors.invalidInput'],
+  [/File has no "name" column/, 'errors.bulkImportNoNameColumn'],
+  [/File has no data rows/, 'errors.bulkImportEmptyFile'],
+  [/File has \d+ rows — the limit is/, 'errors.bulkImportTooManyRows'],
+  [/File contains no sheets/, 'errors.bulkImportUnreadableFile'],
 ];
 
 /** Maps a raw error (an IPC rejection message, or anything else thrown in the

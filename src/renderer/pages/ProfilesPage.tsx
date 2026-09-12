@@ -7,6 +7,7 @@ import { callApi } from '../services/api';
 import { parseLowMemoryError } from '@shared/utils/lowMemory';
 import { ProfileEditorModal } from '../components/ProfileEditorModal';
 import { ProfileCreateModal } from '../components/ProfileCreateModal';
+import { BulkImportModal } from '../components/BulkImportModal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { UndoToast } from '../components/UndoToast';
 import { GroupsModal } from '../components/GroupsModal';
@@ -46,6 +47,7 @@ export function ProfilesPage(): JSX.Element {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   // Soft-delete undo window (see profileManager.ts's SOFT_DELETE_WINDOW_MS,
   // which this mirrors for the visible countdown — the actual undo cutoff is
   // enforced by a main-process timer regardless of what happens to this toast).
@@ -339,6 +341,7 @@ export function ProfilesPage(): JSX.Element {
         quickCreatePending={createAction.pending}
         onImport={() => void importProfiles()}
         onImportFromGoLogin={() => void importFromGoLogin()}
+        onBulkImport={() => setShowBulkImportModal(true)}
         onRestore={() => void restoreProfile()}
         onExportAll={() => void exportAll()}
       />
@@ -401,6 +404,15 @@ export function ProfilesPage(): JSX.Element {
           onDeleteRequest={(p) => void deleteOne(p)}
         />
       </div>
+      {showBulkImportModal && (
+        <BulkImportModal
+          onClose={() => setShowBulkImportModal(false)}
+          onImported={() => {
+            void refresh();
+            void refreshGroups();
+          }}
+        />
+      )}
       {showCreateModal && (
         <ProfileCreateModal
           initialName={newName}

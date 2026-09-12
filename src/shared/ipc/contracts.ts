@@ -97,6 +97,23 @@ export const IpcRequestSchemas = {
   'profiles:exportAll': z.object({}),
   'profiles:import': z.object({}),
   'profiles:importFromCompetitor': z.object({ vendor: z.literal('gologin') }),
+  'profiles:bulkImportParse': z.object({}),
+  'profiles:bulkImportCommit': z.object({
+    rows: z
+      .array(
+        z.object({
+          row: z.number().int().positive(),
+          name: z.string(),
+          os: OsSchema.optional(),
+          proxyLabel: z.string().optional(),
+          groupName: z.string().optional(),
+          tags: z.array(z.string()),
+          error: z.string().optional(),
+        }),
+      )
+      .min(1)
+      .max(500),
+  }),
   'profiles:backup': z.object({ id: ProfileIdSchema }),
   'profiles:restore': z.object({}),
 
