@@ -186,7 +186,12 @@ body { display: flex; flex-direction: column; }
 #toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  /* Same gap token the main manager window's own .toolbar uses
+     (src/renderer/styles/global.css) — was --space-1 (4px), too tight
+     once real content (icon+label buttons, the downloads badge, the
+     profile name) sits at the far end: a real, reported readability
+     issue, not just a token mismatch. */
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--char);
   border-bottom: 1px solid var(--stroke);
@@ -194,6 +199,12 @@ body { display: flex; flex-direction: column; }
   flex: 0 0 auto;
 }
 #toolbar button, #toolbar input { -webkit-app-region: no-drag; }
+/* Back/Forward/Reload/Home read as one control, the same convention
+   every browser chrome uses — kept tighter (--space-1) than the
+   --space-2 gap between the toolbar's other, functionally distinct
+   buttons, rather than every button spacing identically regardless of
+   whether it's part of a group. */
+.nav-cluster { display: flex; align-items: center; gap: var(--space-1); flex: 0 0 auto; }
 /* Font-family split out from the rule above and scoped to button only —
    #toolbar input (higher specificity than a bare #address) would
    otherwise beat #address's own font-family: var(--font-mono) below. */
@@ -351,5 +362,19 @@ body { display: flex; flex-direction: column; }
    instead (the previous approach) is a known Electron <webview> trap: the
    guest process can fail to pick up its real size the moment it goes from
    hidden back to visible, leaving a small stale render surface with dead
-   space around it regardless of how correct the CSS box itself is. */
-#webviews webview { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+   space around it regardless of how correct the CSS box itself is.
+   `display: flex` here is load-bearing, not decorative — a real bug found
+   live (a black rectangle under the page once the shell got a dark
+   background made it visible; verified via CDP that it silently
+   pre-dated this file's whole redesign, just invisible on white-on-white
+   before). <webview>'s UA default display is `inline`; an inline host
+   never gives Electron's internal guest-view implementation a proper box
+   to read, so the guest's own compositor gets stuck at what looks like
+   the browser's generic replaced-element fallback (measured 150px tall
+   regardless of the host's actual, correctly-computed size) no matter
+   how the host itself is sized (position, width/height, %, inset — all
+   tried and made no difference). Confirmed via direct CDP inspection of
+   the guest's own `window.innerHeight` in the real running app: switching
+   the host to `display: flex` fixed it immediately, with no JS resize
+   hacks needed. */
+#webviews webview { display: flex; position: absolute; inset: 0; width: 100%; height: 100%; border: none; }

@@ -60,6 +60,46 @@ async function connectToShell(): Promise<Page> {
   throw new Error(`Could not find browser-shell.html page via CDP: ${String(lastErr)}`);
 }
 
+/**
+ * The webview guest is exposed over CDP as a distinct target of type
+ * "webview" (confirmed via GET /json/list), not "page" — Playwright's
+ * `Browser.contexts()[*].pages()` only surfaces "page"-type targets, so
+ * it can never see this guest directly (same underlying limitation
+ * connectToShell()'s own doc comment describes for the OS-process
+ * boundary, but this one applies even after connecting). A plain
+ * WebSocket + raw CDP `Runtime.evaluate` against its own
+ * `webSocketDebuggerUrl` is the only way to read the guest's own
+ * `window.innerHeight` from outside the app.
+ */
+async function evalInGuestWebview<T>(port: number, expression: string): Promise<T> {
+  const res = await fetch(`http://127.0.0.1:${port}/json/list`);
+  const targets = (await res.json()) as Array<{ type: string; webSocketDebuggerUrl: string; url: string }>;
+  const guest = targets.find((t) => t.type === 'webview');
+  if (!guest) throw new Error('No webview guest target found via CDP /json/list');
+  const ws = new WebSocket(guest.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.addEventListener('open', resolve, { once: true });
+    ws.addEventListener('error', reject, { once: true });
+  });
+  try {
+    const result = await new Promise<T>((resolve, reject) => {
+      ws.addEventListener(
+        'message',
+        (ev) => {
+          const msg = JSON.parse(String(ev.data)) as { result?: { result?: { value?: T } }; error?: unknown };
+          if (msg.error) reject(new Error(JSON.stringify(msg.error)));
+          else resolve(msg.result!.result!.value as T);
+        },
+        { once: true },
+      );
+      ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }));
+    });
+    return result;
+  } finally {
+    ws.close();
+  }
+}
+
 test('real multi-tab browser window: new/close/switch/duplicate tabs, navigation, devtools', async () => {
   await window.getByPlaceholder('New profile name').fill('E2E Tabs Profile');
   await window.getByRole('button', { name: 'Custom setup' }).click();
@@ -87,6 +127,23 @@ test('real multi-tab browser window: new/close/switch/duplicate tabs, navigation
   expect(toolbarBg).toBe('rgb(22, 26, 23)'); // --char, browser-shell.css
   const addressFont = await shell.locator('#address').evaluate((el) => getComputedStyle(el).fontFamily);
   expect(addressFont).toContain('Space Mono');
+
+  // Real regression check for the black-gap-under-the-page finding: the
+  // <webview> host element's own CSS box was always correctly sized (this
+  // shell's #webviews container measured the full available height, no
+  // change needed there), but the guest's own compositor stayed stuck at
+  // a small default (~150px tall) regardless — <webview>'s UA-default
+  // `display: inline` never gives Electron's internal guest-view
+  // implementation a proper box to read. This pre-dated the whole
+  // restyle (confirmed against the pre-restyle commit) and was only
+  // invisible before because the unstyled shell's white background hid a
+  // white-on-white gap; the new dark background made it a visible black
+  // rectangle. Fixed by `display: flex` on `#webviews webview` — checked
+  // here against the guest's own `window.innerHeight`, not the host
+  // element's box (which was never the actual bug).
+  const webviewsHeight = await shell.locator('#webviews').evaluate((el) => el.getBoundingClientRect().height);
+  const guestInnerHeight = await evalInGuestWebview<number>(REMOTE_DEBUG_PORT, 'window.innerHeight');
+  expect(guestInnerHeight).toBe(webviewsHeight);
 
   // Starts with exactly one tab, auto-navigated by the main process.
   await expect(shell.locator('.tab')).toHaveCount(1, { timeout: 15_000 });
