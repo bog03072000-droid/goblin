@@ -98,6 +98,46 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
   }
   var PROFILE_SEED = ${JSON.stringify(fp.seed)};
   var profileHash = hashStr(PROFILE_SEED);
+
+  // Function.prototype.toString masking. Every override below replaces a
+  // real native built-in (getImageData, toDataURL, getParameter, ...) with
+  // a plain JS function — which is otherwise trivially detectable, since
+  // Function.prototype.toString.call(fn) (or fn.toString()) would show this
+  // script's own source instead of the "[native code]" string a real,
+  // unpatched Chromium build reports for these methods. __pfMark registers
+  // a function against the name it should *report itself as* when asked;
+  // installToStringMask patches Function.prototype.toString itself (not
+  // each function's own .toString, which a detector can bypass by calling
+  // Function.prototype.toString.call(fn) directly) to consult that registry
+  // first. Self-consistency matters here too: a script that checks
+  // Function.prototype.toString.toString() itself would otherwise catch the
+  // mask by seeing its OWN source — handled by special-casing the proxy
+  // against itself below. Same category of technique as
+  // puppeteer-extra-plugin-stealth's function.prototype.toString evasion,
+  // applied to this project's own override set.
+  var __pfFnNames = new WeakMap();
+  function __pfMark(fn, name) {
+    try { __pfFnNames.set(fn, name); } catch (e) {}
+    return fn;
+  }
+  (function installToStringMask() {
+    var realToString = Function.prototype.toString;
+    var nativeToStringSrc = realToString.call(realToString);
+    var proxiedToString = new Proxy(realToString, {
+      apply: function (target, thisArg, args) {
+        if (thisArg === proxiedToString) return nativeToStringSrc;
+        if (__pfFnNames.has(thisArg)) {
+          return 'function ' + __pfFnNames.get(thisArg) + '() { [native code] }';
+        }
+        return target.apply(thisArg, args);
+      },
+    });
+    try {
+      Object.defineProperty(Function.prototype, 'toString', {
+        value: proxiedToString, writable: true, enumerable: false, configurable: true,
+      });
+    } catch (e) {}
+  })();
 `);
 
   if (fp.canvasMode === 'noise') {
@@ -121,15 +161,15 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
     var proto = self.CanvasRenderingContext2D && self.CanvasRenderingContext2D.prototype;
     if (proto) {
       var origGetImageData = proto.getImageData;
-      proto.getImageData = function () {
+      proto.getImageData = __pfMark(function () {
         var result = origGetImageData.apply(this, arguments);
         return noisify(result);
-      };
+      }, 'getImageData');
     }
     var canvasProto = self.HTMLCanvasElement && self.HTMLCanvasElement.prototype;
     if (canvasProto) {
       var origToDataURL = canvasProto.toDataURL;
-      canvasProto.toDataURL = function () {
+      canvasProto.toDataURL = __pfMark(function () {
         try {
           var ctx = this.getContext('2d');
           if (ctx) {
@@ -142,17 +182,17 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
           }
         } catch (e) {}
         return origToDataURL.apply(this, arguments);
-      };
+      }, 'toDataURL');
     }
     // OffscreenCanvas exists in Worker global scopes (no HTMLCanvasElement
     // there) — same noise function, same seeded determinism.
     var offscreenProto = self.OffscreenCanvasRenderingContext2D && self.OffscreenCanvasRenderingContext2D.prototype;
     if (offscreenProto) {
       var origOffGetImageData = offscreenProto.getImageData;
-      offscreenProto.getImageData = function () {
+      offscreenProto.getImageData = __pfMark(function () {
         var result = origOffGetImageData.apply(this, arguments);
         return noisify(result);
-      };
+      }, 'getImageData');
     }
   })();
 `);
@@ -164,7 +204,7 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
     var proto = self.AudioBuffer && self.AudioBuffer.prototype;
     if (!proto) return;
     var orig = proto.getChannelData;
-    proto.getChannelData = function (channel) {
+    proto.getChannelData = __pfMark(function (channel) {
       var data = orig.call(this, channel);
       var sampleHash = 0;
       for (var i = 0; i < data.length; i += 97) { sampleHash = (Math.imul(31, sampleHash) + Math.floor(data[i] * 1000)) | 0; }
@@ -173,7 +213,7 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
         data[j] = data[j] + (rand() - 0.5) * 0.0001;
       }
       return data;
-    };
+    }, 'getChannelData');
   })();
 `);
   }
@@ -265,11 +305,11 @@ function buildCoreScript(fp: SpoofableFingerprint): string {
     function patch(proto) {
       if (!proto) return;
       var orig = proto.getParameter;
-      proto.getParameter = function (param) {
+      proto.getParameter = __pfMark(function (param) {
         if (param === 37445) return VENDOR;   // UNMASKED_VENDOR_WEBGL
         if (param === 37446) return RENDERER; // UNMASKED_RENDERER_WEBGL
         return orig.call(this, param);
-      };
+      }, 'getParameter');
     }
     patch(self.WebGLRenderingContext && self.WebGLRenderingContext.prototype);
     patch(self.WebGL2RenderingContext && self.WebGL2RenderingContext.prototype);
@@ -289,12 +329,12 @@ ${iframePropagationScript}
     var ALLOW = ${JSON.stringify(RESTRICTED_FONT_ALLOWLIST)};
     try {
       if (self.document && self.document.fonts) {
-        self.document.fonts.check = function (font) {
+        self.document.fonts.check = __pfMark(function (font) {
           return ALLOW.some(function (f) { return font.indexOf(f) !== -1; });
-        };
+        }, 'check');
       }
       if (self.navigator && self.navigator.fonts && self.navigator.fonts.query) {
-        self.navigator.fonts.query = function () { return Promise.resolve([]); };
+        self.navigator.fonts.query = __pfMark(function () { return Promise.resolve([]); }, 'query');
       }
     } catch (e) {}
   })();
@@ -308,11 +348,11 @@ ${iframePropagationScript}
     var FAKE = ${JSON.stringify(devices)};
     try {
       if (self.navigator && self.navigator.mediaDevices && self.navigator.mediaDevices.enumerateDevices) {
-        self.navigator.mediaDevices.enumerateDevices = function () {
+        self.navigator.mediaDevices.enumerateDevices = __pfMark(function () {
           return Promise.resolve(FAKE.map(function (d) {
             return { deviceId: d.deviceId, kind: d.kind, label: d.label, groupId: d.groupId, toJSON: function () { return this; } };
           }));
-        };
+        }, 'enumerateDevices');
       }
     } catch (e) {}
   })();
@@ -361,11 +401,11 @@ ${iframePropagationScript}
     // values while userAgent alone was correctly overridden). Isolating
     // each call means a property this Chromium build won't let us redefine
     // fails on its own without taking the others down with it.
-    try { Object.defineProperty(self.navigator, 'userAgent', { get: function () { return ${JSON.stringify(fp.userAgent)}; }, configurable: true }); } catch (e) {}
-    try { Object.defineProperty(self.navigator, 'platform', { get: function () { return ${JSON.stringify(fp.platform)}; }, configurable: true }); } catch (e) {}
-    try { Object.defineProperty(self.navigator, 'hardwareConcurrency', { get: function () { return ${JSON.stringify(fp.hardwareConcurrency)}; }, configurable: true }); } catch (e) {}
-    try { Object.defineProperty(self.navigator, 'deviceMemory', { get: function () { return ${JSON.stringify(fp.deviceMemory)}; }, configurable: true }); } catch (e) {}
-    try { Object.defineProperty(self.navigator, 'maxTouchPoints', { get: function () { return ${JSON.stringify(fp.maxTouchPoints)}; }, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'userAgent', { get: __pfMark(function () { return ${JSON.stringify(fp.userAgent)}; }, 'get userAgent'), configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'platform', { get: __pfMark(function () { return ${JSON.stringify(fp.platform)}; }, 'get platform'), configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'hardwareConcurrency', { get: __pfMark(function () { return ${JSON.stringify(fp.hardwareConcurrency)}; }, 'get hardwareConcurrency'), configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'deviceMemory', { get: __pfMark(function () { return ${JSON.stringify(fp.deviceMemory)}; }, 'get deviceMemory'), configurable: true }); } catch (e) {}
+    try { Object.defineProperty(self.navigator, 'maxTouchPoints', { get: __pfMark(function () { return ${JSON.stringify(fp.maxTouchPoints)}; }, 'get maxTouchPoints'), configurable: true }); } catch (e) {}
   })();
 `);
 
@@ -403,8 +443,8 @@ ${core}
       }
     };
   }
-  try { if (typeof self.Worker !== 'undefined') self.Worker = wrapWorkerCtor(self.Worker); } catch (e) {}
-  try { if (typeof self.SharedWorker !== 'undefined') self.SharedWorker = wrapWorkerCtor(self.SharedWorker); } catch (e) {}
+  try { if (typeof self.Worker !== 'undefined') self.Worker = __pfMark(wrapWorkerCtor(self.Worker), 'Worker'); } catch (e) {}
+  try { if (typeof self.SharedWorker !== 'undefined') self.SharedWorker = __pfMark(wrapWorkerCtor(self.SharedWorker), 'SharedWorker'); } catch (e) {}
 
   // Best-effort only: Service Worker registration is async by nature and
   // Chromium restricts acceptable script origins for it more strictly than

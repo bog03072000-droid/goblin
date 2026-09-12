@@ -2933,3 +2933,107 @@ in the summary table — this investigation found the *specific mechanism*
 behind that grade (plaintext label correlation, silently auto-granted
 permission) rather than a new gap, and closed a documentation/UI-copy gap
 rather than an enforcement one.
+
+## Function.prototype.toString masking (new stage — closes a real, previously undocumented tell)
+
+**The gap.** Every override this document describes (Canvas
+`getImageData`/`toDataURL`, `AudioBuffer.getChannelData`, WebGL
+`getParameter`, `document.fonts.check`/`navigator.fonts.query`,
+`mediaDevices.enumerateDevices`, the `Worker`/`SharedWorker` constructor
+wrappers, and the `navigator.userAgent`/`platform`/`hardwareConcurrency`/
+`deviceMemory`/`maxTouchPoints` getters) replaces a real Chromium native
+method with a plain JS function. Before this stage, that function's own
+`.toString()` — or, more robustly for a detector, `Function.prototype.
+toString.call(fn)`, which bypasses an own `toString` property the way a
+naive per-function override attempt would try — returned this project's
+actual JS source verbatim, instead of the `"function X() { [native code]
+}"` string a real, unpatched Chromium build reports for every one of
+these methods. A fingerprinting script that checks whether a suspicious
+API "looks native" (a well-known, real technique — this is exactly what
+`puppeteer-extra-plugin-stealth`'s own `function.prototype.toString`
+evasion module exists to defeat) would have flagged every spoofed profile
+on this single check alone, regardless of how correct the spoofed values
+themselves were.
+
+**The fix (`src/main/browser/spoofingScript.ts`).** A `__pfMark(fn, name)`
+helper registers a function against the name it should report itself as,
+and a self-invoking `installToStringMask()` block patches
+`Function.prototype.toString` itself — not each function's own
+`.toString` property, which is exactly the bypassable, naive version of
+this fix — via a `Proxy` around the real `Function.prototype.toString`
+that consults that registry first and falls through to the genuine
+native behavior for everything else. This is deliberately the *same*
+category of technique as the CDP-based overrides elsewhere in this
+document (a real evasion mechanism, not a homegrown guess): patch the one
+central choke point every caller path (`fn.toString()`,
+`Function.prototype.toString.call(fn)`, `String(fn)`) actually goes
+through, rather than patching each function's own property.
+
+**Self-consistency, verified both in a sandbox and live.** A mask that
+can itself be unmasked by asking `Function.prototype.toString.toString()`
+what it looks like would just move the tell one level up. `installToStringMask()`
+special-cases the proxy against itself, returning the real native
+`Function.prototype.toString`'s own genuine `"[native code]"` string —
+verified both in a Node `vm` sandbox (`tests/unit/spoofingScript.test.ts`)
+and live in a real running profile (see below): `Function.prototype.
+toString.toString()` returns `'function toString() { [native code] }'`,
+not this project's own mask source.
+
+**Accessor-getter naming matches real V8 formatting.** A native accessor
+(e.g. `navigator.userAgent`) reports itself with a `"get "` prefix in
+V8's real `Function.prototype.toString` output —
+`"function get userAgent() { [native code] }"`, not
+`"function userAgent() { [native code] }"`. Every `__pfMark` call on one
+of the navigator identity getters uses that exact `"get <name>"` naming,
+confirmed against this project's own real, running Chromium build (see
+live verification below) rather than assumed from memory.
+
+**Verified three ways:**
+1. **Unit** (`tests/unit/spoofingScript.test.ts`, 9 new tests): the
+   generated script is executed against a mocked `self` inside a
+   completely separate V8 realm (Node's `vm.createContext`) — never the
+   real test process's own `Function.prototype`, since patching that
+   globally from inside a test would leak into every other test in the
+   suite for the rest of the process's life. Confirms every listed
+   override reports itself as native code, confirms the self-consistency
+   property, and confirms an *unmarked*, ordinary function is left
+   completely alone (its real source is still visible — the mask only
+   ever intercepts registered overrides, never becomes a blanket lie).
+2. **E2E** (`tests/e2e/fingerprintEnforcement.spec.ts`, new test "spoofed
+   methods report themselves as native code via Function.prototype.
+   toString, in the real running browser"): a real profile with default
+   settings (`canvasMode: 'noise'`, `audioMode: 'noise'`,
+   `webglSpoofingMode: 'spoof'` — the generator's actual defaults, not a
+   specially configured profile) is started, and `webview.executeJavaScript()`
+   runs the exact same native-code check directly inside the real guest
+   page's main world — the same context a real external fingerprinting
+   script would execute in.
+3. **Live, manual, via this exact window's own DevTools console** (per
+   this stage's own verification requirement — not just an automated
+   assertion): started a real profile, opened DevTools on the loaded
+   page, and ran each check by hand:
+   ```
+   > CanvasRenderingContext2D.prototype.getImageData.toString()
+   < 'function getImageData() { [native code] }'
+   > WebGLRenderingContext.prototype.getParameter.toString()
+   < 'function getParameter() { [native code] }'
+   > Object.getOwnPropertyDescriptor(Navigator.prototype,'userAgent').get.toString()
+   < 'function get userAgent() { [native code] }'
+   > Function.prototype.toString.toString()
+   < 'function toString() { [native code] }'
+   ```
+   All four came back exactly as a real, unpatched Chromium build would
+   report them — including the self-consistency check on the mask itself.
+
+**What this does and doesn't change.** This closes a real, verifiable
+detection vector (a `Function.prototype.toString` check against any of
+the overrides this document already describes) without changing any
+spoofed *value* — Canvas/Audio noise, WebGL vendor/renderer, the
+navigator identity fields, fonts, and media devices all still report
+exactly the same configured values as before this stage; only how the
+*mechanism* introspects is different. It does not close the Service
+Worker gap (§Confirmed, real, honest limitation: Service Workers,
+above) — the mask is installed by the same `buildCoreScript()` that
+already fails to reach a Service Worker's own global scope for the
+reasons documented there, so a script running inside a real Service
+Worker sees neither the spoofed values nor this mask, same as before.

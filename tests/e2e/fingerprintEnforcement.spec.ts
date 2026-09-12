@@ -265,6 +265,77 @@ test('webglSpoofingMode "spoof" actually overrides the observed vendor/renderer,
   await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
 });
 
+test('spoofed methods report themselves as native code via Function.prototype.toString, in the real running browser', async () => {
+  // Default profile: canvasMode 'noise', audioMode 'noise', and
+  // webglSpoofingMode 'spoof' are all the generator's real defaults (no
+  // manual toggle needed) — exactly what any newly created profile a real
+  // user makes actually gets, so this test is checking the common case, not
+  // a specially configured one.
+  const profilesRoot = path.join(userDataDir, 'profiles');
+  fs.mkdirSync(profilesRoot, { recursive: true });
+  const dirsBefore = new Set(fs.readdirSync(profilesRoot));
+
+  await window.getByText('Profiles', { exact: true }).click();
+  await window.getByPlaceholder('New profile name').fill('E2E ToString Mask Profile');
+  await window.getByRole('button', { name: 'Custom setup' }).click();
+  await window.locator('.modal-panel').getByRole('button', { name: 'Create profile' }).click();
+  const row = window.locator('tr', { has: window.locator('td', { hasText: 'E2E ToString Mask Profile' }) });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+
+  await row.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'RUNNING', { timeout: 30_000 });
+  const newDirs = () => fs.readdirSync(profilesRoot).filter((d) => !dirsBefore.has(d));
+  await expect.poll(() => newDirs().length, { timeout: 30_000 }).toBeGreaterThan(0);
+
+  const shell = await connectToShellAt(REMOTE_DEBUG_PORT);
+  const webview = shell.locator('webview').first();
+  await webview.waitFor({ state: 'attached', timeout: 15_000 });
+
+  // executeJavaScript() runs inside the real guest page (the diagnostics
+  // page, auto-navigated to via PF_E2E_AUTO_DIAGNOSTICS) — the same
+  // main-world context a real external fingerprinting script would run in,
+  // not a mock or a re-implementation of the spoofing logic.
+  const results = (await webview.evaluate((el) =>
+    (
+      el as unknown as { executeJavaScript: (s: string) => Promise<unknown> }
+    ).executeJavaScript(`(function () {
+        function nativeLooking(fn) {
+          return typeof fn === 'function' && Function.prototype.toString.call(fn) === 'function ' + fn.name + '() { [native code] }';
+        }
+        var out = {};
+        try { out.getImageData = nativeLooking(CanvasRenderingContext2D.prototype.getImageData); } catch (e) { out.getImageData = 'threw: ' + e; }
+        try { out.toDataURL = nativeLooking(HTMLCanvasElement.prototype.toDataURL); } catch (e) { out.toDataURL = 'threw: ' + e; }
+        try { out.getChannelData = nativeLooking(AudioBuffer.prototype.getChannelData); } catch (e) { out.getChannelData = 'threw: ' + e; }
+        try { out.getParameter = nativeLooking(WebGLRenderingContext.prototype.getParameter); } catch (e) { out.getParameter = 'threw: ' + e; }
+        try {
+          var uaGetter = Object.getOwnPropertyDescriptor(Navigator.prototype, 'userAgent').get;
+          out.userAgentGetterSrc = Function.prototype.toString.call(uaGetter);
+        } catch (e) { out.userAgentGetterSrc = 'threw: ' + e; }
+        // Self-consistency: the mask itself must not be visible via
+        // Function.prototype.toString.toString().
+        try { out.toStringToStringLooksNative = Function.prototype.toString.toString().indexOf('[native code]') !== -1; } catch (e) { out.toStringToStringLooksNative = 'threw: ' + e; }
+        return out;
+      })()`),
+  )) as {
+    getImageData: boolean | string;
+    toDataURL: boolean | string;
+    getChannelData: boolean | string;
+    getParameter: boolean | string;
+    userAgentGetterSrc: string;
+    toStringToStringLooksNative: boolean | string;
+  };
+
+  expect(results.getImageData).toBe(true);
+  expect(results.toDataURL).toBe(true);
+  expect(results.getChannelData).toBe(true);
+  expect(results.getParameter).toBe(true);
+  expect(results.userAgentGetterSrc).toBe('function get userAgent() { [native code] }');
+  expect(results.toStringToStringLooksNative).toBe(true);
+
+  await row.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(row).toHaveAttribute('data-status', 'STOPPED', { timeout: 30_000 });
+});
+
 /**
  * Registers a real Service Worker against a real, same-origin http(s) URL
  * — exactly CreepJS's own technique (`navigator.serviceWorker.register('./creep.js')`,
