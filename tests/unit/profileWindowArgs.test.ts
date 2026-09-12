@@ -81,6 +81,30 @@ describe('parseArgs', () => {
   it.each(['0', '-1', 'not-a-number', '3.5'])('treats automation-port=%s as absent (null)', (value) => {
     expect(parseArgs(baseArgv([`--automation-port=${value}`])).automationPort).toBeNull();
   });
+
+  it('defaults extensionPaths to an empty array when the flag is absent', () => {
+    expect(parseArgs(baseArgv()).extensionPaths).toEqual([]);
+  });
+
+  it('decodes a valid base64-encoded JSON array of extension paths', () => {
+    const paths = ['C:\\ext\\one', 'C:\\ext\\two'];
+    const b64 = Buffer.from(JSON.stringify(paths), 'utf-8').toString('base64');
+    expect(parseArgs(baseArgv([`--extension-paths=${b64}`])).extensionPaths).toEqual(paths);
+  });
+
+  it('falls back to an empty array when extension-paths is not valid base64-JSON', () => {
+    expect(parseArgs(baseArgv(['--extension-paths=not-valid!!!'])).extensionPaths).toEqual([]);
+  });
+
+  it('drops non-string entries from a malformed extension-paths array instead of throwing', () => {
+    const b64 = Buffer.from(JSON.stringify(['/real/path', 42, null, '/other/path']), 'utf-8').toString('base64');
+    expect(parseArgs(baseArgv([`--extension-paths=${b64}`])).extensionPaths).toEqual(['/real/path', '/other/path']);
+  });
+
+  it('returns an empty array when the decoded JSON is not an array at all', () => {
+    const b64 = Buffer.from(JSON.stringify({ not: 'an array' }), 'utf-8').toString('base64');
+    expect(parseArgs(baseArgv([`--extension-paths=${b64}`])).extensionPaths).toEqual([]);
+  });
 });
 
 describe('readStdinCredentials', () => {

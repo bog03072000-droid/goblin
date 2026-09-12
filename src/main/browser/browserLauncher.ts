@@ -25,6 +25,11 @@ export interface LaunchParams {
    * arg or env var (both stay readable by any other process on this machine
    * for the child's whole lifetime; see the stdin-write comment below). */
   automationToken?: string | null;
+  /** Absolute paths to unpacked Chrome extension directories to load into
+   * this profile's session on launch — see SECURITY.md's "Chrome extension
+   * risks" section. Not secret (just local filesystem paths), safe as a
+   * plain CLI arg like automationPort. */
+  extensionPaths?: string[];
 }
 
 const TRANSIENT_SPAWN_ERROR_CODES = new Set(['EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM']);
@@ -137,6 +142,10 @@ export function launchProfileProcess(params: LaunchParams): ChildProcess {
 
   if (params.automationPort) {
     args.push(`--automation-port=${params.automationPort}`);
+  }
+
+  if (params.extensionPaths && params.extensionPaths.length > 0) {
+    args.push(`--extension-paths=${Buffer.from(JSON.stringify(params.extensionPaths)).toString('base64')}`);
   }
 
   if (params.proxy) {

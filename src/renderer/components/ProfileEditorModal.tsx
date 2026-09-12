@@ -384,6 +384,12 @@ export function ProfileEditorModal({
               automationSaving={automationPending}
               onSaveAutomation={(patch) => void saveAutomation(patch)}
               onRegenerateToken={() => void regenerateAutomationToken()}
+              onPickExtensionDirectory={() =>
+                callApi<'profiles:pickExtensionDirectory', { path: string; name: string; manifestVersion: number | null } | null>(
+                  'profiles:pickExtensionDirectory',
+                  {},
+                )
+              }
             />
           )}
         </div>

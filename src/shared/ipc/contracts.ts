@@ -28,6 +28,7 @@ export const IpcRequestSchemas = {
   'profiles:update': ProfileUpdateInputSchema,
   'profiles:getAutomationToken': z.object({ id: ProfileIdSchema }),
   'profiles:regenerateAutomationToken': z.object({ id: ProfileIdSchema }),
+  'profiles:pickExtensionDirectory': z.object({}),
   'profiles:delete': z.object({ id: ProfileIdSchema }),
   'profiles:restoreDeleted': z.object({ id: ProfileIdSchema }),
   'profiles:start': z.object({ id: ProfileIdSchema, acknowledgeLowMemory: z.boolean().optional() }),

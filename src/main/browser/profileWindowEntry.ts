@@ -13,6 +13,7 @@ import { parseArgs, readStdinCredentials } from './profileWindowArgs';
 import { setupDownloadHandling } from './profileWindowDownloads';
 import { findFreePort, startAutomationProxy } from './automationProxy';
 import { humanClick, humanScroll, type CdpSession } from '../../shared/automation/humanInputDriver';
+import { runWarmup, type WarmupProgressEvent } from './warmupOrchestrator';
 import {
   resolveLanguages,
   buildSpoofableFingerprint,
@@ -126,6 +127,28 @@ export function runProfileWindowProcess(): void {
 
     const partition = `persist:${args.profileId}`;
     const ses = session.fromPartition(partition, { cache: true });
+
+    // Unpacked Chrome extensions configured for this profile — see
+    // SECURITY.md's "Chrome extension risks" section for what loading one
+    // actually grants (full manifest-declared permissions inside this
+    // session, no additional sandboxing, no signature/store verification of
+    // the directory's contents). Must run on this persistent session
+    // (`persist:` prefix — loadExtension throws on an in-memory session),
+    // after app.whenReady() (already true here), and before the webview's
+    // first navigation, matching the same "await before first navigation"
+    // discipline setProxy() above already follows — an extension's content
+    // scripts/background worker need to be registered before any page in
+    // this session starts loading, not race against it. One bad/removed
+    // path is logged and skipped rather than failing the whole profile
+    // launch — same "one bad item doesn't block the rest" posture as every
+    // other per-item operation in this app.
+    for (const extensionPath of args.extensionPaths) {
+      try {
+        await ses.loadExtension(extensionPath, { allowFileAccess: false });
+      } catch (err) {
+        console.error(`[ProfileForge] failed to load extension "${extensionPath}":`, err);
+      }
+    }
 
     // Cookie editor support (ProfileManager.sendChildRequest): cookies only
     // ever exist inside this session, which only this process ever holds —
@@ -311,6 +334,37 @@ export function runProfileWindowProcess(): void {
       await humanScroll(session, to, Math.round(viewport.h * 0.6), { pauseProbability: 0.3 });
       return { ok: true };
     });
+
+    // "Warm up profile" toolbar button (see README's Automation section) —
+    // Dolphin Anty's "Cookie Robot" concept: visit a list of real URLs in
+    // turn, scrolling each like a real person via the same humanScroll
+    // primitive/CDP session pattern as pf:test-human-input above, to build
+    // organic browsing history/cookies before the profile's actual use.
+    // Bounds are deliberately generous but real limits, not decorative —
+    // this drives a real webContents.loadURL() against renderer-supplied
+    // strings, so both the URL count and the requested duration are capped
+    // before anything is attempted.
+    ipcMain.handle(
+      'pf:warmup',
+      async (_event, webContentsId: number, urls: unknown, durationSeconds: unknown) => {
+        const target = webviewsById.get(webContentsId);
+        if (!target) throw new Error('No tab is attached yet');
+        if (!Array.isArray(urls) || urls.length === 0) throw new Error('At least one URL is required');
+        if (urls.length > 30) throw new Error('At most 30 URLs per warm-up run');
+        if (!urls.every((u) => typeof u === 'string')) throw new Error('Every URL must be a string');
+        const duration = Number(durationSeconds);
+        if (!Number.isFinite(duration) || duration < 10 || duration > 3600) {
+          throw new Error('Duration must be between 10 and 3600 seconds');
+        }
+        if (!target.debugger.isAttached()) target.debugger.attach('1.3');
+        const cdpSession: CdpSession = {
+          send: (method, params) => target.debugger.sendCommand(method, params),
+        };
+        return runWarmup(target, cdpSession, urls as string[], duration, (progress: WarmupProgressEvent) => {
+          win.webContents.send('pf:warmup-progress', progress);
+        });
+      },
+    );
 
     // localStorage editor support (ProfileManager.sendChildRequest, same
     // protocol/retry as the cookies: handlers above). Unlike cookies

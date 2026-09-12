@@ -1,4 +1,4 @@
-import { ipcMain, safeStorage, shell } from 'electron';
+import { ipcMain, safeStorage, shell, dialog } from 'electron';
 import fs from 'node:fs';
 import { log } from '../logger';
 import { IpcRequestSchemas, type IpcChannel } from '../../shared/ipc/contracts';
@@ -17,6 +17,7 @@ import type { RestApiManager } from '../api/restApiManager';
 import type { DownloadWithStatus } from '../../shared/schemas/download';
 import { generateFingerprint } from '../fingerprint/generator';
 import { createProfileWithFingerprint } from '../profiles/createProfileWithFingerprint';
+import { validateExtensionDirectory } from '../profiles/extensionPicker';
 import { validateFingerprint } from '../fingerprint/validator';
 import { PLATFORM_PROFILES, BROWSER_VERSIONS } from '../fingerprint/platformProfiles';
 import { testProxyConnection } from '../proxy/proxyTester';
@@ -68,6 +69,23 @@ export function registerIpc(deps: IpcDependencies): void {
   handle('profiles:update', (p) => deps.profiles.update(p.id, p));
   handle('profiles:getAutomationToken', (p) => ({ token: deps.profiles.getAutomationToken(p.id) }));
   handle('profiles:regenerateAutomationToken', (p) => ({ token: deps.profiles.regenerateAutomationToken(p.id) }));
+  handle('profiles:pickExtensionDirectory', async () => {
+    // PF_E2E_EXTENSION_DIRECTORY (testing-only, same convention as
+    // PF_E2E_BULK_IMPORT_FILE/PF_E2E_AUTO_DIAGNOSTICS elsewhere in this
+    // app — never set in a normal launch): a real native folder picker
+    // can't be driven by Playwright, so this substitutes for "the user
+    // picked this folder" so an E2E test can exercise the real
+    // manifest-validation path against a real fixture directory.
+    const forcedDir = process.env['PF_E2E_EXTENSION_DIRECTORY'];
+    if (forcedDir) return validateExtensionDirectory(forcedDir);
+
+    const result = await dialog.showOpenDialog({
+      title: 'Select Unpacked Extension Directory',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return validateExtensionDirectory(result.filePaths[0]!);
+  });
   handle('profiles:delete', (p) => deps.profileManager.delete(p.id));
   handle('profiles:restoreDeleted', (p) => deps.profileManager.restoreDeleted(p.id));
   handle('profiles:start', (p) => deps.profileManager.start(p.id, { acknowledgeLowMemory: p.acknowledgeLowMemory }));

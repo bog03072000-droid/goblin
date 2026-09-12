@@ -186,6 +186,7 @@ export class ProfileManager {
       initialUrl: opts?.initialUrl,
       automationPort: profile.automationEnabled ? profile.automationPort : null,
       automationToken,
+      extensionPaths: profile.extensionPaths,
     };
     this.launchAndTrack(id, profile, launchParams, MAX_SPAWN_RETRIES);
 

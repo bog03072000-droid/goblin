@@ -38,6 +38,7 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     scheduleMode: 'recurring',
     scheduleTimezone: null,
     scheduleOneTimeAt: null,
+    extensionPaths: [],
     ...overrides,
   } as Profile;
 }
@@ -45,6 +46,7 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
 function renderTab(overrides: Partial<Parameters<typeof AdvancedTab>[0]> = {}) {
   const onSaveAutomation = vi.fn();
   const onRegenerateToken = vi.fn();
+  const onPickExtensionDirectory = vi.fn(async () => null);
   render(
     <I18nProvider initialLocale="en" onLocaleChange={() => {}}>
       <AdvancedTab
@@ -54,11 +56,12 @@ function renderTab(overrides: Partial<Parameters<typeof AdvancedTab>[0]> = {}) {
         automationSaving={false}
         onSaveAutomation={onSaveAutomation}
         onRegenerateToken={onRegenerateToken}
+        onPickExtensionDirectory={onPickExtensionDirectory}
         {...overrides}
       />
     </I18nProvider>,
   );
-  return { onSaveAutomation, onRegenerateToken };
+  return { onSaveAutomation, onRegenerateToken, onPickExtensionDirectory };
 }
 
 describe('AdvancedTab — schedule', () => {
@@ -316,5 +319,75 @@ describe('AdvancedTab — automation token regenerate while running', () => {
   it('the Regenerate button hint no longer overclaims "immediately"', () => {
     renderTab({ profile: makeProfile({ automationEnabled: true, automationPort: 9222 }) });
     expect(screen.getByTitle('Generates a new token. Takes effect the next time this profile starts.')).toBeInTheDocument();
+  });
+});
+
+describe('AdvancedTab — Chrome extensions', () => {
+  it('always shows the security warning, not just on first add', () => {
+    renderTab();
+    expect(screen.getByText(/full permissions its manifest declares/)).toBeInTheDocument();
+  });
+
+  it('shows no list when no extensions are configured', () => {
+    renderTab({ profile: makeProfile({ extensionPaths: [] }) });
+    expect(screen.queryByTitle('Remove this extension')).not.toBeInTheDocument();
+  });
+
+  it('lists every configured extension path with a remove button', () => {
+    renderTab({ profile: makeProfile({ extensionPaths: ['/ext/one', '/ext/two'] }) });
+    expect(screen.getByText('/ext/one')).toBeInTheDocument();
+    expect(screen.getByText('/ext/two')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Remove this extension')).toHaveLength(2);
+  });
+
+  it('clicking "Add extension…" calls onPickExtensionDirectory and saves the returned path', async () => {
+    const onPickExtensionDirectory = vi.fn(async () => ({ path: '/picked/ext', name: 'Picked', manifestVersion: 3 }));
+    const { onSaveAutomation } = renderTab({
+      profile: makeProfile({ extensionPaths: ['/existing'] }),
+      onPickExtensionDirectory,
+    });
+
+    fireEvent.click(screen.getByText('Add extension…'));
+    await vi.waitFor(() => expect(onSaveAutomation).toHaveBeenCalledWith({ extensionPaths: ['/existing', '/picked/ext'] }));
+  });
+
+  it('cancelling the native dialog (null result) saves nothing', async () => {
+    const onPickExtensionDirectory = vi.fn(async () => null);
+    const { onSaveAutomation } = renderTab({ onPickExtensionDirectory });
+
+    fireEvent.click(screen.getByText('Add extension…'));
+    await vi.waitFor(() => expect(onPickExtensionDirectory).toHaveBeenCalled());
+    expect(onSaveAutomation).not.toHaveBeenCalled();
+  });
+
+  it('picking a directory that is not a real extension shows the thrown error instead of saving', async () => {
+    const onPickExtensionDirectory = vi.fn(async () => {
+      throw new Error('This folder has no manifest.json');
+    });
+    const { onSaveAutomation } = renderTab({ onPickExtensionDirectory });
+
+    fireEvent.click(screen.getByText('Add extension…'));
+    await screen.findByText('This folder has no manifest.json');
+    expect(onSaveAutomation).not.toHaveBeenCalled();
+  });
+
+  it('does not add the same path twice', async () => {
+    const onPickExtensionDirectory = vi.fn(async () => ({ path: '/existing', name: 'X', manifestVersion: 3 }));
+    const { onSaveAutomation } = renderTab({
+      profile: makeProfile({ extensionPaths: ['/existing'] }),
+      onPickExtensionDirectory,
+    });
+
+    fireEvent.click(screen.getByText('Add extension…'));
+    await vi.waitFor(() => expect(onPickExtensionDirectory).toHaveBeenCalled());
+    expect(onSaveAutomation).not.toHaveBeenCalled();
+  });
+
+  it('clicking a path\'s Remove button saves the list without that path', () => {
+    const { onSaveAutomation } = renderTab({ profile: makeProfile({ extensionPaths: ['/ext/one', '/ext/two'] }) });
+
+    fireEvent.click(screen.getAllByTitle('Remove this extension')[0]!);
+
+    expect(onSaveAutomation).toHaveBeenCalledWith({ extensionPaths: ['/ext/two'] });
   });
 });

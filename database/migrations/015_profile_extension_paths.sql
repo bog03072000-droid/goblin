@@ -1,0 +1,13 @@
+-- Per-profile unpacked Chrome extension directories (see SECURITY.md's
+-- "Chrome extension risks" section for what loading one actually grants —
+-- full manifest-declared permissions inside that profile's session, no
+-- additional sandboxing on top, no signature/store verification of the
+-- directory's contents). Stored as a JSON array of absolute directory
+-- paths, same TEXT-column-holding-JSON approach as schedule_days
+-- (012_profile_schedule.sql) rather than a separate join table — an
+-- extension path has no other entity to reference and no independent
+-- lifecycle of its own the way a tag or group does. Defaults to '[]' (an
+-- empty array), not NULL, since "no extensions configured" is the normal
+-- state for every profile that predates this column, not a distinct
+-- not-yet-set state the way schedule_days' NULL is.
+ALTER TABLE profiles ADD COLUMN extension_paths TEXT NOT NULL DEFAULT '[]';

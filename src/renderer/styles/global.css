@@ -1321,3 +1321,6 @@ tr:has(:focus-visible) td { background: var(--char-raised); }
 .row-invalid { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .status-PASS { color: var(--lime-bright); font-size: 12px; }
 .status-MISMATCH { color: var(--danger); font-size: 12px; }
+
+.extension-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.extension-list-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: var(--char); word-break: break-all; }

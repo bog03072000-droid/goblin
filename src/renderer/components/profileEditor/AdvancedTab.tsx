@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, RefreshCw, ShieldCheck, CalendarClock } from 'lucide-react';
+import { Copy, RefreshCw, ShieldCheck, CalendarClock, Puzzle, Trash2 } from 'lucide-react';
 import type { Profile, ScheduleMode } from '@shared/schemas/profile';
 import { computeNextScheduledRun } from '@shared/utils/scheduleNextRun';
 import { zonedWallClockToUtc, formatInZoneForDateTimeLocal } from '@shared/utils/wallClockInZone';
@@ -23,6 +23,7 @@ export function AdvancedTab({
   automationSaving,
   onSaveAutomation,
   onRegenerateToken,
+  onPickExtensionDirectory,
 }: {
   profile: Profile;
   automationToken: string | null;
@@ -37,10 +38,38 @@ export function AdvancedTab({
     scheduleMode?: ScheduleMode;
     scheduleTimezone?: string | null;
     scheduleOneTimeAt?: string | null;
+    extensionPaths?: string[];
   }) => void;
   onRegenerateToken: () => void;
+  /** Opens a native folder picker and validates the chosen directory has a
+   * real manifest.json (see registerIpc.ts's profiles:pickExtensionDirectory)
+   * — returns null if the user cancels, throws if the folder isn't a real
+   * unpacked extension. */
+  onPickExtensionDirectory: () => Promise<{ path: string; name: string; manifestVersion: number | null } | null>;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [extensionError, setExtensionError] = useState<string | null>(null);
+  const [pickingExtension, setPickingExtension] = useState(false);
+  const extensionPaths = profile.extensionPaths ?? [];
+
+  async function addExtension(): Promise<void> {
+    setExtensionError(null);
+    setPickingExtension(true);
+    try {
+      const picked = await onPickExtensionDirectory();
+      if (!picked) return; // user cancelled the native dialog
+      if (extensionPaths.includes(picked.path)) return; // already added
+      onSaveAutomation({ extensionPaths: [...extensionPaths, picked.path] });
+    } catch (err) {
+      setExtensionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPickingExtension(false);
+    }
+  }
+
+  function removeExtension(extPath: string): void {
+    onSaveAutomation({ extensionPaths: extensionPaths.filter((p) => p !== extPath) });
+  }
   const [portDraft, setPortDraft] = useState(String(profile.automationPort ?? defaultAutomationPort ?? ''));
   const [copied, setCopied] = useState<'port' | 'token' | 'snippet' | null>(null);
   const portNum = Number(portDraft);
@@ -222,6 +251,40 @@ export function AdvancedTab({
             </div>
           </>
         )}
+      </div>
+
+      <div className="panel mt-16">
+        <h4 className="fp-heading">
+          <Puzzle size={16} strokeWidth={2.25} />
+          {t('editor.advanced.extensions.title')}
+        </h4>
+        <p className="text-dim text-xs mt-0">{t('editor.advanced.extensions.hint')}</p>
+        <div className="banner banner-warn mb-8 text-xs">{t('editor.advanced.extensions.warning')}</div>
+
+        {extensionError && <div className="banner banner-error mb-8 text-xs">{extensionError}</div>}
+
+        {extensionPaths.length > 0 && (
+          <ul className="extension-list">
+            {extensionPaths.map((extPath) => (
+              <li key={extPath} className="extension-list-item">
+                <span className="mono text-xs">{extPath}</span>
+                <button
+                  className="btn btn-danger-ghost btn-sm"
+                  type="button"
+                  onClick={() => removeExtension(extPath)}
+                  title={t('editor.advanced.extensions.remove')}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button className="btn btn-ghost btn-sm mt-8" type="button" onClick={() => void addExtension()} disabled={pickingExtension}>
+          <Puzzle size={14} />
+          {pickingExtension ? t('common.loading') : t('editor.advanced.extensions.add')}
+        </button>
       </div>
 
       <div className="panel mt-16">

@@ -17,6 +17,10 @@ export interface ProfileWindowArgs {
   /** Not secret (unlike the token) — the port a client connects to, safe as
    * a plain CLI arg. Null when automation is disabled for this profile. */
   automationPort: number | null;
+  /** Absolute paths to unpacked Chrome extension directories to load into
+   * this profile's session — see SECURITY.md's "Chrome extension risks"
+   * section. Empty when none configured. */
+  extensionPaths: string[];
 }
 
 /** Same logic main.ts uses for the manager process — recomputed here rather
@@ -79,6 +83,16 @@ export function parseArgs(argv: string[]): ProfileWindowArgs {
       const raw = get('automation-port');
       const parsed = raw ? Number(raw) : NaN;
       return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    })(),
+    extensionPaths: (() => {
+      const raw = get('extension-paths');
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as unknown;
+        return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
+      } catch {
+        return [];
+      }
     })(),
   };
 }

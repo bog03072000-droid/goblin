@@ -124,6 +124,65 @@ and does not expose:
   separately) — it only affects a script you write against this API that
   inspects the profile's own fingerprint that way.
 
+## Chrome extension risks
+
+Any profile can optionally load one or more unpacked Chrome extensions into
+its own browser session on every start (`session.loadExtension()` via
+`src/main/browser/profileWindowEntry.ts`, configured per profile in the
+editor's Advanced tab). This is a genuinely different category of surface
+from everything else in this section — it is intentional, unrestricted code
+execution inside the profile's browsing session, not a bug class to close.
+Worth stating precisely what it grants and does not:
+
+- **An extension gets exactly the capability its own `manifest.json`
+  declares** — `permissions`/`host_permissions`/`content_scripts` — the same
+  as a real Chrome extension with that manifest. If it declares
+  `<all_urls>` and `tabs`, it can read and modify every page the profile
+  visits, see every cookie, and intercept network requests, for as long as
+  the profile runs. This app does not narrow, sandbox, or otherwise
+  restrict what a loaded extension's manifest already permits — there is no
+  additional confinement layer on top of Chromium's own extension model.
+- **This app's own hardening (`contextIsolation: true`, `sandbox: true`,
+  the CSPs on `src/renderer/index.html` and `browser-shell.html`) does not
+  apply to a loaded extension.** Those settings protect this app's *own* UI
+  surfaces (the manager window, the tab-bar shell page) — they are a
+  separate Electron/Chromium mechanism from the extension system entirely.
+  An extension's content scripts are injected by Chromium's own extension
+  subsystem into whatever page it targets, independent of that page's CSP
+  and independent of this app's CSPs, exactly like a real Chrome install.
+- **No signature, store review, or integrity check of any kind.** Loading
+  an unpacked extension means pointing at a local directory — this app
+  reads its `manifest.json` only to confirm the folder actually contains
+  one (see `profiles:pickExtensionDirectory` in `registerIpc.ts`) and to
+  show its declared name; it does not and cannot verify the extension's
+  actual code does what its name/manifest claims, the way the Chrome Web
+  Store's own review process at least partially does for a normal install.
+- **Electron only loads an unpacked directory, never a packed `.crx`**, and
+  per Electron's own documented behavior, an extension is not remembered
+  across restarts — this app calls `loadExtension()` again on every profile
+  launch from the same configured path, which also means a path that later
+  points at different content (the folder was edited, or the path was
+  reused for something else) gets picked up silently on the next start,
+  with no hash/version pinning.
+- A bad or removed extension path is logged and skipped (never fails the
+  whole profile launch) — but a *successfully loaded* extension whose code
+  turns out to be malicious is not something this app can detect or stop
+  after the fact; it runs with the extension's full declared permissions
+  for the rest of that profile's session.
+
+**Practical implication**: only add an extension you wrote yourself or
+fully trust the source of, exactly as you would before installing it in a
+real Chrome profile — this app adds zero additional protection against a
+malicious or compromised extension beyond what real Chrome itself provides,
+and in fact skips the one layer (Web Store review) a normal Chrome install
+usually goes through.
+
+**What this does not change**: extensions are configured per profile and
+loaded only into that profile's own session (`persist:<profileId>`) — an
+extension added to one profile has no access to any other profile's
+cookies, storage, or browsing session (see Cross-profile filesystem/storage
+isolation above; the same partition boundary applies here).
+
 ## IPC validation
 
 Every IPC channel is registered in `src/main/ipc/registerIpc.ts` against a Zod

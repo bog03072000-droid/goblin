@@ -27,6 +27,7 @@ interface ProfileRow {
   schedule_mode: string;
   schedule_timezone: string | null;
   schedule_one_time_at: string | null;
+  extension_paths: string;
 }
 
 interface ProfileListRow extends ProfileRow {
@@ -119,6 +120,13 @@ export class ProfileRepository {
       scheduleMode: row.schedule_mode as ScheduleMode,
       scheduleTimezone: row.schedule_timezone,
       scheduleOneTimeAt: row.schedule_one_time_at,
+      extensionPaths: (() => {
+        try {
+          return JSON.parse(row.extension_paths) as string[];
+        } catch {
+          return [];
+        }
+      })(),
     };
   }
 
@@ -242,6 +250,7 @@ export class ProfileRepository {
       scheduleMode: ScheduleMode;
       scheduleTimezone: string | null;
       scheduleOneTimeAt: string | null;
+      extensionPaths: string[];
     }>,
   ): Profile {
     const columns: Record<string, unknown> = {};
@@ -257,6 +266,7 @@ export class ProfileRepository {
     if (patch.scheduleMode !== undefined) columns['schedule_mode'] = patch.scheduleMode;
     if (patch.scheduleTimezone !== undefined) columns['schedule_timezone'] = patch.scheduleTimezone;
     if (patch.scheduleOneTimeAt !== undefined) columns['schedule_one_time_at'] = patch.scheduleOneTimeAt;
+    if (patch.extensionPaths !== undefined) columns['extension_paths'] = JSON.stringify(patch.extensionPaths);
     columns['updated_at'] = new Date().toISOString();
 
     const update = this.db.transaction(() => {

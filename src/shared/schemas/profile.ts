@@ -97,6 +97,14 @@ export const ProfileSchema = z.object({
   scheduleMode: ScheduleModeSchema,
   scheduleTimezone: ScheduleTimezoneSchema.nullable(),
   scheduleOneTimeAt: ScheduleOneTimeAtSchema.nullable(),
+  // Absolute paths to unpacked Chrome extension directories loaded into
+  // this profile's session on every start — see SECURITY.md's "Chrome
+  // extension risks" section for what that actually grants (full
+  // manifest-declared permissions, no additional sandboxing, no
+  // signature/store verification). Empty by default; a bad/removed path is
+  // skipped at launch (see profileWindowEntry.ts) rather than failing the
+  // whole profile start.
+  extensionPaths: z.array(z.string().min(1)).default([]),
 });
 export type Profile = z.infer<typeof ProfileSchema>;
 
@@ -138,5 +146,6 @@ export const ProfileUpdateInputSchema = z.object({
   scheduleMode: ScheduleModeSchema.optional(),
   scheduleTimezone: ScheduleTimezoneSchema.nullable().optional(),
   scheduleOneTimeAt: ScheduleOneTimeAtSchema.nullable().optional(),
+  extensionPaths: z.array(z.string().min(1)).optional(),
 });
 export type ProfileUpdateInput = z.infer<typeof ProfileUpdateInputSchema>;

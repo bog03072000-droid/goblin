@@ -338,6 +338,13 @@ const en = {
   'editor.advanced.automation.snippetHint': 'Puppeteer connection example:',
   'editor.advanced.automation.warning':
     'Anyone with this token and local access to this machine can fully control this browser profile — read cookies, run JavaScript on any open page, and see everything it does. Treat it like a password.',
+  'editor.advanced.extensions.title': 'Chrome extensions',
+  'editor.advanced.extensions.hint':
+    'Loads one or more unpacked extensions into this profile\'s browser on every start. See SECURITY.md for what this actually grants.',
+  'editor.advanced.extensions.warning':
+    'An extension gets the full permissions its manifest declares inside this profile — it can read/modify every page you visit, see cookies and network requests, and persist state, exactly like a real installed Chrome extension. There is no additional sandboxing on top, and no signature or store review of an unpacked folder\'s contents. Only add extensions you wrote yourself or fully trust.',
+  'editor.advanced.extensions.add': 'Add extension…',
+  'editor.advanced.extensions.remove': 'Remove this extension',
   'editor.advanced.schedule.title': 'Scheduled auto-start',
   'editor.advanced.schedule.hint':
     'Automatically start this profile at a set time, on the days you choose, or once at a specific future moment. Off by default. Skipped if the profile is already running.',
